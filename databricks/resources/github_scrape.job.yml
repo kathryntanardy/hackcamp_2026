@@ -1,0 +1,35 @@
+resources:
+  jobs:
+    github_scrape:
+      name: hackcamp-github-scrape
+      description: Freeze 50–100 real GitHub repos on Databricks (PRD F1, ticket 3).
+      max_concurrent_runs: 1
+      timeout_seconds: 1800
+      parameters:
+        - name: volume_path
+          default: ${var.volume_path}
+        - name: repo_limit
+          default: "100"
+        - name: minimum_repos
+          default: "50"
+        - name: batch_size
+          default: "5"
+        - name: publish
+          default: "true"
+      tasks:
+        - task_key: scrape_github
+          notebook_task:
+            notebook_path: ../src/ingest/scrape_github_repos.py
+            source: WORKSPACE
+            base_parameters:
+              volume_path: "{{job.parameters.volume_path}}"
+              repo_limit: "{{job.parameters.repo_limit}}"
+              minimum_repos: "{{job.parameters.minimum_repos}}"
+              batch_size: "{{job.parameters.batch_size}}"
+              publish: "{{job.parameters.publish}}"
+          environment_key: scrape_env
+          max_retries: 0
+      environments:
+        - environment_key: scrape_env
+          spec:
+            environment_version: "4"

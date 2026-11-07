@@ -174,6 +174,8 @@ The hackathon scrape runs on Databricks using the existing workspace, catalog, V
 - **Handoff:** manually run the existing `repo_health` pipeline after a successful scrape; automatic chaining is optional. Expectations and latest-per-repo selection stay in the existing pipeline. Ensure the real run does not mix generated seed payloads into its final demo snapshot.
 - **Freeze and verify:** retain the real snapshot, notebook/job run and summary, and verify bronze/silver/gold counts reconcile with successes and dropped rows. Run the demo from frozen data. Seeded JSON is a clearly labelled development fallback, never evidence of a successful real scrape.
 
+**Ticket #3 implementation:** `databricks/src/ingest/scrape_github_repos.py`, run as bundle job `github_scrape`. Defaults are 100 requested repos, a 50-repo minimum and batches of 5. A 5-repo smoke run uses `publish=false` and leaves active input untouched. Full runs stage a frozen copy and summary under `snapshots/<run_id>/`, then archive the previous input before publishing validated real JSON to `repos/`. Each newly published snapshot needs a full pipeline refresh to reread stable filenames and remove historical sample rows from derived tables. See the [README run instructions](README.md#github-scraping-ticket-3). Nullable-data handling and the reduced scoring/tool contracts remain the responsibility of tickets #4–#6.
+
 **Layer 2: targeted fetches (stretch only, ticket #7)**
 
 - Required investigations use the snapshot-backed UC tools; they do not depend on live HTTP.

@@ -2,18 +2,18 @@ resources:
   jobs:
     github_scrape:
       name: hackcamp-github-scrape
-      description: Freeze 50–100 real GitHub repos on Databricks (PRD F1, ticket 3).
+      description: Freeze 1,000 unique real GitHub repos on Databricks (PRD F1, ticket 3).
       max_concurrent_runs: 1
       timeout_seconds: 1800
       parameters:
         - name: volume_path
           default: ${var.volume_path}
         - name: repo_limit
-          default: "100"
+          default: "1000"
         - name: minimum_repos
-          default: "50"
+          default: "1000"
         - name: batch_size
-          default: "5"
+          default: "10"
         - name: publish
           default: "true"
       tasks:

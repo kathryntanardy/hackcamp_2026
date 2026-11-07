@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 # COMMAND ----------
 
-dbutils.widgets.text("budget_n", "5")
+dbutils.widgets.text("budget_n", "10")
 dbutils.widgets.text("model_endpoint", "databricks-meta-llama-3-3-70b-instruct")
 dbutils.widgets.text("max_tool_calls", "8")
 dbutils.widgets.text("repo_timeout_sec", "180")

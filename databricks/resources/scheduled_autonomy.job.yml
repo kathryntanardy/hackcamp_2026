@@ -16,7 +16,7 @@ resources:
         pause_status: UNPAUSED
       parameters:
         - name: budget_n
-          default: "3"
+          default: "10"
         - name: model_endpoint
           default: databricks-meta-llama-3-3-70b-instruct
         - name: max_tool_calls

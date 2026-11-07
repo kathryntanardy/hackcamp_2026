@@ -65,15 +65,15 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | ID | Feature | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
 | F1 | Data scraping and repo ingestion | P0 must | One on-demand Databricks notebook retains curated controls and discovers additional public repos through paginated language searches, collects exactly 1,000 unique canonical repo IDs with real metrics, writes compatible JSON Lines chunks to the UC Volume, and feeds the existing bronze/silver/gold pipeline. Default publication requires all 1,000 successes and coverage of the five intended languages; failed attempts retain the previous active snapshot. The agent investigation budget remains separate |
-| F2 | Baseline health score | P0 must | Gold rows use the MVP release/commit/activity formula below, with healthy, watchlist, at risk, or **ignored** status; uncollected signals remain unknown and are excluded from the score. Officially deprecated or archived-as-deprecated repos land in **ignored** (not scored as living risk). No maintainer-reply or contributor-history scrape is needed |
-| F3 | Agent triage | P0 must | Given a budget N (default 20), the agent picks which repos to investigate and logs why it chose them. **Skip repos already marked `ignored`** — deprecated lines get no future PR-review / investigation budget |
+| F2 | Baseline health score | P0 must | Gold rows use the MVP release/commit/activity formula below, with healthy, watchlist, at risk, or **ignored** status; uncollected signals remain unknown and are excluded from the score. Archived repos and a curated list of officially deprecated repos (`deprecated_repos.py`) land in **ignored** (not scored as living risk). No maintainer-reply or contributor-history scrape is needed |
+| F3 | Agent triage | P0 must | Given a budget N (default 10), the agent picks which repos to investigate and logs why it chose them. **Skip repos already marked `ignored`** — deprecated lines get no future PR-review / investigation budget |
 | F4 | Agent investigation | P0 must | The agent calls at least 2 tools per repo, chosen by the model rather than a fixed sequence, and stops when it is confident or reaches 8 calls |
 | F5 | Structured verdict | P0 must | Each investigation writes one `findings` row matching the schema in Agent design, with every evidence item pointing to a tool result |
 | F6 | Reasoning trace | P0 must | Every investigation has an MLflow trace, and the repo drawer shows its tool calls and results in order |
 | F7 | Galaxy map | P0 must | Renders all repos as stars clustered by language, sized by importance and coloured by health (**including gray ignored**); hover shows the name and score; click opens the drawer; 1,000 stars render smoothly |
 | F8 | Findings page | P0 must | Lists findings sorted by severity, then importance; filters by language and risk **including an Ignored bin**; a row click opens that repo on the map |
 | F9 | Evaluation | P1 should | The agent runs on 30–50 labelled repos; accuracy and false-positive rate are logged in MLflow and shown in the pitch |
-| F10 | Scheduled autonomy | P2 stretch | After the demo works, optionally chain the existing scraping, pipeline and agent tasks in a Lakeflow Job, reusing frozen data for the demo. Recurring scraping is not required within the 20-hour build |
+| F10 | Scheduled autonomy | P2 stretch | The `scheduled_autonomy` Lakeflow Job runs daily at 10:00 Pacific: the `repo_health` pipeline refresh, then the agent run, on the frozen snapshot. Scraping stays a separate on-demand job; recurring scraping is not required within the 20-hour build |
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
 | F12 | Find alternatives | P2 if time | For an at-risk repo, the agent returns up to 3 similar healthy repos from Vector Search |
 | F13 | Run-over-run memory | P2 if time | The agent reads its previous finding for each repo; the UI shows newly at risk and recovered badges |
@@ -99,7 +99,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 - One row per finding: repo, risk level, confidence, a one-line headline, investigated time, a "new" badge.
 - Sorted by severity, then importance by default; other sorts: health score, importance, days since release, advisory count / max severity / max CVSS, programming language. Filters for language, category, vulnerability bucket and risk, including an **Ignored** bin. Default list focuses on healthy / watchlist / at risk; ignored is a separate filter tab or chip so judges can still open a deprecated example.
 - Clicking a row jumps to the map with that star selected and the drawer open.
-- Header strip: latest run stats, i.e. repos triaged, investigated, tool calls made, **ignored count**, and eval score.
+- Header strip: latest run stats, i.e. repos triaged, investigated, tool calls made and **ignored count**.
 
 **Repo drawer**: opens from either page
 
@@ -142,15 +142,15 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 
 ## Agent design
 
-One tool-calling agent, built with Mosaic AI Agent Framework on a Foundation Model API model, makes its own decisions in two places: **which repos to investigate** and **which evidence to gather**. A fixed scoring pipeline feeds it, and it writes structured verdicts back to Delta.
+One tool-calling agent, a Databricks notebook loop that calls a Foundation Model API model through its OpenAI-compatible endpoint, makes its own decisions in two places: **which repos to investigate** and **which evidence to gather**. A fixed scoring pipeline feeds it, and it writes structured verdicts back to Delta.
 
 **Loop for each run**
 
-1. **Triage.** Read `gold_repo_health` plus the previous `findings`. **Exclude** repos whose latest finding or gold status is `ignored` (deprecated). Pick up to N remaining repos (default 20) by importance × risk, favouring repos whose score changed since the last run. Log the chosen list and a one-line reason for each.
+1. **Triage.** Read `gold_repo_health` plus the previous `findings`. **Exclude** repos whose latest finding or gold status is `ignored` (deprecated). Pick up to N remaining repos (default 10) by importance × risk, favouring repos whose score changed since the last run. Log the chosen list and a one-line reason for each.
 2. **Investigate each pick.** Start from the repo's baseline metrics. Call tools in whatever order the model chooses. Dig deeper when signals conflict: low commits but steady releases may just mean the project is mature. Early-exit if tools show official deprecation → verdict `ignored`.
 3. **Stop.** Stop when confidence is at least 0.7, after a deprecation/`ignored` decision, or after 8 tool calls, whichever comes first.
 4. **Verdict.** Emit JSON matching the schema below. Code validates it, and an invalid output gets one retry before the repo is marked `inconclusive`.
-5. **Persist.** `MERGE` into `findings`, keyed on (repo\_id, run\_id). The trace id is stored on the row. Writing `ignored` also sets gold `status = ignored` for that repo so later triage skips it.
+5. **Persist.** `MERGE` into `findings`, keyed on (repo\_id, run\_id). The trace id is stored on the row. Once any finding for a repo is `ignored`, later triage skips it; the agent never writes to gold.
 6. **Memory.** On the next run, step 1 reads the previous verdicts, skips ignored repos, and the agent states what changed only for living bins.
 
 **Tools**
@@ -162,12 +162,12 @@ One tool-calling agent, built with Mosaic AI Agent Framework on a Foundation Mod
 | `get_release_history(repo)` | UC SQL function | Latest release date and days since it; full release history and inter-release gaps are deferred |
 | `get_issue_backlog(repo)` | UC SQL function | Open issues and PR counts; response time and unanswered counts are unknown in the MVP |
 | `get_contributor_concentration(repo)` (stretch) | UC SQL function | Disabled until real contributor data is collected |
-| `fetch_recent_issues(repo, n)` (stretch) | GitHub fetch, cached to Delta | At most 5 issue titles; maintainer-reply analysis is deferred |
-| `fetch_readme_signals(repo)` (stretch) | GitHub fetch, cached to Delta | README flags for "deprecated", "unmaintained", "archived", "use X instead"; at most 5 demo repos. A clear **deprecated** hit is enough to emit `ignored` and stop further tool spend |
+| `fetch_recent_issues(repo, n)` | GitHub fetch, cached to Delta | The last n issue titles (default 5, at most 20), whether a maintainer replied to each, and the unanswered count |
+| `fetch_readme_signals(repo)` | GitHub fetch, cached to Delta | README flags for "deprecated", "unmaintained", "archived", "use X instead". A clear **deprecated** hit is enough to emit `ignored` and stop further tool spend |
 | `get_previous_finding(repo)` | UC SQL function over findings | Last verdict and date |
 | `find_alternatives(repo)` (P2) | Vector Search | Up to 3 similar healthy repos |
 
-The required agent tools read the frozen snapshot and still support model-selected investigations with at least two tools. Live-fetch tools are optional: use Python inside the existing Databricks-hosted agent if attempted, without new serving infrastructure or an outbound-HTTP setup project.
+The snapshot tools read the frozen snapshot and support model-selected investigations with at least two tools. The two live-fetch tools are offered on every investigation as Python inside the Databricks-hosted agent; the system prompt tells the model to prefer the UC tools first.
 
 **Ticket #6 implementation:** `databricks/src/setup/create_uc_tools.sql` registers five active snapshot tools plus an explicitly unavailable contributor-function compatibility entry. All results preserve JSON nulls; missing repos/findings return `found=false`. Release age is measured at collection time, commit percentage change is unknown when the previous count is zero, and unavailable response/contributor metrics are never estimated. The agent does not offer the contributor tool. Bundle job `uc_tools` checks the actual SQL against temporary edge-case fixtures before registration, then verifies registered functions against the live silver/gold tables. See the [README tool run instructions](README.md#agent-data-tools-ticket-6).
 
@@ -241,11 +241,10 @@ The hackathon scrape runs on Databricks using the existing workspace, catalog, V
 
 **Scraping implementation:** `databricks/src/ingest/scrape_github_repos.py`, bundle job `github_scrape`, now defaults to `repo_limit=1000`, `minimum_repos=1000`, and `batch_size=10`. A 5-repo smoke run skips discovery and leaves active input untouched. Expanded runs retain curated IDs, discover spare candidates, refill unavailable/redirected IDs until 1,000 distinct successes, and write JSON Lines chunks plus a record-count manifest under `snapshots/<run_id>/`. Archive the previous input before publication. Verify actual record counts and unique IDs, rather than equating file count with repo count. Refresh the existing ingestion pipeline after publication; stable filenames require a full refresh on subsequent replacement snapshots. See the [README run instructions](README.md#github-scraping-ticket-3).
 
-**Layer 2: targeted fetches (stretch only, ticket #7)**
+**Layer 2: targeted fetches (ticket #7)**
 
-- Required investigations use the snapshot-backed UC tools; they do not depend on live HTTP.
-- Only after the full demo works, spend at most 30 minutes adding README retrieval for up to 5 demo repos inside the Databricks-hosted agent, cached in the existing `agent.tool_cache` table.
-- Recent issue titles (at most 5 per repo) are a further stretch. Maintainer-reply classification, contributor concentration and comprehensive histories are deferred. Cached-only demo playback must work without GitHub access.
+- `live_fetch_tools.py` gives the agent read-only README-signal and recent-issue fetches for any investigated repo, cached in the existing `agent.tool_cache` table. Fetch errors come back to the model as a tool result rather than failing the run.
+- Contributor concentration and comprehensive histories are deferred. Cached-only demo playback must work without GitHub access.
 
 **Deferred scraping work:** external enrichment, full release/weekly commit/contributor/comment histories, worker pools, durable resume/checkpoint frameworks, recurring scraping, coverage beyond 1,000 repos and production monitoring. These are not acceptance gates for the hackathon.
 
@@ -258,11 +257,11 @@ Everything lives in catalog `hackcamp`, in schemas `raw`, `bronze`, `silver`, `g
 | Table | Grain | Key columns |
 | --- | --- | --- |
 | `bronze.github_repos_raw` | One API response per repo per pull | `repo_id`, `payload` (JSON), `pulled_at` |
-| `silver.repos` | One row per repo | `repo_id`, `name`, `owner`, `language`, `stars`, `is_archived`, `pushed_at`, `last_release_at`, `commits_90d`, `commits_prev_90d`, `open_issues`, `open_prs`, `contributors`, `dependents`, `description`, `topics`, `advisory_fetch_status` (`ok` \| `failed` \| `not_fetched`) |
+| `silver.repos` | One row per repo | `repo_id`, `name`, `owner`, `language`, `stars`, `is_archived`, `pushed_at`, `last_release_at`, `commits_90d`, `commits_prev_90d`, `open_issues`, `open_prs`, `contributors`, `dependents`, `maintainer_reply_rate` and `top_contributor_share` (always NULL; not collected yet), `description`, `topics`, `advisory_fetch_status` (`ok` \| `failed` \| `not_fetched`) |
 | `silver.repo_advisories` | One row per GitHub security advisory per repo | `repo_id`, `ghsa_id`, `cve_id`, `severity`, `cvss_score`, `cwes`, `summary`, `published_at` |
 | `gold.repo_health` | One row per repo per run | `repo_id`, `run_id`, `health_score`, `status` (`healthy` \| `watchlist` \| `at_risk` \| `ignored`), `importance`, `days_since_release`, `commit_trend_pct`, `category`, `vuln_buckets` (array), `advisory_count`, `max_severity`, `max_cvss`, `x`, `y`, `cat_x`, `cat_y`, `scored_at` |
 | `agent.findings` | One row per investigated repo per run | `repo_id`, `run_id`, `risk_level` (includes `ignored`), `confidence`, `headline`, `explanation`, `evidence` (array of structs), `changed_since_last`, `recommended_actions`, `alternatives`, `tool_calls`, `trace_id`, `investigated_at` |
-| `agent.runs` | One row per agent run | `run_id`, `started_at`, `repos_triaged`, `repos_investigated`, `tool_calls_total`, `model`, `eval_score` |
+| `agent.runs` | One row per agent run | `run_id`, `started_at`, `repos_triaged`, `repos_investigated`, `tool_calls_total`, `model`, `eval_score` (always NULL; eval results live in the MLflow eval run) |
 | `agent.trace_steps` | One app-readable trace per investigation | `trace_id`, `repo_id`, `run_id`, `payload` (ordered decision/tool steps as JSON), `created_at` |
 | `agent.tool_cache` | One row per live fetch | `tool`, `args_hash`, `response`, `fetched_at` |
 | `agent.eval_labels` | One row per labelled repo | `repo_id`, `label`, `label_source`, `notes` |
@@ -293,7 +292,7 @@ Each sub-score runs from 0 to 1:
 | s\_bus (deferred) | 1 − top contributor's share of the last 100 commits | 0.6 or more | 0.1 or less |
 | s\_activity | Days since last push | 30 days or less | 365 days or more |
 
-- **Thresholds:** 70 or more is healthy, 40 to 69 is watchlist, below 40 is at risk. **Ignored overrides the formula:** if the repo is officially deprecated (README/project-status evidence, or archived *as* a deprecated line), set `status = ignored`, leave or null the numeric score for display, and exclude it from living triage. A bare archive without a deprecation story may still be `at_risk` until the agent confirms deprecate-and-park.
+- **Thresholds:** 70 or more is healthy, 40 to 69 is watchlist, below 40 is at risk. **Ignored overrides the formula:** if the repo is archived or on the curated deprecated list (`deprecated_repos.py`), set `status = ignored`, keep the numeric score for display, and exclude it from living triage.
 - **Importance** (star size and triage weight) = log10(stars + 1) in the MVP. Dependents-based importance is deferred. Ignored repos keep importance for map sizing but get **zero triage priority**.
 - **Triage priority** = importance × (100 − health) for non-ignored rows only, boosted when the score dropped by 10 or more points since the last run.
 - The weights are a first guess. Tune them against the labelled eval set in hour 15, and note the final weights in the pitch.
@@ -311,7 +310,6 @@ The core services carry the Best Use of Databricks story; additional services su
 | Unity Catalog | Namespace, permissions, lineage across tables, functions and models | One governed lineage from raw API JSON to an AI verdict | Core |
 | UC functions | The agent's data tools | The agent's tools are governed, discoverable catalog objects | Core |
 | Foundation Model APIs | The model behind the agent (`databricks-meta-llama-3-3-70b-instruct`; fallback `databricks-llama-4-maverick`) | No model hosting to manage | Core |
-| Mosaic AI Agent Framework | Agent loop, logged as an MLflow model | Platform-native agent rather than a script calling an API | Core |
 | MLflow Tracing and GenAI evaluation | Per-investigation traces; eval on the labelled set with LLM judges and custom metrics | Shows how the agent reasons and how well it performs | Core |
 | Lakeflow Jobs | Runs one on-demand scraping notebook; pipeline runs may be started manually | Source collection runs on Databricks, with visible task history | Core for F1 notebook; Stretch for F10 chaining/scheduling |
 | Databricks Apps + SQL warehouse | Hosts the React app and a thin Python API querying gold and findings | The whole product lives inside the workspace | Should |
@@ -342,7 +340,7 @@ The pitch includes one measured number: how often the agent's verdict matches gr
 **How to score**
 
 - The `eval_run` job runs the same agent on every labelled repo that has a gold row. Eval runs don't write to `findings`, so they never show up on the map.
-- Custom metrics, logged to MLflow: verdict accuracy, at-risk precision and recall, a false-alarm rate on the hard cases, the inconclusive rate and median tool calls. Scoring is binary on "is it at risk?": hard cases count as negatives, and an `inconclusive` verdict counts as not at risk.
+- Custom metrics, logged to MLflow: verdict accuracy, at-risk precision and recall, a false-alarm rate on the hard cases, the inconclusive rate and median tool calls. Scoring is binary on "is it flagged?": `at_risk` and `ignored` labels are positives and either verdict counts as a flag; healthy and hard cases are negatives, and an `inconclusive` verdict counts as not flagged.
 - An MLflow GenAI LLM judge checks that each explanation is grounded in the trace's tool outputs.
 - The baseline formula alone is scored too, and the gap is logged as `agent_minus_formula_accuracy`, so the pitch can say how much the agent adds over the formula.
 
@@ -371,7 +369,7 @@ A 3-minute walkthrough. Every Databricks claim is shown on screen, not just said
 
 1. **Hook (0:00–0:20).** "Your app depends on hundreds of packages. Which ones are dying?" Open the galaxy map with the verified collected repo count (target 1,000), with red ones scattered through the clusters.
 2. **The map (0:20–0:50).** Type "unmaintained Python HTTP clients" and the map zooms to the matches; filter by the Injection bucket. Filter to at-risk. Hover a big red star and click it. The drawer shows the score, the agent's verdict and the evidence.
-3. **How the agent decided (0:50–1:30).** Open the trace tab and walk through its steps: the agent checked releases, saw conflicting commit data, compared archive status and last push, and concluded at risk using the collected evidence. Live README or issue fetches are only shown if the stretch work was completed. Point out that it chose those steps itself.
+3. **How the agent decided (0:50–1:30).** Open the trace tab and walk through its steps: the agent checked releases, saw conflicting commit data, compared archive status and last push, and concluded at risk using the collected evidence. If the agent used a live README or issue fetch, show it. Point out that it chose those steps itself.
 4. **Live run (1:30–2:00).** Hit "Investigate now" on a repo not yet investigated, or show the Lakeflow Job's last run graph if serving isn't ready. Show the new finding appear.
 5. **Platform (2:00–2:30).** Show the successful Databricks scraping task and its raw Volume output, Unity Catalog lineage from the raw volume to findings, and the UC functions list showing the agent's tools. Show the Lakeflow Job schedule if implemented.
 6. **Proof (2:30–2:50).** The MLflow eval run, with at-risk recall and the improvement over the baseline formula.

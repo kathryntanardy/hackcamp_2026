@@ -16,6 +16,15 @@ resources:
               source: WORKSPACE
             warehouse_id: ${var.warehouse_id}
 
+        - task_key: create_trace_steps
+          depends_on:
+            - task_key: create_uc
+          sql_task:
+            file:
+              path: ../src/setup/create_trace_steps.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+
         - task_key: create_uc_tools
           depends_on:
             - task_key: create_uc

@@ -95,7 +95,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 - Header: name, GitHub link, language, stars, dependents.
 - Health gauge plus the collected metrics: days since last release, commits in the last 90 days vs the previous 90, and open issues/PR counts. Unanswered PRs, maintainer-response and contributor-share metrics show as unavailable until collected; missing data is not evidence of abandonment.
 - Agent verdict: risk level, confidence, a short explanation, an evidence list, and a recommended alternative if one was found.
-- **"How the agent decided" tab:** the MLflow trace as a step list showing tool name, inputs, a result summary and the model's reasoning at each step.
+- **"How the agent decided" tab:** the MLflow trace as a step list showing tool name, inputs, a result summary and a brief public decision summary when the model supplies one. Missing summaries are explicit; hidden provider reasoning is not shown.
 - Previous verdict and its date, if one exists.
 
 ## Agent design
@@ -126,6 +126,10 @@ One tool-calling agent, built with Mosaic AI Agent Framework on a Foundation Mod
 | `find_alternatives(repo)` (P2) | Vector Search | Up to 3 similar healthy repos |
 
 The required agent tools read the frozen snapshot and still support model-selected investigations with at least two tools. Live-fetch tools are optional: use Python inside the existing Databricks-hosted agent if attempted, without new serving infrastructure or an outbound-HTTP setup project.
+
+**Ticket #6 implementation:** `databricks/src/setup/create_uc_tools.sql` registers five active snapshot tools plus an explicitly unavailable contributor-function compatibility entry. All results preserve JSON nulls; missing repos/findings return `found=false`. Release age is measured at collection time, commit percentage change is unknown when the previous count is zero, and unavailable response/contributor metrics are never estimated. The agent does not offer the contributor tool. Bundle job `uc_tools` checks the actual SQL against temporary edge-case fixtures before registration, then verifies registered functions against the live silver/gold tables. See the [README tool run instructions](README.md#agent-data-tools-ticket-6).
+
+**Ticket #11 implementation:** each finding stores the trace ID captured from its own MLflow root span. All model calls (including retries/finalization) and full tool inputs/results are traced. `agent.trace_steps` stores the same trace as ordered JSON so the app can read it through the SQL warehouse; `get_finding_trace` provides the lookup contract. Public decision summaries and the verdict explanation support the UI; private provider reasoning is not exported. The `agent_run` job verifies MLflow retrieval and the persisted finding-to-steps link after investigation. The HTTP endpoint remains in ticket #12.
 
 **Verdict schema**
 
@@ -197,6 +201,7 @@ Everything lives in catalog `hackcamp`, in schemas `raw`, `bronze`, `silver`, `g
 | `gold.repo_health` | One row per repo per run | `repo_id`, `run_id`, `health_score`, `status`, `importance`, `days_since_release`, `commit_trend_pct`, `x`, `y`, `scored_at` |
 | `agent.findings` | One row per investigated repo per run | `repo_id`, `run_id`, `risk_level`, `confidence`, `headline`, `explanation`, `evidence` (array of structs), `changed_since_last`, `alternatives`, `tool_calls`, `trace_id`, `investigated_at` |
 | `agent.runs` | One row per agent run | `run_id`, `started_at`, `repos_triaged`, `repos_investigated`, `tool_calls_total`, `model`, `eval_score` |
+| `agent.trace_steps` | One app-readable trace per investigation | `trace_id`, `repo_id`, `run_id`, `payload` (ordered decision/tool steps as JSON), `created_at` |
 | `agent.tool_cache` | One row per live fetch | `tool`, `args_hash`, `response`, `fetched_at` |
 | `agent.eval_labels` | One row per labelled repo | `repo_id`, `label`, `label_source`, `notes` |
 

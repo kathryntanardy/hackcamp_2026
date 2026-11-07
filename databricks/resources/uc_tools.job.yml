@@ -1,0 +1,41 @@
+resources:
+  jobs:
+    uc_tools:
+      name: hackcamp-uc-tools
+      description: Verify SQL tool contracts, register UC functions and check live data (ticket 6).
+      max_concurrent_runs: 1
+      parameters:
+        - name: volume_path
+          default: ${var.volume_path}
+      tasks:
+        - task_key: verify_contracts
+          notebook_task:
+            notebook_path: ../src/setup/verify_uc_tools.py
+            source: WORKSPACE
+            base_parameters:
+              mode: fixtures
+              sql_file: ${workspace.file_path}/src/setup/create_uc_tools.sql
+              volume_path: "{{job.parameters.volume_path}}"
+          environment_key: tools_env
+        - task_key: register_tools
+          depends_on:
+            - task_key: verify_contracts
+          sql_task:
+            file:
+              path: ../src/setup/create_uc_tools.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+        - task_key: verify_live
+          depends_on:
+            - task_key: register_tools
+          notebook_task:
+            notebook_path: ../src/setup/verify_uc_tools.py
+            source: WORKSPACE
+            base_parameters:
+              mode: live
+              volume_path: "{{job.parameters.volume_path}}"
+          environment_key: tools_env
+      environments:
+        - environment_key: tools_env
+          spec:
+            environment_version: "4"

@@ -1,6 +1,7 @@
 # Ticket dependency graph
 
-✅ = done in workspace · ◐ = partial (#3 seed only)
+✅ = done in workspace. #3 has a verified 100-repo live snapshot; #6 has passed
+fixture and live-catalog verification (see `TICKET3_RUN.md` and `TICKET6_RUN.md`).
 
 ```mermaid
 flowchart TB
@@ -9,7 +10,7 @@ flowchart TB
     n2["#2 agent tables ✅"]
   end
   subgraph IngestGold["Ingest + gold"]
-    n3["#3 GitHub pull ◐"]
+    n3["#3 GitHub pull ✅"]
     n4["#4 bronze/silver ✅"]
     n5["#5 gold score ✅"]
   end

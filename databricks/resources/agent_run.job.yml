@@ -10,10 +10,20 @@ resources:
           default: databricks-meta-llama-3-3-70b-instruct
         - name: max_tool_calls
           default: "8"
+        - name: repo_timeout_sec
+          default: "180"
         - name: experiment_path
-          default: /Users/philip03ho@gmail.com/hackcamp-agent
+          default: /Users/${workspace.current_user.userName}/hackcamp-agent
       tasks:
+        - task_key: prepare_trace_steps
+          sql_task:
+            file:
+              path: ../src/setup/create_trace_steps.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
         - task_key: investigate
+          depends_on:
+            - task_key: prepare_trace_steps
           notebook_task:
             notebook_path: ../src/agent/run_investigation.py
             source: WORKSPACE
@@ -21,7 +31,18 @@ resources:
               budget_n: "{{job.parameters.budget_n}}"
               model_endpoint: "{{job.parameters.model_endpoint}}"
               max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
               experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: verify_traces
+          depends_on:
+            - task_key: investigate
+          notebook_task:
+            notebook_path: ../src/agent/verify_traces.py
+            source: WORKSPACE
+            base_parameters:
+              run_id: "{{tasks.investigate.values.run_id}}"
+              volume_path: ${var.volume_path}
           environment_key: agent_env
 
       environments:

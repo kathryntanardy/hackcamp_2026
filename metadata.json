@@ -3,7 +3,7 @@
   "checkpoint_id": "01M6W6NQPY79K53HX5QCSET8PR",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 5,
+  "checkpoints_count": 10,
   "files_touched": [
     "PRD.md"
   ],
@@ -14,6 +14,13 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
@@ -24,15 +31,15 @@
     "api_call_count": 0
   },
   "redaction": {
-    "replacements": 28,
+    "replacements": 57,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
       "credential_value": 0,
       "credentialed_uri": 0,
-      "entropy": 12,
-      "key_context": 16,
+      "entropy": 24,
+      "key_context": 33,
       "provider_token": 0,
       "shell_stdin": 0
     }

@@ -49,10 +49,12 @@ from eval_metrics import score
 
 labelled = spark.sql(
     """
-    SELECT l.repo_id, l.label, l.label_source, g.status AS formula_status, g.health_score
+    SELECT l.repo_id, l.label, l.label_source, g.status AS formula_status, g.health_score,
+           -- round-robin across labels so a small `limit` still covers every label
+           row_number() OVER (PARTITION BY l.label ORDER BY l.repo_id) AS rr
     FROM hackcamp.agent.eval_labels l
     LEFT JOIN hackcamp.gold.repo_health g ON g.repo_id = l.repo_id
-    ORDER BY l.label, l.repo_id
+    ORDER BY rr, l.label
     """
 ).collect()
 

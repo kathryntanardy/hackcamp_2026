@@ -118,3 +118,85 @@ Offline checks require only Python:
 ```sh
 python3 -m unittest discover -s databricks/tests -v
 ```
+
+## Agent data tools (ticket #6)
+
+The agent uses five snapshot-backed Unity Catalog functions in `hackcamp.tools`:
+repo metrics, fixed 90-day commit totals, the latest release, issue/PR counts,
+and the previous finding. Each returns a JSON object with explicit nulls,
+provenance and a `found` flag. Missing rows return `found: false`; missing metrics
+do not become evidence of abandonment. Release age is measured at the snapshot's
+collection time so replaying frozen data gives the same result.
+
+Weekly histories, inter-release gaps, response times, unanswered counts and
+contributor concentration are not inferred. The contributor function remains
+registered as an unavailable compatibility entry and is excluded from the
+agent's callable tools. Its output contains no bus-factor proxy.
+
+After the real snapshot is loaded through the existing pipeline, deploy and
+verify the functions from `databricks/`:
+
+```sh
+databricks bundle validate -t dev --profile school
+databricks bundle deploy -t dev --profile school
+databricks bundle run uc_tools -t dev --profile school
+```
+
+This dedicated job first tests the actual SQL definitions against temporary
+fixture views/functions, then registers the persistent UC functions, then checks
+their outputs against known repos in the live silver/gold tables. It does not
+run the sample-seeding setup job or the investigation agent. Registration needs
+permission to create/replace functions in `hackcamp.tools` and access to their
+source tables. Existing function ownership/management permissions are also
+required for replacements; the job does not change grants.
+
+Each verification task prints its result and saves a JSON summary under
+`/Volumes/hackcamp/raw/github/ticket6_verification/<run_id>/summary.json`.
+The tests include missing repos, null metrics, zero prior commit counts,
+historical verdict selection, and ignoring old estimated metrics.
+
+## Investigation traces (ticket #11)
+
+Each investigation captures its own root MLflow trace ID and stores it on the
+finding. Model decisions, structured-output retries, budget finalization and
+every executed tool call are traced. Tool spans retain their complete inputs and
+outputs. Model/tool failures produce a traced inconclusive finding or an explicit
+error step rather than silently assigning another investigation's trace.
+
+The same trace is exported to `hackcamp.agent.trace_steps` as a JSON payload,
+keyed by `trace_id` and associated with `repo_id` and `run_id`. This lets the app
+read traces through the existing SQL warehouse, without an MLflow client in its
+backend. `get_finding_trace(spark, repo_id, run_id=None)` in
+`databricks/src/agent/trace_steps.py` implements the lookup contract; the HTTP
+endpoint belongs to ticket #12.
+
+```sql
+SELECT t.payload
+FROM hackcamp.agent.findings f
+JOIN hackcamp.agent.trace_steps t
+  ON f.trace_id = t.trace_id
+ AND f.repo_id = t.repo_id AND f.run_id = t.run_id
+WHERE f.repo_id = :repo_id AND f.run_id = :run_id;
+```
+
+The payload includes the trace ID, experiment link, verdict explanation and
+chronological `steps`. Each step includes its kind, tool name, inputs, outputs,
+result summary, error status and public decision summary in `reasoning`.
+`reasoning_available=false` makes missing explanations explicit. Hidden provider
+reasoning and system prompts are not included in the app export. Large tool
+outputs remain intact; only the display summary is shortened.
+
+From `databricks/`, validate/deploy as usual, then verify with one real repo:
+
+```sh
+databricks bundle run agent_run -t dev --profile school --params budget_n=1,max_tool_calls=4
+```
+
+The job prepares the trace-export table, runs the investigation, persists its
+trace/finding link, and verifies that fetching MLflow and querying the finding
+return the same ordered steps. `experiment_path` defaults to the signed-in
+user's own experiment; override it to use an existing shared experiment if you
+have access. The verification task saves its summary under
+`/Volumes/hackcamp/raw/github/ticket11_verification/<run_id>/summary.json`.
+It does not refresh or replace the scraped corpus. Legacy findings without an
+export return `status=not_ready`; unknown findings return `found=false`.

@@ -41,13 +41,13 @@ dbutils.widgets.text("budget_n", "5")
 dbutils.widgets.text("model_endpoint", "databricks-meta-llama-3-3-70b-instruct")
 dbutils.widgets.text("max_tool_calls", "8")
 dbutils.widgets.text("repo_timeout_sec", "180")
-dbutils.widgets.text("experiment_path", "/Users/philip03ho@gmail.com/hackcamp-agent")
+dbutils.widgets.text("experiment_path", "")
 
 BUDGET_N = int(dbutils.widgets.get("budget_n"))
 MODEL = dbutils.widgets.get("model_endpoint")
 MAX_TOOL_CALLS = int(dbutils.widgets.get("max_tool_calls"))
 REPO_TIMEOUT_SEC = int(dbutils.widgets.get("repo_timeout_sec"))
-EXPERIMENT_PATH = dbutils.widgets.get("experiment_path")
+EXPERIMENT_PATH = dbutils.widgets.get("experiment_path").strip() or f"/Users/{WorkspaceClient().current_user.me().user_name}/hackcamp-agent"
 RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8]
 
 print(
@@ -94,11 +94,15 @@ def _databricks_auth() -> tuple[str, str]:
 
 
 _DB_HOST, _DB_TOKEN = _databricks_auth()
-llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints")
+llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints", max_retries=0)
 
 # COMMAND ----------
 
 # MAGIC %run ./live_fetch_tools
+
+# COMMAND ----------
+
+# MAGIC %run ./trace_steps
 
 # COMMAND ----------
 
@@ -107,31 +111,25 @@ UC_TOOLS = {
         "uc": "hackcamp.tools.get_repo_metrics",
         "sql": "SELECT hackcamp.tools.get_repo_metrics(?) AS r",
         "params": ["repo"],
-        "description": "Baseline health score and core metrics for a repo_id.",
+        "description": "Latest gold baseline score and collected snapshot metrics. Null metrics are unknown, not zero.",
     },
     "get_commit_trend": {
         "uc": "hackcamp.tools.get_commit_trend",
         "sql": "SELECT hackcamp.tools.get_commit_trend(?, ?) AS r",
         "params": ["repo", "weeks"],
-        "description": "Commit trend over recent vs previous windows; weeks defaults to 12.",
+        "description": "Two fixed 90-day commit totals and their percentage change. No weekly history. weeks is compatibility-only; a zero denominator gives unknown change.",
     },
     "get_release_history": {
         "uc": "hackcamp.tools.get_release_history",
         "sql": "SELECT hackcamp.tools.get_release_history(?) AS r",
         "params": ["repo"],
-        "description": "Last release date and days since release.",
+        "description": "Latest release only and days since release at collection time. No full history or inter-release gaps; absent release data is unknown.",
     },
     "get_issue_backlog": {
         "uc": "hackcamp.tools.get_issue_backlog",
         "sql": "SELECT hackcamp.tools.get_issue_backlog(?) AS r",
         "params": ["repo"],
-        "description": "Open issues/PRs, reply rate, estimated unanswered count.",
-    },
-    "get_contributor_concentration": {
-        "uc": "hackcamp.tools.get_contributor_concentration",
-        "sql": "SELECT hackcamp.tools.get_contributor_concentration(?) AS r",
-        "params": ["repo"],
-        "description": "Top contributor share / bus-factor proxy.",
+        "description": "Open issue and PR counts only. Reply rates, unanswered counts and response times are unavailable and null.",
     },
     "get_previous_finding": {
         "uc": "hackcamp.tools.get_previous_finding",
@@ -211,18 +209,6 @@ OPENAI_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "get_contributor_concentration",
-            "description": UC_TOOLS["get_contributor_concentration"]["description"],
-            "parameters": {
-                "type": "object",
-                "properties": {"repo": {"type": "string"}},
-                "required": ["repo"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "get_previous_finding",
             "description": UC_TOOLS["get_previous_finding"]["description"],
             "parameters": {
@@ -264,7 +250,14 @@ OPENAI_TOOLS = [
 SYSTEM_PROMPT = """You are a maintainer-risk analyst for open-source packages.
 Investigate ONE repository using the provided tools. Choose which tools to call and in what order — there is no fixed sequence.
 Do not invent metrics — every claim must come from a tool result.
+Null or unavailable is unknown, not zero or evidence of abandonment.
+The MVP provides fixed 90-day commit windows, latest release and backlog counts.
+Do not claim weekly history, inter-release gaps, contributor concentration, or unanswered/response-time metrics from the snapshot.
+Contributor concentration is disabled until measured history exists.
+Only get_previous_finding may return historical verdicts; distinguish their date from the current snapshot.
 Prefer UC metric tools; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
+When requesting tools, provide a brief public decision summary in assistant content when possible.
+Do not provide private chain-of-thought; final explanations should summarize the evidence.
 Never open issues or post comments — tools are read-only.
 
 When signals conflict (e.g. low recent commits but steady releases, or high stars but archived), dig deeper with another tool before deciding — that often means mature/quiet rather than abandoned.
@@ -273,7 +266,7 @@ Scoring rubric (align with baseline formula):
 - healthy: active releases/commits, shared ownership, maintainers reply
 - watchlist: slowing activity, rising bus factor, aging releases
 - at_risk: archived, long release gap, near-zero commits, unanswered backlog, single maintainer dominance
-- inconclusive: only if tools conflict and you cannot decide
+- inconclusive: evidence is missing, insufficient or conflicting; never force a risk verdict from unavailable metrics
 
 Stop calling tools when confidence >= 0.7, or after the tool budget (max 8 calls).
 When done, reply with ONLY a JSON object (no markdown) matching:
@@ -450,201 +443,164 @@ assert triage, "No repos to investigate — is gold.repo_health empty?"
 
 # COMMAND ----------
 
-def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | None]:
+def call_model(messages, *, phase="decide", temperature=0.2, tools=None, timeout=90):
+    """Trace every model call, including validation retries and budget finalization."""
+    with mlflow.start_span(name=f"llm_{phase}", span_type="CHAT_MODEL") as span:
+        span.set_attribute("phase", phase)
+        span.set_inputs({"messages": messages, "model": MODEL})
+        kwargs = {"model": MODEL, "messages": messages, "temperature": temperature, "timeout": timeout}
+        if tools is not None:
+            kwargs.update(tools=tools, tool_choice="auto")
+        response = llm.chat.completions.create(**kwargs)
+        message = response.choices[0].message
+        # Log only the visible answer/tool requests, never provider reasoning_content.
+        span.set_outputs({
+            "content": message.content,
+            "tool_calls": [{"name": call.function.name, "arguments": call.function.arguments}
+                           for call in (message.tool_calls or [])],
+        })
+        return message
+
+
+def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
     user_msg = (
         f"Investigate maintainer risk for `{repo_id}`.\n"
         f"Triage reason: {triage_reason}\n"
-        f"Choose which tools to call and in what order (no fixed sequence).\n"
+        "Choose which tools to call and in what order (no fixed sequence).\n"
         f"Tool budget: {MAX_TOOL_CALLS} calls. Per-repo wall clock: {REPO_TIMEOUT_SEC}s."
     )
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_msg},
-    ]
-    called_tools: set[str] = set()
+    messages = [{"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_msg}]
+    called_tools = set()
     tool_calls = 0
-    verdict: Verdict | None = None
-    started = time.monotonic()
+    decisions = 0
+    verdict = None
+    deadline = time.monotonic() + REPO_TIMEOUT_SEC
 
-    def _timed_out() -> bool:
-        return (time.monotonic() - started) >= REPO_TIMEOUT_SEC
+    def _timed_out():
+        return time.monotonic() >= deadline
+
+    def _call_with_deadline(messages, **kwargs):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+        message = call_model(messages, timeout=min(90, remaining), **kwargs)
+        if _timed_out():
+            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+        return message
 
     with mlflow.start_span(name=f"investigate:{repo_id}", span_type="AGENT") as root:
-        root.set_inputs(
-            {
-                "repo_id": repo_id,
-                "triage_reason": triage_reason,
-                "repo_timeout_sec": REPO_TIMEOUT_SEC,
-            }
-        )
-
-        while tool_calls < MAX_TOOL_CALLS:
-            if _timed_out():
-                verdict = inconclusive(
-                    repo_id,
-                    tool_calls,
-                    f"Per-repo timeout after {REPO_TIMEOUT_SEC}s",
-                )
-                root.set_outputs(verdict.model_dump())
-                break
-
-            with mlflow.start_span(name="llm_decide", span_type="CHAT_MODEL") as llm_span:
-                llm_span.set_inputs({"messages_tail": messages[-2:], "model": MODEL})
-                resp = llm.chat.completions.create(
-                    model=MODEL,
-                    messages=messages,
-                    tools=OPENAI_TOOLS,
-                    tool_choice="auto",
-                    temperature=0.2,
-                )
-                msg = resp.choices[0].message
-                llm_span.set_outputs(
-                    {
-                        "content": msg.content,
-                        "tool_calls": [
-                            {"name": t.function.name, "arguments": t.function.arguments}
-                            for t in (msg.tool_calls or [])
-                        ],
-                    }
-                )
-
-            if msg.tool_calls:
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": msg.content or "",
-                        "tool_calls": [
-                            {
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
-                                },
-                            }
-                            for tc in msg.tool_calls
-                        ],
-                    }
-                )
-                for tc in msg.tool_calls:
-                    if tool_calls >= MAX_TOOL_CALLS or _timed_out():
-                        break
-                    name = tc.function.name
-                    try:
-                        args = json.loads(tc.function.arguments or "{}")
-                    except json.JSONDecodeError:
-                        args = {"repo": repo_id}
-                    args.setdefault("repo", repo_id)
-
-                    with mlflow.start_span(name=name, span_type="TOOL") as tool_span:
-                        tool_span.set_inputs(args)
-                        result = execute_tool(name, args, repo_id)
-                        tool_span.set_outputs({"result": result[:2000]})
-
-                    called_tools.add(name)
-                    tool_calls += 1
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": result,
-                        }
-                    )
-                if _timed_out() and verdict is None:
-                    verdict = inconclusive(
-                        repo_id,
-                        tool_calls,
-                        f"Per-repo timeout after {REPO_TIMEOUT_SEC}s",
-                    )
-                    root.set_outputs(verdict.model_dump())
-                    break
-                continue
-
-            # No tool calls — expect final JSON verdict
-            content = msg.content or ""
-            try:
-                raw = extract_json(content)
-                verdict = validate_verdict(raw, repo_id, called_tools, tool_calls)
-                if len(called_tools) < 2:
-                    # Force at least 2 distinct tools per F4 when model stops early
-                    messages.append({"role": "assistant", "content": content})
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                "You must call at least 2 different tools before concluding. "
-                                "Continue investigating."
-                            ),
-                        }
-                    )
+        # Capture the owning root directly; a global last-trace lookup can be stale.
+        trace_id = root.trace_id
+        if not trace_id:
+            raise RuntimeError("Investigation did not receive an MLflow trace ID")
+        root.set_inputs({"repo_id": repo_id, "run_id": RUN_ID, "triage_reason": triage_reason,
+                         "repo_timeout_sec": REPO_TIMEOUT_SEC})
+        root.set_attribute("repo_id", repo_id)
+        root.set_attribute("run_id", RUN_ID)
+        try:
+            while tool_calls < MAX_TOOL_CALLS and decisions < MAX_TOOL_CALLS + 2:
+                if _timed_out():
+                    raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+                decisions += 1
+                msg = _call_with_deadline(messages, tools=OPENAI_TOOLS)
+                if msg.tool_calls:
+                    messages.append({
+                        "role": "assistant", "content": msg.content or "",
+                        "tool_calls": [{"id": tc.id, "type": "function", "function": {
+                            "name": tc.function.name, "arguments": tc.function.arguments}}
+                            for tc in msg.tool_calls],
+                    })
+                    for tc in msg.tool_calls:
+                        if _timed_out():
+                            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+                        if tool_calls >= MAX_TOOL_CALLS:
+                            # Complete the model protocol without claiming an unexecuted tool span.
+                            messages.append({"role": "tool", "tool_call_id": tc.id,
+                                             "content": '{"error":"Tool budget exhausted; not executed"}'})
+                            continue
+                        name = tc.function.name
+                        try:
+                            args = json.loads(tc.function.arguments or "{}")
+                            if not isinstance(args, dict):
+                                args = {}
+                        except json.JSONDecodeError:
+                            args = {}
+                        args.setdefault("repo", repo_id)
+                        with mlflow.start_span(name=name, span_type="TOOL") as tool_span:
+                            tool_span.set_inputs(args)
+                            tool_span.set_attribute("step_index", tool_calls + 1)
+                            tool_span.set_attribute("tool_call_id", tc.id)
+                            summary = public_summary(msg.content)
+                            if summary:
+                                tool_span.set_attribute("decision_summary", summary)
+                            try:
+                                result = execute_tool(name, args, repo_id)
+                            except Exception as exc:
+                                result = json.dumps({"error": f"{type(exc).__name__}: {str(exc)[:500]}", "tool": name})
+                            try:
+                                parsed = json.loads(result)
+                            except (ValueError, TypeError):
+                                parsed = result
+                            tool_span.set_outputs({"result": parsed})
+                            if isinstance(parsed, dict) and parsed.get("error"):
+                                tool_span.set_status("ERROR")
+                        called_tools.add(name)
+                        tool_calls += 1
+                        messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+                        if _timed_out():
+                            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
                     continue
-                root.set_outputs(verdict.model_dump())
-                break
-            except (json.JSONDecodeError, ValidationError) as exc:
-                messages.append({"role": "assistant", "content": content})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Your last reply was invalid ({exc}). "
-                            "Return ONLY valid verdict JSON."
-                        ),
-                    }
-                )
-                # one structured retry then mark inconclusive
-                retry = llm.chat.completions.create(
-                    model=MODEL,
-                    messages=messages,
-                    temperature=0.1,
-                )
-                retry_content = retry.choices[0].message.content or ""
+
+                content = msg.content or ""
                 try:
-                    raw = extract_json(retry_content)
-                    verdict = validate_verdict(raw, repo_id, called_tools, tool_calls)
-                    root.set_outputs(verdict.model_dump())
-                except Exception as exc2:
-                    verdict = inconclusive(
-                        repo_id, tool_calls, f"Invalid verdict after retry: {exc2}"
-                    )
-                    root.set_outputs(verdict.model_dump())
-                break
-        else:
-            # Budget exhausted — ask for verdict from evidence so far
-            messages.append(
-                {
-                    "role": "user",
-                    "content": "Tool budget reached. Return the final verdict JSON now.",
-                }
-            )
-            final = llm.chat.completions.create(
-                model=MODEL, messages=messages, temperature=0.1
-            )
-            try:
-                raw = extract_json(final.choices[0].message.content or "")
-                verdict = validate_verdict(raw, repo_id, called_tools, tool_calls)
-            except Exception as exc:
-                verdict = inconclusive(repo_id, tool_calls, f"Budget exhausted; {exc}")
-            root.set_outputs(verdict.model_dump())
-
-    if verdict is None:
-        verdict = inconclusive(repo_id, tool_calls, "No verdict produced")
-
-    trace_id = None
-    try:
-        trace_id = mlflow.get_last_active_trace_id()
-    except Exception:
-        pass
+                    verdict = validate_verdict(extract_json(content), repo_id, called_tools, tool_calls)
+                    if len(called_tools) < 2:
+                        verdict = None
+                        messages.extend([{"role": "assistant", "content": content}, {
+                            "role": "user", "content": "Call at least 2 different tools before concluding; continue investigating."}])
+                        continue
+                    break
+                except (json.JSONDecodeError, ValidationError) as exc:
+                    messages.extend([{"role": "assistant", "content": content}, {
+                        "role": "user", "content": f"Your last reply was invalid ({exc}). Return ONLY valid verdict JSON."}])
+                    retry = _call_with_deadline(messages, phase="structured_retry", temperature=0.1)
+                    try:
+                        verdict = validate_verdict(extract_json(retry.content or ""), repo_id, called_tools, tool_calls)
+                    except Exception as exc2:
+                        verdict = inconclusive(repo_id, tool_calls, f"Invalid verdict after retry: {type(exc2).__name__}")
+                    break
+            if verdict is None:
+                messages.append({"role": "user", "content": "Investigation limit reached. Return the final verdict JSON from available evidence now."})
+                final = _call_with_deadline(messages, phase="budget_finalize", temperature=0.1)
+                try:
+                    verdict = validate_verdict(extract_json(final.content or ""), repo_id, called_tools, tool_calls)
+                except Exception as exc:
+                    verdict = inconclusive(repo_id, tool_calls, f"No valid final verdict: {type(exc).__name__}")
+        except Exception as exc:
+            root.set_status("ERROR")
+            root.set_attribute("error_type", type(exc).__name__)
+            if isinstance(exc, TimeoutError) or _timed_out():
+                root.set_attribute("timed_out", True)
+                verdict = inconclusive(repo_id, tool_calls, f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+            else:
+                verdict = inconclusive(repo_id, tool_calls, f"Investigation failed: {type(exc).__name__}: {str(exc)[:300]}")
+        root.set_outputs(verdict.model_dump())
     return verdict, trace_id
 
 # COMMAND ----------
 
 findings: list[dict[str, Any]] = []
+trace_exports = []
 tool_calls_total = 0
 
 for item in triage:
     repo_id = item["repo_id"]
     print(f"\n=== Investigating {repo_id} ===")
     verdict, trace_id = investigate_repo(repo_id, item["reason"])
+    trace_payload = fetch_trace_steps(trace_id, repo_id=repo_id, run_id=RUN_ID, host=_DB_HOST)
+    trace_exports.append((trace_id, repo_id, RUN_ID, json.dumps(trace_payload),
+                          datetime.now(timezone.utc).replace(tzinfo=None)))
     tool_calls_total += verdict.tool_calls
     row = {
         "repo_id": verdict.repo_id,
@@ -704,6 +660,17 @@ findings_schema = StructType(
     ]
 )
 
+# Publish app-readable steps before linking findings to their trace IDs.
+trace_exports_df = spark.createDataFrame(
+    trace_exports, "trace_id STRING, repo_id STRING, run_id STRING, payload STRING, created_at TIMESTAMP"
+)
+trace_exports_df.createOrReplaceTempView("new_trace_steps")
+spark.sql("""
+    MERGE INTO hackcamp.agent.trace_steps t USING new_trace_steps s
+    ON t.trace_id = s.trace_id
+    WHEN MATCHED THEN UPDATE SET *
+    WHEN NOT MATCHED THEN INSERT *
+""")
 findings_df = spark.createDataFrame(findings, schema=findings_schema)
 findings_df.createOrReplaceTempView("new_findings")
 
@@ -744,5 +711,6 @@ runs_df = spark.createDataFrame(
 )
 runs_df.write.mode("append").saveAsTable("hackcamp.agent.runs")
 
-print(f"Wrote {len(findings)} findings for run_id={RUN_ID}")
+dbutils.jobs.taskValues.set(key="run_id", value=RUN_ID)
+print(f"Wrote {len(findings)} findings and trace exports for run_id={RUN_ID}")
 display(findings_df.select("repo_id", "risk_level", "confidence", "headline", "tool_calls", "trace_id"))

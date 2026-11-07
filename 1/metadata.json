@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6VY7WGBWYVYQKCGXZDRTQYJ",
+  "session_id": "956f2a4e-40fd-472a-8cde-41e84af18404",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T21:22:13.980923Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "save_step_count": 2,
+  "files_touched": [
+    "backend/app.yaml",
+    "backend/app/db.py",
+    "backend/app/main.py",
+    "backend/requirements.txt",
+    "backend/sample_responses/findings.json",
+    "backend/sample_responses/repo_detail.json",
+    "backend/sample_responses/repos.json",
+    "backend/sample_responses/runs_latest.json",
+    "backend/sample_responses/trace.json",
+    "backend/tests/test_api.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "da9dbcdd5cb2",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 1006,
+    "cache_read_tokens": 184735,
+    "output_tokens": 1040,
+    "api_call_count": 2
+  },
+  "redaction": {
+    "replacements": 22,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 12,
+      "key_context": 10,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 10
+  }
+}

@@ -1,0 +1,53 @@
+I want to design a new Claude Code skill. Interview me ONE question at a time
+to fill in a design doc with these sections:
+1.⁠ ⁠The one job (one sentence)
+2.⁠ ⁠Done means (how we'll know the output is right)
+3.⁠ ⁠Inputs and outputs (exact formats and files)
+4.⁠ ⁠Triggers: 8 things I'd really type that SHOULD use it, and 5 near-misses
+   that should NOT
+5.⁠ ⁠Exact jobs (go in scripts) vs judgement (goes in instructions)
+6.⁠ ⁠Gates: checks that must pass before "done". For each, how we'll prove it
+   can fail.
+7.⁠ ⁠Rules: known mistakes, each with the reason
+Push back if my answers are vague. Suggest answers when I'm stuck, but let me
+decide. When we're done, save it as design.md in
+/Users/verrill/Documents/Nerding/Hackathon/hackcamp_2026/hackcamp_2026/.claude/skills/prd_editor and show it to me.
+
+The skill I have in mind: Everytime there's a design change i want you to update the PRD
+
+---
+
+a and b
+
+---
+
+1, 2, 4
+
+---
+
+everythings since it was edited
+no chat summary
+
+---
+
+looks good
+
+---
+
+fire on decisions
+
+---
+
+looks good
+
+---
+
+keep all 4
+
+---
+
+keep
+
+---
+
+Build it

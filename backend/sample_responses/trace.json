@@ -1,0 +1,159 @@
+{
+  "repo_id": "moment/moment",
+  "run_id": "20261107200203-6f014084",
+  "trace_id": "tr-e7ed4b630c51de182d6cfc2dcb03fbc4",
+  "steps": [
+    {
+      "step": 1,
+      "tool": "get_repo_metrics",
+      "inputs": {
+        "repo": "moment/moment"
+      },
+      "result": {
+        "repo_id": "moment/moment",
+        "name": "moment",
+        "owner": "moment",
+        "language": "JavaScript",
+        "health_score": 12.34,
+        "status": "at_risk",
+        "importance": 5.1761,
+        "stars": 48000,
+        "dependents": 150000,
+        "is_archived": false,
+        "days_since_release": 420,
+        "commit_trend_pct": -98.0,
+        "commits_90d": 1,
+        "commits_prev_90d": 50,
+        "open_issues": 40,
+        "open_prs": 22,
+        "contributors": 35,
+        "maintainer_reply_rate": 0.05,
+        "top_contributor_share": 0.8,
+        "pushed_at": "2025-12-22 12:00:00",
+        "last_release_at": "2025-09-13 12:00:00",
+        "scored_at": "2026-11-07 19:47:20.979036"
+      },
+      "reasoning": null
+    },
+    {
+      "step": 2,
+      "tool": "get_contributor_concentration",
+      "inputs": {
+        "repo": "moment/moment"
+      },
+      "result": {
+        "repo_id": "moment/moment",
+        "top_contributor_share": 0.8,
+        "bus_factor_score": 0.2,
+        "contributors": 35,
+        "window": "last_100_commits_proxy",
+        "source": "silver_metrics"
+      },
+      "reasoning": null
+    },
+    {
+      "step": 3,
+      "tool": "get_release_history",
+      "inputs": {
+        "repo": "moment/moment"
+      },
+      "result": {
+        "repo_id": "moment/moment",
+        "last_release_at": "2025-09-13 12:00:00",
+        "days_since_release": 420,
+        "releases": [
+          {
+            "released_at": "2025-09-13 12:00:00"
+          }
+        ],
+        "source": "last_release_snapshot"
+      },
+      "reasoning": null
+    },
+    {
+      "step": 4,
+      "tool": "get_issue_backlog",
+      "inputs": {
+        "repo": "moment/moment"
+      },
+      "result": {
+        "repo_id": "moment/moment",
+        "open_issues": 40,
+        "open_prs": 22,
+        "maintainer_reply_rate": 0.05,
+        "estimated_unanswered": 38,
+        "median_first_response_hours": 336,
+        "source": "silver_metrics"
+      },
+      "reasoning": null
+    },
+    {
+      "step": 5,
+      "tool": "get_commit_trend",
+      "inputs": {
+        "repo": "moment/moment"
+      },
+      "result": {
+        "repo_id": "moment/moment",
+        "weeks_requested": 12,
+        "commits_90d": 1,
+        "commits_prev_90d": 50,
+        "avg_commits_per_week_recent": 0.08,
+        "avg_commits_per_week_previous": 4.17,
+        "trend_pct": -98.0,
+        "estimated_weekly": [
+          {
+            "week_offset": 1,
+            "commits": 4
+          },
+          {
+            "week_offset": 2,
+            "commits": 4
+          },
+          {
+            "week_offset": 3,
+            "commits": 4
+          },
+          {
+            "week_offset": 4,
+            "commits": 4
+          },
+          {
+            "week_offset": 5,
+            "commits": 4
+          },
+          {
+            "week_offset": 6,
+            "commits": 4
+          },
+          {
+            "week_offset": 7,
+            "commits": 0
+          },
+          {
+            "week_offset": 8,
+            "commits": 0
+          },
+          {
+            "week_offset": 9,
+            "commits": 0
+          },
+          {
+            "week_offset": 10,
+            "commits": 0
+          },
+          {
+            "week_offset": 11,
+            "commits": 0
+          },
+          {
+            "week_offset": 12,
+            "commits": 0
+          }
+        ],
+        "source": "derived_from_90d_windows"
+      },
+      "reasoning": null
+    }
+  ]
+}

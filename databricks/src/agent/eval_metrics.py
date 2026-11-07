@@ -7,11 +7,14 @@ Scoring is binary on "is this at risk?":
 - at_risk label is a positive; healthy and hard_case are negatives
   (hard cases are quiet-but-fine or revived projects, so flagging them is a false alarm).
 - inconclusive counts as "not at_risk" (a miss on a positive, fine on a negative).
+- ignored (officially deprecated, per PRD) counts as flagged: it's a correct catch
+  for an at_risk label and a false alarm on healthy/hard cases.
 """
 
 from statistics import median
 
 POSITIVE = "at_risk"
+FLAGGED = {"at_risk", "ignored"}
 
 
 def _safe_div(num, den):
@@ -21,13 +24,13 @@ def _safe_div(num, den):
 def score(rows):
     """rows: iterable of dicts with `label` and `pred`. Optional `tool_calls`."""
     rows = list(rows)
-    tp = sum(1 for r in rows if r["label"] == POSITIVE and r["pred"] == POSITIVE)
-    fp = sum(1 for r in rows if r["label"] != POSITIVE and r["pred"] == POSITIVE)
-    fn = sum(1 for r in rows if r["label"] == POSITIVE and r["pred"] != POSITIVE)
+    tp = sum(1 for r in rows if r["label"] == POSITIVE and r["pred"] in FLAGGED)
+    fp = sum(1 for r in rows if r["label"] != POSITIVE and r["pred"] in FLAGGED)
+    fn = sum(1 for r in rows if r["label"] == POSITIVE and r["pred"] not in FLAGGED)
     tn = len(rows) - tp - fp - fn
 
     hard = [r for r in rows if r["label"] == "hard_case"]
-    hard_alarms = sum(1 for r in hard if r["pred"] == POSITIVE)
+    hard_alarms = sum(1 for r in hard if r["pred"] in FLAGGED)
 
     out = {
         "n": len(rows),

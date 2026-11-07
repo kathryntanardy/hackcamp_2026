@@ -51,3 +51,10 @@ def test_no_positive_predictions_gives_none_precision_not_crash():
 def test_empty():
     s = m.score([])
     assert s["n"] == 0 and s["accuracy"] is None
+
+
+def test_ignored_counts_as_flagged():
+    s = m.score([row("at_risk", "ignored"), row("hard_case", "ignored"), row("healthy", "healthy")])
+    assert s["at_risk_recall"] == 1.0
+    assert s["hard_case_false_alarm_rate"] == 1.0
+    assert s["at_risk_precision"] == 0.5

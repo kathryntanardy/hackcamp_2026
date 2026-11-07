@@ -96,6 +96,7 @@ def investigation_namespace(responses, budget=4):
         "MAX_TOOL_CALLS": budget, "OPENAI_TOOLS": [], "SYSTEM_PROMPT": "PRIVATE_PROMPT_SENTINEL",
         "REPO_TIMEOUT_SEC": 180, "time": time,
         "Verdict": Verdict, "ValidationError": RuntimeError, "public_summary": steps.public_summary,
+        "apply_memory": lambda verdict, prev: verdict,  # memory covered in test_memory.py
         "extract_json": json.loads, "validate_verdict": validate,
         "execute_tool": lambda *args: json.dumps({"value": "x" * 4000}),
         "inconclusive": lambda repo, count, reason: Verdict({"repo_id": repo, "risk_level": "inconclusive", "tool_calls": count, "explanation": reason}),

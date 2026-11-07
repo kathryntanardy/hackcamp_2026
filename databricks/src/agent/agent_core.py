@@ -80,6 +80,10 @@ llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints", max_re
 
 # COMMAND ----------
 
+# MAGIC %run ./memory
+
+# COMMAND ----------
+
 UC_TOOLS = {
     "get_repo_metrics": {
         "uc": "hackcamp.tools.get_repo_metrics",
@@ -259,6 +263,7 @@ When done, reply with ONLY a JSON object (no markdown) matching:
   "tool_calls": 0
 }
 Every evidence.tool must be a tool you actually called.
+changed_since_last is recomputed by code from the previous finding; if your verdict differs from it, say what changed in the explanation.
 """
 
 # COMMAND ----------
@@ -400,10 +405,29 @@ def call_model(messages, *, phase="decide", temperature=0.2, tools=None, timeout
         return message
 
 
-def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
+def load_previous_findings(repo_ids: list[str]) -> dict[str, dict]:
+    """Latest persisted finding per repo, read before this run writes anything."""
+    if not repo_ids:
+        return {}
+    rows = (
+        spark.table("hackcamp.agent.findings")
+        .filter(F.col("repo_id").isin(repo_ids))
+        .selectExpr("*", "row_number() OVER (PARTITION BY repo_id ORDER BY investigated_at DESC) AS rn")
+        .filter("rn = 1")
+        .select("repo_id", "run_id", "risk_level", "confidence", "headline", "investigated_at")
+        .collect()
+    )
+    return {r.repo_id: r.asDict() for r in rows}
+
+
+def investigate_repo(repo_id: str, triage_reason: str, previous: dict | None = None,
+                     use_memory: bool = False) -> tuple[Verdict, str]:
+    """use_memory=False (eval) keeps prior verdicts out of the prompt and labels first_seen."""
     user_msg = (
         f"Investigate maintainer risk for `{repo_id}`.\n"
         f"Triage reason: {triage_reason}\n"
+        + (memory_prompt(previous) + "\n" if use_memory else "")
+        +
         "Choose which tools to call and in what order (no fixed sequence).\n"
         f"Tool budget: {MAX_TOOL_CALLS} calls. Per-repo wall clock: {REPO_TIMEOUT_SEC}s."
     )
@@ -523,5 +547,6 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
                 verdict = inconclusive(repo_id, tool_calls, f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
             else:
                 verdict = inconclusive(repo_id, tool_calls, f"Investigation failed: {type(exc).__name__}: {str(exc)[:300]}")
+        verdict = apply_memory(verdict, previous if use_memory else None)
         root.set_outputs(verdict.model_dump())
     return verdict, trace_id

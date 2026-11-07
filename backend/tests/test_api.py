@@ -50,6 +50,11 @@ def test_repos(calls):
     assert client.get("/api/repos").status_code == 200
 
 
+def test_repos_expose_change_badge(calls):
+    client.get("/api/repos")
+    assert "f.changed_since_last" in calls[-1][0]
+
+
 def test_repo_detail_splits_metrics_and_verdicts(calls):
     body = client.get("/api/repos/moment/moment").json()
     assert body["repo_id"] == "moment/moment"

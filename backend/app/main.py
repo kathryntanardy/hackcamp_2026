@@ -49,7 +49,7 @@ def list_repos() -> list[dict]:
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
 SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
   g.importance, g.x, g.y, g.stars, g.is_archived,
-  f.risk_level,
+  f.risk_level, f.changed_since_last,
   f.repo_id IS NOT NULL AS investigated,
   coalesce(f.run_id = (SELECT run_id FROM latest_run), false) AS investigated_in_latest_run
 FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id

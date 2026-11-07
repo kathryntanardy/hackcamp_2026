@@ -131,11 +131,15 @@ assert triage, (
 findings: list[dict[str, Any]] = []
 trace_exports = []
 tool_calls_total = 0
+# Memory (F13): latest prior finding per triaged repo, read before this run's MERGE.
+previous_findings = load_previous_findings([t["repo_id"] for t in triage])
+print(f"memory: {len(previous_findings)}/{len(triage)} repo(s) have a previous finding")
 
 for item in triage:
     repo_id = item["repo_id"]
     print(f"\n=== Investigating {repo_id} ===")
-    verdict, trace_id = investigate_repo(repo_id, item["reason"])
+    verdict, trace_id = investigate_repo(repo_id, item["reason"],
+                                         previous=previous_findings.get(repo_id), use_memory=True)
     trace_payload = fetch_trace_steps(trace_id, repo_id=repo_id, run_id=RUN_ID, host=_DB_HOST)
     trace_exports.append((trace_id, repo_id, RUN_ID, json.dumps(trace_payload),
                           datetime.now(timezone.utc).replace(tzinfo=None)))
@@ -160,7 +164,7 @@ for item in triage:
     findings.append(row)
     print(
         f"→ {verdict.risk_level} conf={verdict.confidence:.2f} "
-        f"tools={verdict.tool_calls} trace={trace_id}"
+        f"tools={verdict.tool_calls} changed={verdict.changed_since_last} trace={trace_id}"
     )
     print(f"  {verdict.headline}")
 

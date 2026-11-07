@@ -12,6 +12,7 @@
     "stars": 252361,
     "is_archived": false,
     "risk_level": null,
+    "changed_since_last": null,
     "investigated": false,
     "investigated_in_latest_run": false
   },
@@ -28,6 +29,7 @@
     "stars": 212631,
     "is_archived": false,
     "risk_level": null,
+    "changed_since_last": null,
     "investigated": false,
     "investigated_in_latest_run": false
   },
@@ -44,6 +46,7 @@
     "stars": 143382,
     "is_archived": false,
     "risk_level": null,
+    "changed_since_last": null,
     "investigated": false,
     "investigated_in_latest_run": false
   },
@@ -60,6 +63,7 @@
     "stars": 139777,
     "is_archived": false,
     "risk_level": null,
+    "changed_since_last": null,
     "investigated": false,
     "investigated_in_latest_run": false
   },
@@ -76,6 +80,7 @@
     "stars": 128896,
     "is_archived": false,
     "risk_level": null,
+    "changed_since_last": null,
     "investigated": false,
     "investigated_in_latest_run": false
   }

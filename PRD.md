@@ -77,7 +77,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
 | F12 | Find alternatives | P2 if time | For an at-risk repo, the agent returns up to 3 similar healthy repos from Vector Search |
 | F13 | Run-over-run memory | P2 if time | The agent reads its previous finding for each repo; the UI shows newly at risk and recovered badges |
-| F14 | Natural-language map search | P1 should | The user types a natural-language query on the galaxy map; Databricks Vector Search matches it against repo name, description and topics, within the active filters. One match zooms to that star and opens the drawer; several matches zoom to fit them and dim the rest; zero matches shows "no matches" and leaves the map unchanged. Clearing the query restores the full map |
+| F14 | Natural-language map search | P1 should | The user types a natural-language query on the galaxy map; Databricks Vector Search matches it against repo name, description, topics and advisory summaries, within the active filters. One match zooms to that star and opens the drawer; several matches zoom to fit them and dim the rest; zero matches shows "no matches" and leaves the map unchanged. Clearing the query restores the full map |
 | F15 | Categories and vulnerability buckets | P1 should | Every repo has one of 6 categories (Front-end, Back-end, Machine learning, Database, Hardware/embedded, DevOps & infra) or `other`, and a list of CWE vulnerability buckets from its GitHub security advisories (see Pages and UX). The map and Findings sort and filter by both |
 
 ## Pages and UX
@@ -97,7 +97,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 **Findings (`/findings`)**: the agent's output
 
 - One row per finding: repo, risk level, confidence, a one-line headline, investigated time, a "new" badge.
-- Sorted by severity, then importance by default; other sorts: health score, importance, days since release, advisory count / max severity, programming language. Filters for language, category, vulnerability bucket and risk, including an **Ignored** bin. Default list focuses on healthy / watchlist / at risk; ignored is a separate filter tab or chip so judges can still open a deprecated example.
+- Sorted by severity, then importance by default; other sorts: health score, importance, days since release, advisory count / max severity / max CVSS, programming language. Filters for language, category, vulnerability bucket and risk, including an **Ignored** bin. Default list focuses on healthy / watchlist / at risk; ignored is a separate filter tab or chip so judges can still open a deprecated example.
 - Clicking a row jumps to the map with that star selected and the drawer open.
 - Header strip: latest run stats, i.e. repos triaged, investigated, tool calls made, **ignored count**, and eval score.
 
@@ -108,7 +108,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 - Agent verdict: risk level, confidence, a short explanation, an evidence list, **recommended actions** (see below), and a successor/alternative repo if one applies.
 - **"How the agent decided" tab:** the MLflow trace as a step list showing tool name, inputs, a result summary and a brief public decision summary when the model supplies one. Missing summaries are explicit; hidden provider reasoning is not shown.
 - Previous verdict and its date, if one exists.
-- Security advisories: GHSA ID, severity and vulnerability bucket for each. With none, show "No GitHub advisories", never "safe".
+- Security advisories: GHSA ID, CVE ID, severity, CVSS, summary and vulnerability bucket for each. With none, show "No GitHub advisories", never "safe"; if the advisory fetch failed, show "Advisories unavailable".
 
 **Vulnerability buckets (F15)**: each advisory's CWE IDs map to one bucket; a repo carries every bucket its advisories hit. Buckets do not change the health score or the agent's verdict.
 
@@ -125,7 +125,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 | 9 | Network & TLS | 918, 295, 601 | HTTP clients |
 | 10 | Auth & access control | 287, 285, 862, 352 | Web frameworks, auth middleware |
 | — | Other / unclassified | Anything unmapped or with no CWE | — |
-| — | No GitHub advisories | Repo has no advisories published on GitHub | — |
+| — | No GitHub advisories | Fetch succeeded and the repo has no advisories published on GitHub | — |
 
 **Recommended actions (by verdict)** — the point of investigating is a next step for the dependency owner, not a binary “alive/dead” stamp:
 
@@ -230,8 +230,8 @@ The hackathon scrape runs on Databricks using the existing workspace, catalog, V
 - **Execution:** one Python notebook under `databricks/src/ingest/`, one on-demand Lakeflow Job in the existing bundle. Actual requests execute on Databricks. Reuse the current Python environment and existing libraries or the standard library; no new crawler framework, service or cluster-management layer.
 - **Repo list:** preserve the 100 curated at-risk, healthy and hard-case examples, then add public, non-fork repos from paginated searches for Python, JavaScript, Go, Rust and Java (`stars:>=100`, sorted by stars). Interleave languages and deduplicate both requested IDs and canonical IDs returned by GitHub. Discover a spare candidate pool (default 1,200 IDs for a 1,000-repo run) so redirects/unavailable repos can be replaced without lowering the publication target. This is a star-ranked sample, not a representative prevalence study. Keep successor examples such as `vuejs/vue` available for the risk/ignored-bin behavior elsewhere in this PRD.
 - **Metrics:** use small GitHub GraphQL batches (start with 5–10 repos) for name, owner, language, stars, archive flag, last push, latest release, commit totals since 90 and 180 days, open issue/PR counts, description and topics. Derive `commits_prev_90d` as the 180-day total minus the 90-day total using a fixed collection timestamp. Do not fetch per-commit or per-comment histories.
-- **Advisories (F15):** one REST call per repo to `GET /repos/{owner}/{repo}/security-advisories`, keeping GHSA ID, severity, CWE IDs and published date (about 1,000 calls, within the token's hourly limit). Run it as a separate pass with bounded retries. This covers only advisories published through GitHub, so projects that report elsewhere (e.g. Django) show none; matching repos to packages in GitHub's global advisory database is deferred.
-- **Category (F15):** a one-time `ai_query()` over description and topics, constrained to the 6 fixed categories plus `other`.
+- **Advisories (F15):** one REST call per repo to `GET /repos/{owner}/{repo}/security-advisories`, keeping GHSA ID, CVE ID, severity, CVSS score, CWE IDs, summary and published date, plus a per-repo fetch status so a failed call is never read as "no advisories" (about 1,000 calls, within the token's hourly limit). Run it as a separate pass with bounded retries. This covers only advisories published through GitHub, so projects that report elsewhere (e.g. Django) show none; matching repos to packages in GitHub's global advisory database is deferred.
+- **Category (F15):** a one-time `ai_query()` over description and topics, constrained to the 6 fixed categories plus `other`. If too many repos land in `other` because descriptions are thin, fall back to adding a short README excerpt to the scrape.
 - **Importance:** use `log10(stars + 1)` for the MVP. deps.dev, dependents mapping, OpenSSF and Criticality Score are deferred; no second source or credential is required.
 - **Auth:** read the GitHub token from `dbutils.secrets.get("hackcamp", "github_token")`. Never print or save the token.
 - **Landing:** keep the existing `repo_id`, `payload`, `pulled_at` envelope under `/Volumes/hackcamp/raw/github/repos/`. Write newline-delimited JSON chunks with up to 100 records per file (10 files for 1,000 repos), compatible with the existing Auto Loader JSON reader. Stage a frozen copy and per-file record manifest, retain the previous input, then publish only the validated dataset. Keep summaries outside `repos/`, including target, candidate/attempt counts, canonical successes, failures and collection time. Rerunning may refetch the corpus; durable checkpoints remain deferred.
@@ -258,18 +258,18 @@ Everything lives in catalog `hackcamp`, in schemas `raw`, `bronze`, `silver`, `g
 | Table | Grain | Key columns |
 | --- | --- | --- |
 | `bronze.github_repos_raw` | One API response per repo per pull | `repo_id`, `payload` (JSON), `pulled_at` |
-| `silver.repos` | One row per repo | `repo_id`, `name`, `owner`, `language`, `stars`, `is_archived`, `pushed_at`, `last_release_at`, `commits_90d`, `commits_prev_90d`, `open_issues`, `open_prs`, `contributors`, `dependents`, `description`, `topics` |
-| `silver.repo_advisories` | One row per GitHub security advisory per repo | `repo_id`, `ghsa_id`, `severity`, `cwes`, `published_at` |
-| `gold.repo_health` | One row per repo per run | `repo_id`, `run_id`, `health_score`, `status` (`healthy` \| `watchlist` \| `at_risk` \| `ignored`), `importance`, `days_since_release`, `commit_trend_pct`, `category`, `vuln_buckets` (array), `advisory_count`, `max_severity`, `x`, `y`, `scored_at` |
+| `silver.repos` | One row per repo | `repo_id`, `name`, `owner`, `language`, `stars`, `is_archived`, `pushed_at`, `last_release_at`, `commits_90d`, `commits_prev_90d`, `open_issues`, `open_prs`, `contributors`, `dependents`, `description`, `topics`, `advisory_fetch_status` (`ok` \| `failed` \| `not_fetched`) |
+| `silver.repo_advisories` | One row per GitHub security advisory per repo | `repo_id`, `ghsa_id`, `cve_id`, `severity`, `cvss_score`, `cwes`, `summary`, `published_at` |
+| `gold.repo_health` | One row per repo per run | `repo_id`, `run_id`, `health_score`, `status` (`healthy` \| `watchlist` \| `at_risk` \| `ignored`), `importance`, `days_since_release`, `commit_trend_pct`, `category`, `vuln_buckets` (array), `advisory_count`, `max_severity`, `max_cvss`, `x`, `y`, `cat_x`, `cat_y`, `scored_at` |
 | `agent.findings` | One row per investigated repo per run | `repo_id`, `run_id`, `risk_level` (includes `ignored`), `confidence`, `headline`, `explanation`, `evidence` (array of structs), `changed_since_last`, `recommended_actions`, `alternatives`, `tool_calls`, `trace_id`, `investigated_at` |
 | `agent.runs` | One row per agent run | `run_id`, `started_at`, `repos_triaged`, `repos_investigated`, `tool_calls_total`, `model`, `eval_score` |
 | `agent.trace_steps` | One app-readable trace per investigation | `trace_id`, `repo_id`, `run_id`, `payload` (ordered decision/tool steps as JSON), `created_at` |
 | `agent.tool_cache` | One row per live fetch | `tool`, `args_hash`, `response`, `fetched_at` |
 | `agent.eval_labels` | One row per labelled repo | `repo_id`, `label`, `label_source`, `notes` |
 
-The Vector Search index for F12 and F14 syncs from a source table keyed on `repo_id` with Change Data Feed enabled, embedding name, description and topics.
+The Vector Search index for F12 and F14 syncs from a source table keyed on `repo_id` with Change Data Feed enabled, embedding name, description, topics and the repo's advisory summaries.
 
-`x` and `y` are precomputed in gold (the language's cluster centre plus a seeded offset), so the frontend draws them as they are.
+`x` and `y` are precomputed in gold (the language's cluster centre plus a seeded offset), so the frontend draws them as they are. `cat_x` and `cat_y` work the same way around category cluster centres, for the cluster-by-category toggle.
 
 ## Health scoring
 

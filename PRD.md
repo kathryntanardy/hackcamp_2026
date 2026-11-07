@@ -1,6 +1,6 @@
 # Open-Source Corpus Explorer PRD
 
-Nov 6, 2026 · @Hi
+Nov 6, 2026 · @Hi · Updated Nov 7, 2026
 
 An interactive galaxy map of GitHub repositories where an autonomous Databricks agent finds critical open-source packages that are quietly dying, investigates them with governed tools, and shows its evidence. Built in 20 hours for HackCamp, targeting the Best Use of Databricks track.
 
@@ -12,7 +12,7 @@ The question: **which open-source packages that many people depend on are losing
 
 **Hackathon goal:** win Best Use of Databricks. That means Databricks has to be the engine of the product, not just hosting: ingestion, governance, the agent's tools, tracing, evaluation and scheduling all run on the platform, and the demo shows each of them working.
 
-**Not the goal:** a complete or real-time picture of all of GitHub. About 500 repos across 4–5 languages is enough to make the point.
+**Not the goal:** a complete or real-time picture of all of GitHub. Target 100 repos across 4–5 languages; 50 real repos is enough for the hackathon demo. Expanding to 500 is a stretch goal.
 
 ## Users and judges
 
@@ -29,7 +29,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 
 **Must-have (the demo fails without these)**
 
-- About 500 repos ingested through a Lakeflow pipeline into Delta, governed in Unity Catalog
+- At least 50 real repos (target 100) scraped from GitHub by one Databricks-hosted Python notebook task in Lakeflow Jobs, then ingested through the existing Lakeflow pipeline into Delta, governed in Unity Catalog
 - A baseline health score for every repo
 - A tool-calling agent that triages and investigates flagged repos and writes structured verdicts
 - Agent tools registered as Unity Catalog functions
@@ -57,8 +57,8 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 
 | ID | Feature | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
-| F1 | Repo ingestion | P0 must | About 500 repos across Python, JavaScript, Go, Rust and one more, landed in bronze, silver and gold Delta tables by a Lakeflow pipeline; expectations drop malformed rows and log the counts |
-| F2 | Baseline health score | P0 must | Every gold row has a `health_score` from 0 to 100 and a status of healthy, watchlist or at risk, recomputed on each run |
+| F1 | Data scraping and repo ingestion | P0 must | One on-demand Databricks notebook collects at least 50 real repos (target 100) from a curated list using GitHub APIs, writes the existing JSON envelope into the UC Volume, and feeds the existing bronze/silver/gold pipeline. A manual pipeline run is acceptable. Bounded retries and a count/error summary are sufficient; no custom scheduler, checkpoint system or external enrichment is required |
+| F2 | Baseline health score | P0 must | Gold rows use the MVP release/commit/activity formula below, with healthy, watchlist or at risk status; uncollected signals remain unknown and are excluded from the score. Archive status overrides the score. No maintainer-reply or contributor-history scrape is needed |
 | F3 | Agent triage | P0 must | Given a budget N (default 20), the agent picks which repos to investigate and logs why it chose them |
 | F4 | Agent investigation | P0 must | The agent calls at least 2 tools per repo, chosen by the model rather than a fixed sequence, and stops when it is confident or reaches 8 calls |
 | F5 | Structured verdict | P0 must | Each investigation writes one `findings` row matching the schema in Agent design, with every evidence item pointing to a tool result |
@@ -66,7 +66,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | F7 | Galaxy map | P0 must | Renders all repos as stars clustered by language, sized by importance and coloured by health; hover shows the name and score; click opens the drawer; 500 stars render smoothly |
 | F8 | Findings page | P0 must | Lists findings sorted by severity, then importance; filters by language and risk; a row click opens that repo on the map |
 | F9 | Evaluation | P1 should | The agent runs on 30–50 labelled repos; accuracy and false-positive rate are logged in MLflow and shown in the pitch |
-| F10 | Scheduled autonomy | P1 should | One Lakeflow Job runs pipeline, then scoring, then agent, then refreshes findings, end to end with no manual steps |
+| F10 | Scheduled autonomy | P2 stretch | After the demo works, optionally chain the existing scraping, pipeline and agent tasks in a Lakeflow Job, reusing frozen data for the demo. Recurring scraping is not required within the 20-hour build |
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
 | F12 | Find alternatives | P2 if time | For an at-risk repo, the agent returns up to 3 similar healthy repos from Vector Search |
 | F13 | Run-over-run memory | P2 if time | The agent reads its previous finding for each repo; the UI shows newly at risk and recovered badges |
@@ -93,7 +93,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 **Repo drawer**: opens from either page
 
 - Header: name, GitHub link, language, stars, dependents.
-- Health gauge plus the metrics behind it: days since last release, commits in the last 90 days vs the previous 90, open issues, unanswered PRs, top-contributor share.
+- Health gauge plus the collected metrics: days since last release, commits in the last 90 days vs the previous 90, and open issues/PR counts. Unanswered PRs, maintainer-response and contributor-share metrics show as unavailable until collected; missing data is not evidence of abandonment.
 - Agent verdict: risk level, confidence, a short explanation, an evidence list, and a recommended alternative if one was found.
 - **"How the agent decided" tab:** the MLflow trace as a step list showing tool name, inputs, a result summary and the model's reasoning at each step.
 - Previous verdict and its date, if one exists.
@@ -116,16 +116,16 @@ One tool-calling agent, built with Mosaic AI Agent Framework on a Foundation Mod
 | Tool | Type | Returns |
 | --- | --- | --- |
 | `get_repo_metrics(repo)` | UC SQL function over gold | Baseline metrics and score |
-| `get_commit_trend(repo, weeks)` | UC SQL function over silver | Weekly commit counts |
-| `get_release_history(repo)` | UC SQL function | Release dates and gaps |
-| `get_issue_backlog(repo)` | UC SQL function | Open issues and PRs, median first-response time, unanswered count |
-| `get_contributor_concentration(repo)` | UC SQL function | Top contributor's share of the last 100 commits (bus factor) |
-| `fetch_recent_issues(repo, n)` | Live GitHub fetch, cached to Delta | Last n issue titles and whether a maintainer replied |
-| `fetch_readme_signals(repo)` | Live GitHub fetch, cached to Delta | Flags for "deprecated", "unmaintained", "archived", "use X instead" |
+| `get_commit_trend(repo, weeks)` | UC SQL function over silver | Two 90-day commit totals and their change; actual weekly history is deferred; no invented weekly series |
+| `get_release_history(repo)` | UC SQL function | Latest release date and days since it; full release history and inter-release gaps are deferred |
+| `get_issue_backlog(repo)` | UC SQL function | Open issues and PR counts; response time and unanswered counts are unknown in the MVP |
+| `get_contributor_concentration(repo)` (stretch) | UC SQL function | Disabled until real contributor data is collected |
+| `fetch_recent_issues(repo, n)` (stretch) | GitHub fetch, cached to Delta | At most 5 issue titles; maintainer-reply analysis is deferred |
+| `fetch_readme_signals(repo)` (stretch) | GitHub fetch, cached to Delta | README flags for "deprecated", "unmaintained", "archived", "use X instead"; at most 5 demo repos |
 | `get_previous_finding(repo)` | UC SQL function over findings | Last verdict and date |
 | `find_alternatives(repo)` (P2) | Vector Search | Up to 3 similar healthy repos |
 
-The live-fetch tools may need to be plain Python tools inside the agent instead of UC functions if UC functions can't make outbound HTTP calls. Check this in hour 1.
+The required agent tools read the frozen snapshot and still support model-selected investigations with at least two tools. Live-fetch tools are optional: use Python inside the existing Databricks-hosted agent if attempted, without new serving infrastructure or an outbound-HTTP setup project.
 
 **Verdict schema**
 
@@ -152,23 +152,37 @@ The live-fetch tools may need to be plain Python tools inside the agent instead 
 
 ## Data sources and ingestion
 
-There are two layers. The bulk pull is a deterministic pipeline that gives every star a baseline. The targeted fetches are agentic: the agent decides which ones to make.
+The hackathon scrape runs on Databricks using the existing workspace, catalog, Volume and bundle. Use GitHub APIs rather than building a browser crawler. The target is a working frozen dataset early in the 20-hour project, with minimal new infrastructure.
 
-**Layer 1: bulk ingest (pipeline)**
+**Fast setup and time budget (estimates, assuming workspace access)**
 
-- **Repo list:** GitHub search API, top repos per language (for example `language:python stars:>1000`), around 100 per language. Search returns at most 1,000 results per query.
-- **Metrics:** GitHub GraphQL API, about 50 repos per query. Fields: `stargazerCount`, `isArchived`, `pushedAt`, `primaryLanguage`, `releases(last:1)`, `defaultBranchRef.target.history(since: 90d)` and `(since: 180d)` totals, open `issues` and `pullRequests` counts, `mentionableUsers` total.
-- **Importance:** dependents counts from deps.dev for packages that map to a repo. As a cross-check, OpenSSF Scorecard and Criticality Score where they're available.
-- **Auth:** the GitHub token goes in a Databricks secret scope and is read with `dbutils.secrets.get`, never in code.
-- **Landing:** a Python notebook task writes raw JSON to a UC Volume (`/Volumes/hackcamp/raw/github/`). The Lakeflow pipeline reads it with Auto Loader into bronze.
-- **Freeze:** pull once, early, and keep the snapshot. The demo never depends on live GitHub.
+- **Setup: 30–60 minutes**, included in the scraping budget: confirm the existing workspace profile, reuse `hackcamp.raw.github`, store one GitHub token in the existing `hackcamp/github_token` secret, deploy and run one notebook job. If access or token setup is blocked, continue integration with clearly labelled sample data while fixing access; do not claim it is a real scrape.
+- **Scraping ticket #3: 2–3 hours total**, including setup, a 5-repo smoke run and freezing at least 50 real repos. Target 100 only after that works.
+- **Pipeline, scoring and tools (#4–#6): 2 hours total** of incremental integration using the existing implementation. Do not rebuild already working setup or tables.
+- **Data gate: by hour 5**, one data owner should have a real snapshot in gold and working snapshot tools. This is a planning budget, not a guaranteed runtime; the rest of the team's 20-hour build remains for the agent, app, evaluation, integration and demo.
+- At hour 3, freeze the successful 50-repo subset instead of expanding coverage. At hour 5, stop adding data features. No optional scraping work before the end-to-end demo works.
 
-**Layer 2: targeted fetches (agent tools)**
+**Layer 1: one notebook and a frozen snapshot (P0)**
 
-- Only made for repos the agent chose to investigate: recent issues with maintainer replies, README signals, recent commit authors.
-- Every response is cached in `tool_cache` (Delta), so repeat runs and the demo don't hit the API.
+- **Execution:** one Python notebook under `databricks/src/ingest/`, one on-demand Lakeflow Job in the existing bundle. Actual requests execute on Databricks. Reuse the current Python environment and existing libraries or the standard library; no new crawler framework, service or cluster-management layer.
+- **Repo list:** a checked-in curated list of 50–100 repo IDs across Python, JavaScript, Go, Rust and Java. Reuse the IDs in the existing seed list, without its generated metrics. Include known archived/at-risk and healthy examples. Search-based discovery, general pagination and 500-repo coverage are stretch work.
+- **Metrics:** use small GitHub GraphQL batches (start with 5–10 repos) for name, owner, language, stars, archive flag, last push, latest release, commit totals since 90 and 180 days, and open issue/PR counts. Derive `commits_prev_90d` as the 180-day total minus the 90-day total using a fixed collection timestamp. Do not fetch per-commit or per-comment histories.
+- **Importance:** use `log10(stars + 1)` for the MVP. deps.dev, dependents mapping, OpenSSF and Criticality Score are deferred; no second source or credential is required.
+- **Auth:** read the GitHub token from `dbutils.secrets.get("hackcamp", "github_token")`. Never print or save the token.
+- **Landing:** keep the existing `repo_id`, `payload`, `pulled_at` envelope under `/Volumes/hackcamp/raw/github/repos/`. Use stable repo filenames for one frozen snapshot. Rerunning the initial notebook may refetch this small corpus; durable checkpoints and incremental refresh are deferred. Keep a single summary JSON of requested/successful/failed repo IDs, counts and collection time outside `repos/`.
+- **Failures:** sequential batches, request timeouts, and at most 3 attempts per batch are enough. Honour retry/reset headers within a short bounded wait; if a long wait is needed, save the summary and stop. A partial scrape passes only with at least 50 real repos across the intended languages and a visible failure summary. Authentication failures or fewer than 50 real repos do not satisfy F1.
+- **Handoff:** manually run the existing `repo_health` pipeline after a successful scrape; automatic chaining is optional. Expectations and latest-per-repo selection stay in the existing pipeline. Ensure the real run does not mix generated seed payloads into its final demo snapshot.
+- **Freeze and verify:** retain the real snapshot, notebook/job run and summary, and verify bronze/silver/gold counts reconcile with successes and dropped rows. Run the demo from frozen data. Seeded JSON is a clearly labelled development fallback, never evidence of a successful real scrape.
 
-**If the hackathon provides a corpus,** it replaces Layer 1. Keep the same gold schema so nothing downstream changes.
+**Layer 2: targeted fetches (stretch only, ticket #7)**
+
+- Required investigations use the snapshot-backed UC tools; they do not depend on live HTTP.
+- Only after the full demo works, spend at most 30 minutes adding README retrieval for up to 5 demo repos inside the Databricks-hosted agent, cached in the existing `agent.tool_cache` table.
+- Recent issue titles (at most 5 per repo) are a further stretch. Maintainer-reply classification, contributor concentration and comprehensive histories are deferred. Cached-only demo playback must work without GitHub access.
+
+**Deferred scraping work:** dynamic discovery, external enrichment, full release/weekly commit/contributor/comment histories, worker pools, durable resume/checkpoint frameworks, recurring scraping and production monitoring. These are not acceptance gates for the hackathon.
+
+**If the hackathon provides a usable corpus,** load it with the same notebook/Volume contract and record its provenance; keep downstream schemas and tools unchanged.
 
 ## Data model
 
@@ -190,9 +204,13 @@ Everything lives in catalog `hackcamp`, in schemas `raw`, `bronze`, `silver`, `g
 
 The baseline score is a simple weighted formula computed in the gold layer. It decides star colour and feeds triage. The agent's verdict can override it, and the drawer shows both.
 
+For the hackathon, use only the three cheap signals already collected. With all three available:
+
 ```latex
-\text{health} = 30\,s_{\text{release}} + 25\,s_{\text{commits}} + 20\,s_{\text{issues}} + 15\,s_{\text{bus}} + 10\,s_{\text{activity}}
+\text{health} = 100\,\frac{30\,s_{\text{release}} + 25\,s_{\text{commits}} + 10\,s_{\text{activity}}}{65}
 ```
+
+Exclude unavailable signals and renormalize over the weights actually present. Keep missing metrics nullable rather than converting them to zero, 999 days, a reply-rate estimate or a bus-factor estimate. If no signal is available, return a null score and a watchlist status with an explicit insufficient-data explanation; the agent must be inconclusive without evidence. A zero previous commit count makes the trend unavailable; it does not establish decline. The original issue-response and bus-factor terms below are deferred until measured data exists, and do not contribute to the MVP score.
 
 Each sub-score runs from 0 to 1:
 
@@ -200,18 +218,18 @@ Each sub-score runs from 0 to 1:
 | --- | --- | --- | --- |
 | s\_release | Days since last release | 90 days or less | 540 days or more (linear in between) |
 | s\_commits | commits\_90d ÷ commits\_prev\_90d | 1.0 or more | 0.2 or less |
-| s\_issues | Share of PRs and issues with a maintainer reply | 80% or more | 20% or less |
-| s\_bus | 1 − top contributor's share of the last 100 commits | 0.6 or more | 0.1 or less |
+| s\_issues (deferred) | Share of PRs and issues with a maintainer reply | 80% or more | 20% or less |
+| s\_bus (deferred) | 1 − top contributor's share of the last 100 commits | 0.6 or more | 0.1 or less |
 | s\_activity | Days since last push | 30 days or less | 365 days or more |
 
 - **Thresholds:** 70 or more is healthy, 40 to 69 is watchlist, below 40 is at risk. An archived repo is always at risk.
-- **Importance** (star size and triage weight) = log10(dependents + 1), falling back to log10(stars + 1).
+- **Importance** (star size and triage weight) = log10(stars + 1) in the MVP. Dependents-based importance is deferred.
 - **Triage priority** = importance × (100 − health), boosted when the score dropped by 10 or more points since the last run.
 - The weights are a first guess. Tune them against the labelled eval set in hour 15, and note the final weights in the pitch.
 
 ## Databricks services
 
-Seven services are core and carry the Best Use of Databricks story. Four more are optional. Service names are from memory as of mid-2026, so check them against current docs.
+The core services carry the Best Use of Databricks story; additional services support hosting, scheduling and optional features. Service names are from memory as of mid-2026, so check them against current docs.
 
 | Service | Role in this product | Why judges care | Priority |
 | --- | --- | --- | --- |
@@ -222,7 +240,7 @@ Seven services are core and carry the Best Use of Databricks story. Four more ar
 | Foundation Model APIs | The model behind the agent | No model hosting to manage | Core |
 | Mosaic AI Agent Framework | Agent loop, logged as an MLflow model | Platform-native agent rather than a script calling an API | Core |
 | MLflow Tracing and GenAI evaluation | Per-investigation traces; eval on the labelled set with LLM judges and custom metrics | Shows how the agent reasons and how well it performs | Core |
-| Lakeflow Jobs | Scheduled end-to-end run | This is what makes "autonomous" true | Should |
+| Lakeflow Jobs | Runs one on-demand scraping notebook; pipeline runs may be started manually | Source collection runs on Databricks, with visible task history | Core for F1 notebook; Stretch for F10 chaining/scheduling |
 | Databricks Apps + SQL warehouse | Hosts the React app and a thin Python API querying gold and findings | The whole product lives inside the workspace | Should |
 | Model Serving | Agent as an endpoint, for the live demo investigation | One-click "investigate now" from the UI | If time |
 | Vector Search | Index over repo descriptions for find\_alternatives | Retrieval as an agent tool, not a chatbot | If time |
@@ -234,7 +252,7 @@ Seven services are core and carry the Best Use of Databricks story. Four more ar
 
 &#91;embedded content: architecture · data, agent and app inside one workspace\]
 
-GitHub data comes in once through the pipeline. The agent reads gold, calls governed UC tools and writes findings and traces, which the app reads. Unity Catalog governs all of it.
+GitHub API → Databricks scraping task (Lakeflow Jobs) → frozen JSON in a UC Volume → Auto Loader / Lakeflow pipeline → bronze → silver → gold. The agent reads gold, calls governed UC tools and Databricks-hosted live-fetch tools, and writes findings and traces, which the app reads. Unity Catalog governs the stored data and tools. Demo runs reuse the frozen snapshot and cached tool responses.
 
 ## Evaluation and success metrics
 
@@ -277,11 +295,11 @@ The frontend works against mock data until hour 9, so the data and agent workstr
 
 A 3-minute walkthrough. Every Databricks claim is shown on screen, not just said.
 
-1. **Hook (0:00–0:20).** "Your app depends on hundreds of packages. Which ones are dying?" Open the galaxy map: 500 stars, with red ones scattered through the clusters.
+1. **Hook (0:00–0:20).** "Your app depends on hundreds of packages. Which ones are dying?" Open the galaxy map with the actual collected repo count (at least 50, target 100), with red ones scattered through the clusters.
 2. **The map (0:20–0:50).** Filter to at-risk. Hover a big red star and click it. The drawer shows the score, the agent's verdict and the evidence.
-3. **How the agent decided (0:50–1:30).** Open the trace tab and walk through its steps: the agent checked releases, saw conflicting commit data, pulled recent issues, found unanswered maintainer pings and concluded at risk. Point out that it chose those steps itself.
+3. **How the agent decided (0:50–1:30).** Open the trace tab and walk through its steps: the agent checked releases, saw conflicting commit data, compared archive status and last push, and concluded at risk using the collected evidence. Live README or issue fetches are only shown if the stretch work was completed. Point out that it chose those steps itself.
 4. **Live run (1:30–2:00).** Hit "Investigate now" on a repo not yet investigated, or show the Lakeflow Job's last run graph if serving isn't ready. Show the new finding appear.
-5. **Platform (2:00–2:30).** Unity Catalog lineage from the raw volume to findings. The UC functions list showing the agent's tools. The Lakeflow Job schedule.
+5. **Platform (2:00–2:30).** Show the successful Databricks scraping task and its raw Volume output, Unity Catalog lineage from the raw volume to findings, and the UC functions list showing the agent's tools. Show the Lakeflow Job schedule if implemented.
 6. **Proof (2:30–2:50).** The MLflow eval run, with at-risk recall and the improvement over the baseline formula.
 7. **Close (2:50–3:00).** "An autonomous maintainer-risk analyst, built entirely on Databricks."
 
@@ -293,7 +311,7 @@ Record a backup video of the full demo by hour 19 in case the venue's wifi or th
 | --- | --- | --- | --- |
 | Workspace is Free Edition and lacks Model Serving, Vector Search or Apps | Medium | High | Run the agent from a notebook or job, drop find\_alternatives, and serve the frontend locally while reading the SQL warehouse |
 | UC functions can't make outbound HTTP calls | Medium | Medium | Live-fetch tools become plain Python tools in the agent; data tools stay UC functions |
-| GitHub rate limits or a slow pull | Medium | High | Pull in hour 2 and freeze; cut to 300 repos; cache every live fetch |
+| GitHub rate limits or a slow pull | Medium | High | Start with 5 real repos, then freeze 50 by hour 3; stop expanding at the time gate; bounded retries and a failure summary; replay the frozen dataset |
 | Agent output fails the schema or hallucinates evidence | Medium | Medium | Structured output plus validation, one retry, then `inconclusive`; strip evidence that has no matching tool call |
 | The agent is too slow for a live demo | Medium | Medium | Pre-run the full batch and keep one live investigation; show the job graph instead |
 | Eval numbers come out bad | Low–Medium | Medium | Report them honestly next to the formula baseline, and show one fix made because of them |

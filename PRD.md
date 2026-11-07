@@ -43,6 +43,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 
 - Scheduled Lakeflow Job running the whole loop end to end
 - Vector Search powering a find-alternatives tool
+- Natural-language search on the galaxy map, powered by Vector Search
 - Memory across runs: "newly at risk" and "recovered" badges
 - `ai_query()` one-line summaries for repos the agent did not investigate
 - Zoom and pan, pulsing stars, link lines between similar repos
@@ -72,6 +73,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
 | F12 | Find alternatives | P2 if time | For an at-risk repo, the agent returns up to 3 similar healthy repos from Vector Search |
 | F13 | Run-over-run memory | P2 if time | The agent reads its previous finding for each repo; the UI shows newly at risk and recovered badges |
+| F14 | Natural-language map search | P2 if time | The user types a natural-language query on the galaxy map; Databricks Vector Search returns the matching repos and the map filters out stars that don't match. Clearing the query restores the full map |
 
 ## Pages and UX
 
@@ -83,6 +85,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 - Star size = importance, the log of dependents (or stars if dependents are missing). Star colour = status: green healthy, amber watchlist, red at risk, **gray ignored**. A pulsing ring marks repos the agent investigated in the latest run. Ignored stars stay on the map for context but are visually de-emphasized (dim / no pulse).
 - Top bar: repos tracked, healthy, watchlist, at risk, **ignored**, last agent run time.
 - Filters: language, status (including **Ignored**), "investigated only". Default map filter can hide ignored if cluttered; keep the bin available.
+- Search box (F14): a natural-language query filters the map down to the repos Vector Search matches. It is a filter, not a chatbot.
 - Hover shows a tooltip with the name, score and status. Click opens the drawer.
 
 **Findings (`/findings`)**: the agent's output
@@ -284,7 +287,7 @@ The core services carry the Best Use of Databricks story; additional services su
 | Lakeflow Jobs | Runs one on-demand scraping notebook; pipeline runs may be started manually | Source collection runs on Databricks, with visible task history | Core for F1 notebook; Stretch for F10 chaining/scheduling |
 | Databricks Apps + SQL warehouse | Hosts the React app and a thin Python API querying gold and findings | The whole product lives inside the workspace | Should |
 | Model Serving | Agent as an endpoint, for the live demo investigation | One-click "investigate now" from the UI | If time |
-| Vector Search | Index over repo descriptions for find\_alternatives | Retrieval as an agent tool, not a chatbot | If time |
+| Vector Search | Index over repo descriptions for find\_alternatives and natural-language map search | Retrieval as an agent tool and a map filter, not a chatbot | If time |
 | `ai_query()` | Batch one-liners for repos not investigated | LLM inference in plain SQL at table scale | If time |
 
 **Skipped on purpose:** Genie (a chatbot, out of scope), Lakebase (Delta through a SQL warehouse is fast enough), AI/BI dashboards (the custom UI covers it).
@@ -309,10 +312,10 @@ The pitch includes one measured number: how often the agent's verdict matches gr
 
 **How to score**
 
-- MLflow GenAI evaluation runs the agent on the set.
-- Custom metrics: verdict accuracy, at-risk precision and recall, and a false-alarm rate on the hard cases.
-- An LLM judge checks that each explanation is grounded in the trace's tool outputs.
-- The baseline formula alone is scored too, so the pitch can say how much the agent adds over the formula.
+- The `eval_run` job runs the same agent on every labelled repo that has a gold row. Eval runs don't write to `findings`, so they never show up on the map.
+- Custom metrics, logged to MLflow: verdict accuracy, at-risk precision and recall, a false-alarm rate on the hard cases, the inconclusive rate and median tool calls. Scoring is binary on "is it at risk?": hard cases count as negatives, and an `inconclusive` verdict counts as not at risk.
+- An MLflow GenAI LLM judge checks that each explanation is grounded in the trace's tool outputs.
+- The baseline formula alone is scored too, and the gap is logged as `agent_minus_formula_accuracy`, so the pitch can say how much the agent adds over the formula.
 
 **Targets**
 

@@ -1,0 +1,146 @@
+[
+  {
+    "repo_id": "moment/moment",
+    "name": "moment",
+    "language": "JavaScript",
+    "importance": 4.6801,
+    "health_score": 65.0,
+    "run_id": "20261107200203-6f014084",
+    "risk_level": "at_risk",
+    "confidence": 0.9,
+    "headline": "moment/moment is at risk due to low maintainer activity and high bus factor",
+    "explanation": "The repository has a low health score of 12.34, a high bus factor score of 0.2, and a low maintainer reply rate of 0.05. The last release was 420 days ago, and there has been a significant decrease in commits over the past 90 days, with only 1 commit compared to 50 in the previous 90 days. The estimated number of unanswered issues is 38, and the median first response time is 336 hours.",
+    "evidence": [
+      {
+        "signal": "low health score",
+        "tool": "get_repo_metrics",
+        "value": "12.34"
+      },
+      {
+        "signal": "high bus factor score",
+        "tool": "get_contributor_concentration",
+        "value": "0.2"
+      },
+      {
+        "signal": "low maintainer reply rate",
+        "tool": "get_issue_backlog",
+        "value": "0.05"
+      },
+      {
+        "signal": "long time since last release",
+        "tool": "get_release_history",
+        "value": "420"
+      },
+      {
+        "signal": "decrease in commits",
+        "tool": "get_commit_trend",
+        "value": "-98.0"
+      }
+    ],
+    "changed_since_last": "unchanged",
+    "alternatives": [
+      "[",
+      "]"
+    ],
+    "tool_calls": 5,
+    "trace_id": "tr-e7ed4b630c51de182d6cfc2dcb03fbc4",
+    "investigated_at": "2026-11-07T20:02:31.955368",
+    "in_latest_run": true
+  },
+  {
+    "repo_id": "request/request",
+    "name": "request",
+    "language": "JavaScript",
+    "importance": 4.4062,
+    "health_score": 0.0,
+    "run_id": "20261107200203-6f014084",
+    "risk_level": "at_risk",
+    "confidence": 0.9,
+    "headline": "request/request is at risk due to inactivity and lack of maintenance",
+    "explanation": "The repository has been archived, has not had a release in 783 days, and has a very low health score of 0.0. The commit trend is also negative, with no commits in the last 90 days. Additionally, the top contributor share is very high at 0.95, indicating a lack of diversity in contributions. The issue backlog is also high, with 100 open issues and an estimated 100 unanswered issues, and the maintainer reply rate is 0.0, indicating a lack of engagement from maintainers.",
+    "evidence": [
+      {
+        "signal": "health_score",
+        "tool": "get_repo_metrics",
+        "value": "0.0"
+      },
+      {
+        "signal": "days_since_release",
+        "tool": "get_repo_metrics",
+        "value": "783"
+      },
+      {
+        "signal": "commit_trend_pct",
+        "tool": "get_repo_metrics",
+        "value": "-100.0"
+      },
+      {
+        "signal": "top_contributor_share",
+        "tool": "get_contributor_concentration",
+        "value": "0.95"
+      },
+      {
+        "signal": "open_issues",
+        "tool": "get_issue_backlog",
+        "value": "100"
+      },
+      {
+        "signal": "maintainer_reply_rate",
+        "tool": "get_issue_backlog",
+        "value": "0.0"
+      }
+    ],
+    "changed_since_last": "unchanged",
+    "alternatives": [
+      "[",
+      "]"
+    ],
+    "tool_calls": 4,
+    "trace_id": "tr-63730430a07cf0f3030e506a2b571030",
+    "investigated_at": "2026-11-07T20:02:19.111555",
+    "in_latest_run": true
+  },
+  {
+    "repo_id": "dgrijalva/jwt-go",
+    "name": "jwt-go",
+    "language": "Go",
+    "importance": 4.0303,
+    "health_score": 0.0,
+    "run_id": "20261107195946-f0231df4",
+    "risk_level": "at_risk",
+    "confidence": 0.9,
+    "headline": "dgrijalva/jwt-go is at risk due to being archived and having no recent commits",
+    "explanation": "The repository dgrijalva/jwt-go has been archived, has not had any commits in the last 90 days, and has a very low health score of 0.0. The top contributor share is 0.95, indicating a high concentration of contributions from a single individual. The repository also has an estimated 20 unanswered issues and a maintainer reply rate of 0.0, further indicating a lack of maintenance activity.",
+    "evidence": [
+      {
+        "signal": "is_archived",
+        "tool": "get_repo_metrics",
+        "value": "True"
+      },
+      {
+        "signal": "commit_trend_pct",
+        "tool": "get_repo_metrics",
+        "value": "-100.0"
+      },
+      {
+        "signal": "top_contributor_share",
+        "tool": "get_contributor_concentration",
+        "value": "0.95"
+      },
+      {
+        "signal": "estimated_unanswered",
+        "tool": "get_issue_backlog",
+        "value": "20"
+      }
+    ],
+    "changed_since_last": "unchanged",
+    "alternatives": [
+      "[",
+      "]"
+    ],
+    "tool_calls": 3,
+    "trace_id": "tr-2c39dae5ffa94bb5a4ee826944bf3cbc",
+    "investigated_at": "2026-11-07T20:00:21.155000",
+    "in_latest_run": false
+  }
+]

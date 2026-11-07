@@ -7,7 +7,10 @@ from pyspark.sql.window import Window
 
 @dp.materialized_view(
     name="hackcamp.silver.repos",
-    comment="Normalized repo metrics — one row per repo_id",
+    comment=(
+        "Latest normalized GitHub metrics per repo_id. "
+        "Source for gold scoring and UC agent tools."
+    ),
     table_properties={"quality": "silver"},
 )
 @dp.expect_or_drop("has_repo_id", "repo_id IS NOT NULL")
@@ -54,12 +57,10 @@ def repos():
         F.coalesce(F.col("p.open_issues"), F.lit(0)).alias("open_issues"),
         F.coalesce(F.col("p.open_prs"), F.lit(0)).alias("open_prs"),
         F.coalesce(F.col("p.contributors"), F.lit(0)).alias("contributors"),
-        F.coalesce(F.col("p.maintainer_reply_rate"), F.lit(0.0)).alias(
-            "maintainer_reply_rate"
-        ),
-        F.coalesce(F.col("p.top_contributor_share"), F.lit(1.0)).alias(
-            "top_contributor_share"
-        ),
+        # Not collected by the scraper yet: keep NULL (worst-case defaults made
+        # every repo look abandoned to gold and the agent's UC tools).
+        F.col("p.maintainer_reply_rate").alias("maintainer_reply_rate"),
+        F.col("p.top_contributor_share").alias("top_contributor_share"),
     )
 
     w = Window.partitionBy("repo_id").orderBy(F.col("pulled_at").desc_nulls_last())

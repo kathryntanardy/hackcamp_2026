@@ -1,0 +1,38 @@
+resources:
+  jobs:
+    eval_run:
+      name: hackcamp-eval-run
+      max_concurrent_runs: 1
+      parameters:
+        - name: model_endpoint
+          default: databricks-meta-llama-3-3-70b-instruct
+        - name: max_tool_calls
+          default: "8"
+        - name: experiment_path
+          default: /Users/philip03ho@gmail.com/hackcamp-agent
+        - name: limit
+          default: "0"
+        - name: run_judge
+          default: "true"
+      tasks:
+        - task_key: evaluate
+          notebook_task:
+            notebook_path: ../src/agent/run_eval.py
+            source: WORKSPACE
+            base_parameters:
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+              limit: "{{job.parameters.limit}}"
+              run_judge: "{{job.parameters.run_judge}}"
+          environment_key: agent_env
+
+      environments:
+        - environment_key: agent_env
+          spec:
+            environment_version: "4"
+            dependencies:
+              - "mlflow[databricks]>=3.1.0"
+              - "openai>=1.40.0"
+              - "pydantic>=2.0"
+              - "databricks-sdk>=0.36.0"

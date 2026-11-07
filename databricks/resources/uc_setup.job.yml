@@ -34,6 +34,16 @@ resources:
               source: WORKSPACE
             warehouse_id: ${var.warehouse_id}
 
+        - task_key: annotate_uc_docs
+          depends_on:
+            - task_key: create_uc
+            - task_key: create_uc_tools
+          sql_task:
+            file:
+              path: ../src/setup/annotate_uc_docs.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+
         - task_key: seed_sample_repos
           depends_on:
             - task_key: create_uc

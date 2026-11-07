@@ -1,0 +1,19 @@
+resources:
+  jobs:
+    hour1_probes:
+      name: hackcamp-hour1-probes
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: probes
+          notebook_task:
+            notebook_path: ../src/setup/hour1_probes.py
+            source: WORKSPACE
+          environment_key: probe_env
+
+      environments:
+        - environment_key: probe_env
+          spec:
+            environment_version: "4"
+            dependencies:
+              - "openai>=1.40.0"
+              - "databricks-sdk>=0.36.0"

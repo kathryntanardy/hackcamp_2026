@@ -9,9 +9,17 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+*.egg-info/
+build/
+
+# Databricks
+.databricks/
+databricks/.databricks/
 
 # Local configuration
 .env
 .env.*
 !.env.example
 .DS_Store
+.idea/
+.vscode/

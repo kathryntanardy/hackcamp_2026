@@ -1,0 +1,21 @@
+{
+  "repo_id": "actix/actix-web",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "actix-web",
+    "owner": "actix",
+    "language": "Rust",
+    "stars": 22000,
+    "dependents": 8000,
+    "is_archived": false,
+    "pushed_at": "2026-08-22T12:00:00Z",
+    "last_release_at": "2026-02-08T12:00:00Z",
+    "commits_90d": 37,
+    "commits_prev_90d": 86,
+    "open_issues": 182,
+    "open_prs": 14,
+    "contributors": 57,
+    "maintainer_reply_rate": 0.57,
+    "top_contributor_share": 0.77
+  }
+}

@@ -1,0 +1,17 @@
+resources:
+  pipelines:
+    repo_health:
+      name: hackcamp-repo-health
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      continuous: false
+      photon: true
+      channel: CURRENT
+      root_path: ../src/pipelines/repo_health
+      libraries:
+        - glob:
+            include: ../src/pipelines/repo_health/transformations/**
+      configuration:
+        catalog: ${var.catalog}
+        volume_path: ${var.volume_path}

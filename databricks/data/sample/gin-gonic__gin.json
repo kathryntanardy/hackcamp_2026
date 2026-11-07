@@ -1,0 +1,21 @@
+{
+  "repo_id": "gin-gonic/gin",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "gin",
+    "owner": "gin-gonic",
+    "language": "Go",
+    "stars": 80000,
+    "dependents": 40000,
+    "is_archived": false,
+    "pushed_at": "2026-10-27T12:00:00Z",
+    "last_release_at": "2026-09-20T12:00:00Z",
+    "commits_90d": 188,
+    "commits_prev_90d": 196,
+    "open_issues": 118,
+    "open_prs": 30,
+    "contributors": 33,
+    "maintainer_reply_rate": 0.93,
+    "top_contributor_share": 0.33
+  }
+}

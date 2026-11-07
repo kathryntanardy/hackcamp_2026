@@ -1,0 +1,21 @@
+{
+  "repo_id": "jquery/jquery",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "jquery",
+    "owner": "jquery",
+    "language": "JavaScript",
+    "stars": 59000,
+    "dependents": 200000,
+    "is_archived": false,
+    "pushed_at": "2026-08-04T12:00:00Z",
+    "last_release_at": "2026-06-15T12:00:00Z",
+    "commits_90d": 15,
+    "commits_prev_90d": 15,
+    "open_issues": 205,
+    "open_prs": 37,
+    "contributors": 40,
+    "maintainer_reply_rate": 0.85,
+    "top_contributor_share": 0.45
+  }
+}

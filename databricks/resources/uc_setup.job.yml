@@ -1,0 +1,43 @@
+resources:
+  jobs:
+    uc_setup:
+      name: hackcamp-uc-setup
+      max_concurrent_runs: 1
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: volume_path
+          default: ${var.volume_path}
+      tasks:
+        - task_key: create_uc
+          sql_task:
+            file:
+              path: ../src/setup/create_uc.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+
+        - task_key: create_uc_tools
+          depends_on:
+            - task_key: create_uc
+          sql_task:
+            file:
+              path: ../src/setup/create_uc_tools.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+
+        - task_key: seed_sample_repos
+          depends_on:
+            - task_key: create_uc
+            - task_key: create_uc_tools
+          notebook_task:
+            notebook_path: ../src/ingest/seed_sample_repos.py
+            source: WORKSPACE
+            base_parameters:
+              catalog: "{{job.parameters.catalog}}"
+              volume_path: "{{job.parameters.volume_path}}"
+          environment_key: default
+
+      environments:
+        - environment_key: default
+          spec:
+            environment_version: "4"

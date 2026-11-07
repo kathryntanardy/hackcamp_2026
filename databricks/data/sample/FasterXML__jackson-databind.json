@@ -1,0 +1,21 @@
+{
+  "repo_id": "FasterXML/jackson-databind",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "jackson-databind",
+    "owner": "FasterXML",
+    "language": "Java",
+    "stars": 3600,
+    "dependents": 180000,
+    "is_archived": false,
+    "pushed_at": "2026-10-16T12:00:00Z",
+    "last_release_at": "2026-09-09T12:00:00Z",
+    "commits_90d": 159,
+    "commits_prev_90d": 168,
+    "open_issues": 129,
+    "open_prs": 41,
+    "contributors": 44,
+    "maintainer_reply_rate": 0.94,
+    "top_contributor_share": 0.44
+  }
+}

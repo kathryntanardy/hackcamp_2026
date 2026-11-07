@@ -1,0 +1,21 @@
+{
+  "repo_id": "tiangolo/fastapi",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "fastapi",
+    "owner": "tiangolo",
+    "language": "Python",
+    "stars": 82000,
+    "dependents": 70000,
+    "is_archived": false,
+    "pushed_at": "2026-10-30T12:00:00Z",
+    "last_release_at": "2026-09-23T12:00:00Z",
+    "commits_90d": 105,
+    "commits_prev_90d": 120,
+    "open_issues": 115,
+    "open_prs": 27,
+    "contributors": 30,
+    "maintainer_reply_rate": 0.9,
+    "top_contributor_share": 0.3
+  }
+}

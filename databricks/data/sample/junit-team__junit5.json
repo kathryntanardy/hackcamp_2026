@@ -1,0 +1,21 @@
+{
+  "repo_id": "junit-team/junit5",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "junit5",
+    "owner": "junit-team",
+    "language": "Java",
+    "stars": 6400,
+    "dependents": 150000,
+    "is_archived": false,
+    "pushed_at": "2026-11-03T12:00:00Z",
+    "last_release_at": "2026-10-17T12:00:00Z",
+    "commits_90d": 121,
+    "commits_prev_90d": 122,
+    "open_issues": 131,
+    "open_prs": 3,
+    "contributors": 6,
+    "maintainer_reply_rate": 0.86,
+    "top_contributor_share": 0.26
+  }
+}

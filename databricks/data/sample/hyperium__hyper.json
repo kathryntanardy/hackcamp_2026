@@ -1,0 +1,21 @@
+{
+  "repo_id": "hyperium/hyper",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "hyper",
+    "owner": "hyperium",
+    "language": "Rust",
+    "stars": 15000,
+    "dependents": 25000,
+    "is_archived": false,
+    "pushed_at": "2026-10-22T12:00:00Z",
+    "last_release_at": "2026-09-15T12:00:00Z",
+    "commits_90d": 193,
+    "commits_prev_90d": 206,
+    "open_issues": 123,
+    "open_prs": 35,
+    "contributors": 38,
+    "maintainer_reply_rate": 0.88,
+    "top_contributor_share": 0.38
+  }
+}

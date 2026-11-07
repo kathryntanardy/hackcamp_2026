@@ -1,0 +1,21 @@
+{
+  "repo_id": "aio-libs/aiohttp",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "aiohttp",
+    "owner": "aio-libs",
+    "language": "Python",
+    "stars": 15000,
+    "dependents": 40000,
+    "is_archived": false,
+    "pushed_at": "2026-08-21T12:00:00Z",
+    "last_release_at": "2026-02-07T12:00:00Z",
+    "commits_90d": 28,
+    "commits_prev_90d": 69,
+    "open_issues": 23,
+    "open_prs": 15,
+    "contributors": 18,
+    "maintainer_reply_rate": 0.48,
+    "top_contributor_share": 0.68
+  }
+}

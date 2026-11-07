@@ -1,0 +1,21 @@
+{
+  "repo_id": "rust-lang/rust",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "rust",
+    "owner": "rust-lang",
+    "language": "Rust",
+    "stars": 102000,
+    "dependents": 0,
+    "is_archived": false,
+    "pushed_at": "2026-11-03T12:00:00Z",
+    "last_release_at": "2026-10-17T12:00:00Z",
+    "commits_90d": 81,
+    "commits_prev_90d": 72,
+    "open_issues": 11,
+    "open_prs": 3,
+    "contributors": 46,
+    "maintainer_reply_rate": 0.86,
+    "top_contributor_share": 0.26
+  }
+}

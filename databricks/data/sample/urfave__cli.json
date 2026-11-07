@@ -1,0 +1,21 @@
+{
+  "repo_id": "urfave/cli",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "cli",
+    "owner": "urfave",
+    "language": "Go",
+    "stars": 23000,
+    "dependents": 20000,
+    "is_archived": false,
+    "pushed_at": "2026-08-06T12:00:00Z",
+    "last_release_at": "2026-03-24T12:00:00Z",
+    "commits_90d": 23,
+    "commits_prev_90d": 54,
+    "open_issues": 18,
+    "open_prs": 10,
+    "contributors": 53,
+    "maintainer_reply_rate": 0.43,
+    "top_contributor_share": 0.63
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "repo_id": "tokio-rs/tokio",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "tokio",
+    "owner": "tokio-rs",
+    "language": "Rust",
+    "stars": 28000,
+    "dependents": 40000,
+    "is_archived": false,
+    "pushed_at": "2026-11-01T12:00:00Z",
+    "last_release_at": "2026-09-25T12:00:00Z",
+    "commits_90d": 103,
+    "commits_prev_90d": 116,
+    "open_issues": 153,
+    "open_prs": 25,
+    "contributors": 28,
+    "maintainer_reply_rate": 0.88,
+    "top_contributor_share": 0.28
+  }
+}

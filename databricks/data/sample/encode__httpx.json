@@ -1,0 +1,21 @@
+{
+  "repo_id": "encode/httpx",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "httpx",
+    "owner": "encode",
+    "language": "Python",
+    "stars": 14000,
+    "dependents": 25000,
+    "is_archived": false,
+    "pushed_at": "2026-10-23T12:00:00Z",
+    "last_release_at": "2026-10-06T12:00:00Z",
+    "commits_90d": 172,
+    "commits_prev_90d": 164,
+    "open_issues": 142,
+    "open_prs": 14,
+    "contributors": 17,
+    "maintainer_reply_rate": 0.87,
+    "top_contributor_share": 0.37
+  }
+}

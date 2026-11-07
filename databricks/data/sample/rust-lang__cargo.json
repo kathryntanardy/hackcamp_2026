@@ -1,0 +1,21 @@
+{
+  "repo_id": "rust-lang/cargo",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "cargo",
+    "owner": "rust-lang",
+    "language": "Rust",
+    "stars": 13000,
+    "dependents": 0,
+    "is_archived": false,
+    "pushed_at": "2026-10-19T12:00:00Z",
+    "last_release_at": "2026-10-02T12:00:00Z",
+    "commits_90d": 96,
+    "commits_prev_90d": 102,
+    "open_issues": 146,
+    "open_prs": 18,
+    "contributors": 21,
+    "maintainer_reply_rate": 0.91,
+    "top_contributor_share": 0.41
+  }
+}

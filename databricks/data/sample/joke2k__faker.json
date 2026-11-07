@@ -1,0 +1,21 @@
+{
+  "repo_id": "joke2k/faker",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "faker",
+    "owner": "joke2k",
+    "language": "Python",
+    "stars": 18000,
+    "dependents": 12000,
+    "is_archived": false,
+    "pushed_at": "2026-10-28T12:00:00Z",
+    "last_release_at": "2026-09-21T12:00:00Z",
+    "commits_90d": 187,
+    "commits_prev_90d": 194,
+    "open_issues": 77,
+    "open_prs": 29,
+    "contributors": 32,
+    "maintainer_reply_rate": 0.92,
+    "top_contributor_share": 0.32
+  }
+}

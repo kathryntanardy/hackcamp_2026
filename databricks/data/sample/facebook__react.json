@@ -1,0 +1,21 @@
+{
+  "repo_id": "facebook/react",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "react",
+    "owner": "facebook",
+    "language": "JavaScript",
+    "stars": 230000,
+    "dependents": 500000,
+    "is_archived": false,
+    "pushed_at": "2026-10-24T12:00:00Z",
+    "last_release_at": "2026-09-17T12:00:00Z",
+    "commits_90d": 191,
+    "commits_prev_90d": 202,
+    "open_issues": 161,
+    "open_prs": 33,
+    "contributors": 36,
+    "maintainer_reply_rate": 0.86,
+    "top_contributor_share": 0.36
+  }
+}

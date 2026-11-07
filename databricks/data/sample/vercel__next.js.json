@@ -1,0 +1,21 @@
+{
+  "repo_id": "vercel/next.js",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "next.js",
+    "owner": "vercel",
+    "language": "JavaScript",
+    "stars": 130000,
+    "dependents": 180000,
+    "is_archived": false,
+    "pushed_at": "2026-10-19T12:00:00Z",
+    "last_release_at": "2026-09-12T12:00:00Z",
+    "commits_90d": 196,
+    "commits_prev_90d": 212,
+    "open_issues": 126,
+    "open_prs": 38,
+    "contributors": 81,
+    "maintainer_reply_rate": 0.91,
+    "top_contributor_share": 0.41
+  }
+}

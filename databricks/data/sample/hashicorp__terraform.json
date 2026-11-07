@@ -1,0 +1,21 @@
+{
+  "repo_id": "hashicorp/terraform",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "terraform",
+    "owner": "hashicorp",
+    "language": "Go",
+    "stars": 44000,
+    "dependents": 0,
+    "is_archived": false,
+    "pushed_at": "2026-10-18T12:00:00Z",
+    "last_release_at": "2026-09-11T12:00:00Z",
+    "commits_90d": 197,
+    "commits_prev_90d": 214,
+    "open_issues": 47,
+    "open_prs": 39,
+    "contributors": 42,
+    "maintainer_reply_rate": 0.92,
+    "top_contributor_share": 0.42
+  }
+}

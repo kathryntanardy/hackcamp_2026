@@ -1,0 +1,21 @@
+{
+  "repo_id": "diesel-rs/diesel",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "diesel",
+    "owner": "diesel-rs",
+    "language": "Rust",
+    "stars": 13000,
+    "dependents": 5000,
+    "is_archived": false,
+    "pushed_at": "2026-09-07T12:00:00Z",
+    "last_release_at": "2026-02-24T12:00:00Z",
+    "commits_90d": 36,
+    "commits_prev_90d": 88,
+    "open_issues": 206,
+    "open_prs": 38,
+    "contributors": 41,
+    "maintainer_reply_rate": 0.56,
+    "top_contributor_share": 0.76
+  }
+}

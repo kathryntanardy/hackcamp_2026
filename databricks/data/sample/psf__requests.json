@@ -1,0 +1,21 @@
+{
+  "repo_id": "psf/requests",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "requests",
+    "owner": "psf",
+    "language": "Python",
+    "stars": 52000,
+    "dependents": 180000,
+    "is_archived": false,
+    "pushed_at": "2026-10-17T12:00:00Z",
+    "last_release_at": "2026-09-30T12:00:00Z",
+    "commits_90d": 98,
+    "commits_prev_90d": 106,
+    "open_issues": 148,
+    "open_prs": 20,
+    "contributors": 23,
+    "maintainer_reply_rate": 0.93,
+    "top_contributor_share": 0.43
+  }
+}

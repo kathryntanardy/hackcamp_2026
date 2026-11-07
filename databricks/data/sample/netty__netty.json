@@ -1,0 +1,21 @@
+{
+  "repo_id": "netty/netty",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "netty",
+    "owner": "netty",
+    "language": "Java",
+    "stars": 34000,
+    "dependents": 80000,
+    "is_archived": false,
+    "pushed_at": "2026-11-03T12:00:00Z",
+    "last_release_at": "2026-09-27T12:00:00Z",
+    "commits_90d": 141,
+    "commits_prev_90d": 132,
+    "open_issues": 31,
+    "open_prs": 23,
+    "contributors": 66,
+    "maintainer_reply_rate": 0.86,
+    "top_contributor_share": 0.26
+  }
+}

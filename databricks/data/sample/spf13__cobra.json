@@ -1,0 +1,21 @@
+{
+  "repo_id": "spf13/cobra",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "cobra",
+    "owner": "spf13",
+    "language": "Go",
+    "stars": 39000,
+    "dependents": 60000,
+    "is_archived": false,
+    "pushed_at": "2026-10-24T12:00:00Z",
+    "last_release_at": "2026-09-17T12:00:00Z",
+    "commits_90d": 111,
+    "commits_prev_90d": 102,
+    "open_issues": 41,
+    "open_prs": 33,
+    "contributors": 76,
+    "maintainer_reply_rate": 0.86,
+    "top_contributor_share": 0.36
+  }
+}

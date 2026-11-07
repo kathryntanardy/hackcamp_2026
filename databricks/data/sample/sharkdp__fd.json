@@ -1,0 +1,21 @@
+{
+  "repo_id": "sharkdp/fd",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "fd",
+    "owner": "sharkdp",
+    "language": "Rust",
+    "stars": 37000,
+    "dependents": 0,
+    "is_archived": false,
+    "pushed_at": "2026-10-23T12:00:00Z",
+    "last_release_at": "2026-10-06T12:00:00Z",
+    "commits_90d": 172,
+    "commits_prev_90d": 164,
+    "open_issues": 22,
+    "open_prs": 14,
+    "contributors": 17,
+    "maintainer_reply_rate": 0.87,
+    "top_contributor_share": 0.37
+  }
+}

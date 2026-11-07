@@ -1,0 +1,33 @@
+bundle:
+  name: hackcamp
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog name for hackcamp tables
+    default: hackcamp
+  warehouse_id:
+    description: SQL warehouse for setup tasks
+    lookup:
+      warehouse: Serverless Starter Warehouse
+  volume_path:
+    description: UC Volume path for raw GitHub JSON
+    default: /Volumes/hackcamp/raw/github
+
+targets:
+  dev:
+    default: true
+    mode: development
+    workspace:
+      profile: school
+    variables:
+      catalog: hackcamp
+
+  prod:
+    mode: production
+    workspace:
+      profile: school
+    variables:
+      catalog: hackcamp

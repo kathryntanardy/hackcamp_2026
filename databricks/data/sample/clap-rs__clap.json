@@ -1,0 +1,21 @@
+{
+  "repo_id": "clap-rs/clap",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "clap",
+    "owner": "clap-rs",
+    "language": "Rust",
+    "stars": 15000,
+    "dependents": 35000,
+    "is_archived": false,
+    "pushed_at": "2026-10-25T12:00:00Z",
+    "last_release_at": "2026-10-08T12:00:00Z",
+    "commits_90d": 170,
+    "commits_prev_90d": 160,
+    "open_issues": 100,
+    "open_prs": 12,
+    "contributors": 15,
+    "maintainer_reply_rate": 0.85,
+    "top_contributor_share": 0.35
+  }
+}

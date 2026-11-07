@@ -1,0 +1,21 @@
+{
+  "repo_id": "kennethreitz/records",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "records",
+    "owner": "kennethreitz",
+    "language": "Python",
+    "stars": 7200,
+    "dependents": 800,
+    "is_archived": false,
+    "pushed_at": "2026-01-06T12:00:00Z",
+    "last_release_at": "2025-05-01T12:00:00Z",
+    "commits_90d": 1,
+    "commits_prev_90d": 65,
+    "open_issues": 165,
+    "open_prs": 37,
+    "contributors": 80,
+    "maintainer_reply_rate": 0.05,
+    "top_contributor_share": 0.8
+  }
+}

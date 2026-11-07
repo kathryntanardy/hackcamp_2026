@@ -1,0 +1,21 @@
+{
+  "repo_id": "dgrijalva/jwt-go",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "jwt-go",
+    "owner": "dgrijalva",
+    "language": "Go",
+    "stars": 11000,
+    "dependents": 30000,
+    "is_archived": true,
+    "pushed_at": "2025-03-08T12:00:00Z",
+    "last_release_at": "2024-11-28T12:00:00Z",
+    "commits_90d": 0,
+    "commits_prev_90d": 14,
+    "open_issues": 19,
+    "open_prs": 11,
+    "contributors": 14,
+    "maintainer_reply_rate": 0.0,
+    "top_contributor_share": 0.95
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "repo_id": "serde-rs/serde",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "serde",
+    "owner": "serde-rs",
+    "language": "Rust",
+    "stars": 9200,
+    "dependents": 80000,
+    "is_archived": false,
+    "pushed_at": "2026-10-26T12:00:00Z",
+    "last_release_at": "2026-10-09T12:00:00Z",
+    "commits_90d": 129,
+    "commits_prev_90d": 138,
+    "open_issues": 59,
+    "open_prs": 11,
+    "contributors": 14,
+    "maintainer_reply_rate": 0.94,
+    "top_contributor_share": 0.34
+  }
+}

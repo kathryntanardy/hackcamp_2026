@@ -1,0 +1,21 @@
+{
+  "repo_id": "pallets/flask",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "flask",
+    "owner": "pallets",
+    "language": "Python",
+    "stars": 68000,
+    "dependents": 90000,
+    "is_archived": false,
+    "pushed_at": "2026-11-03T12:00:00Z",
+    "last_release_at": "2026-09-27T12:00:00Z",
+    "commits_90d": 101,
+    "commits_prev_90d": 112,
+    "open_issues": 31,
+    "open_prs": 23,
+    "contributors": 26,
+    "maintainer_reply_rate": 0.86,
+    "top_contributor_share": 0.26
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "repo_id": "apache/kafka",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "kafka",
+    "owner": "apache",
+    "language": "Java",
+    "stars": 29000,
+    "dependents": 0,
+    "is_archived": false,
+    "pushed_at": "2026-10-29T12:00:00Z",
+    "last_release_at": "2026-10-12T12:00:00Z",
+    "commits_90d": 126,
+    "commits_prev_90d": 132,
+    "open_issues": 96,
+    "open_prs": 8,
+    "contributors": 11,
+    "maintainer_reply_rate": 0.91,
+    "top_contributor_share": 0.31
+  }
+}

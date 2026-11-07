@@ -1,0 +1,21 @@
+{
+  "repo_id": "axios/axios",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "axios",
+    "owner": "axios",
+    "language": "JavaScript",
+    "stars": 106000,
+    "dependents": 250000,
+    "is_archived": false,
+    "pushed_at": "2026-10-31T12:00:00Z",
+    "last_release_at": "2026-10-14T12:00:00Z",
+    "commits_90d": 164,
+    "commits_prev_90d": 178,
+    "open_issues": 14,
+    "open_prs": 6,
+    "contributors": 49,
+    "maintainer_reply_rate": 0.89,
+    "top_contributor_share": 0.29
+  }
+}

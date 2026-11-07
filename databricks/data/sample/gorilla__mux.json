@@ -1,0 +1,21 @@
+{
+  "repo_id": "gorilla/mux",
+  "pulled_at": "2026-11-07T12:00:00Z",
+  "payload": {
+    "name": "mux",
+    "owner": "gorilla",
+    "language": "Go",
+    "stars": 21000,
+    "dependents": 25000,
+    "is_archived": false,
+    "pushed_at": "2026-03-27T12:00:00Z",
+    "last_release_at": "2025-05-31T12:00:00Z",
+    "commits_90d": 1,
+    "commits_prev_90d": 35,
+    "open_issues": 135,
+    "open_prs": 7,
+    "contributors": 10,
+    "maintainer_reply_rate": 0.15,
+    "top_contributor_share": 0.9
+  }
+}

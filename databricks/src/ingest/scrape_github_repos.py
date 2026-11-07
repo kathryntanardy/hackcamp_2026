@@ -1,9 +1,9 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Ticket #3: freeze a small, real GitHub corpus
+# MAGIC # Freeze a 1,000-repository GitHub corpus
 # MAGIC Run `github_scrape` with the existing bundle. No pip installs are needed.
 # MAGIC For a smoke run: `repo_limit=5`, `minimum_repos=5`, `publish=false`.
-# MAGIC Only a validated 50+ repo snapshot may replace the pipeline's active input.
+# MAGIC The default run publishes only after collecting 1,000 unique real repos.
 
 # COMMAND ----------
 
@@ -116,13 +116,8 @@ def retry_delay(headers, attempt, now=None):
     return max(0, delay)
 
 
-def fetch_batch(repo_ids, token, as_of, *, opener=urllib.request.urlopen, sleep=time.sleep):
-    variables = {
-        "since90": iso_utc(as_of - timedelta(days=90)),
-        "since180": iso_utc(as_of - timedelta(days=180)),
-        "asOf": iso_utc(as_of),
-    }
-    body = json.dumps({"query": build_query(repo_ids), "variables": variables}).encode()
+def graphql_request(query, variables, token, *, opener=urllib.request.urlopen, sleep=time.sleep):
+    body = json.dumps({"query": query, "variables": variables}).encode()
     for attempt in range(3):
         request = urllib.request.Request(
             "https://api.github.com/graphql", data=body,
@@ -164,6 +159,89 @@ def fetch_batch(repo_ids, token, as_of, *, opener=urllib.request.urlopen, sleep=
     raise CollectionError("GitHub request failed after 3 attempts.")
 
 
+def fetch_batch(repo_ids, token, as_of, *, opener=urllib.request.urlopen, sleep=time.sleep):
+    return graphql_request(build_query(repo_ids), {
+        "since90": iso_utc(as_of - timedelta(days=90)),
+        "since180": iso_utc(as_of - timedelta(days=180)), "asOf": iso_utc(as_of),
+    }, token, opener=opener, sleep=sleep)
+
+
+def search_page(language, token, cursor=None):
+    result = graphql_request("""
+        query($query: String!, $cursor: String) {
+          search(query: $query, type: REPOSITORY, first: 100, after: $cursor) {
+            nodes { ... on Repository { nameWithOwner isPrivate } }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+    """, {"query": f"is:public fork:false language:{language} stars:>=100 sort:stars-desc",
+          "cursor": cursor}, token)
+    if result.get("errors") or not result.get("data", {}).get("search"):
+        raise CollectionError("GitHub discovery returned an incomplete search page.")
+    search = result["data"]["search"]
+    names = [node["nameWithOwner"] for node in search["nodes"]
+             if node and not node.get("isPrivate", True)]
+    page = search["pageInfo"]
+    return names, page["endCursor"] if page["hasNextPage"] else None
+
+
+def discover_repo_ids(limit, token, *, search=search_page, sleep=time.sleep):
+    """Retain curated controls, then interleave paginated language searches.
+
+    Keep spare candidates for renamed/unavailable repos; collect_repos stops
+    at the requested count of canonical, unique successes.
+    """
+    if limit <= len(CURATED_REPOS):
+        return CURATED_REPOS[:limit]
+    candidate_limit = limit + max(100, limit // 5)
+    seen = {repo.lower() for repo in CURATED_REPOS}
+    pools = {language: [] for language in REPOS_BY_LANGUAGE}
+    cursors = {language: None for language in pools}
+    pages = {language: 0 for language in pools}
+    exhausted = set()
+    requests = 0
+    while len(seen) < candidate_limit:
+        progressed = False
+        for language in pools:
+            if language in exhausted or pages[language] >= 6:
+                continue
+            if requests:
+                sleep(6.1)  # Pace search separately from metric batches.
+            names, cursor = search(language, token, cursors[language])
+            requests += 1
+            pages[language] += 1
+            for name in names:
+                if name.lower() not in seen:
+                    pools[language].append(name)
+                    seen.add(name.lower())
+                    progressed = True
+            if cursor is None or cursor == cursors[language]:
+                exhausted.add(language)
+            cursors[language] = cursor
+            if len(seen) >= candidate_limit:
+                break
+        if not progressed and all(language in exhausted or pages[language] >= 6 for language in pools):
+            break
+    discovered = [pool[index] for index in range(max(map(len, pools.values()), default=0))
+                  for pool in pools.values() if index < len(pool)]
+    candidates = list(CURATED_REPOS) + discovered
+    if len(candidates) < limit:
+        raise CollectionError(f"Discovery found only {len(candidates)} distinct candidates for a {limit}-repo target.")
+    return candidates[:candidate_limit]
+
+
+def write_snapshot(fs, snapshot, records):
+    """JSON Lines preserves Auto Loader's record schema with fewer file operations."""
+    fs.mkdirs(f"{snapshot}/repos")
+    files = []
+    for start in range(0, len(records), 100):
+        batch = records[start:start + 100]
+        name = f"repos_{start // 100:04d}.json"
+        fs.put(f"{snapshot}/repos/{name}", "\n".join(json.dumps(row) for row in batch) + "\n", overwrite=False)
+        files.append({"name": name, "records": len(batch)})
+    return files
+
+
 def normalize_repo(repo, pulled_at):
     branch = repo.get("defaultBranchRef") or {}
     history = branch.get("target") or {}
@@ -190,16 +268,21 @@ def normalize_repo(repo, pulled_at):
     }
 
 
-def collect_repos(repo_ids, token, as_of, batch_size=5, *, fetch=fetch_batch):
+def collect_repos(repo_ids, token, as_of, batch_size=5, *, fetch=fetch_batch, target_count=None, attempted_repo_ids=None):
     records, failures, seen = [], [], set()
     fatal = None
-    for start in range(0, len(repo_ids), batch_size):
-        batch = repo_ids[start:start + batch_size]
+    attempted_repo_ids = [] if attempted_repo_ids is None else attempted_repo_ids
+    start = 0
+    while start < len(repo_ids) and (target_count is None or len(records) < target_count):
+        size = batch_size if target_count is None else min(batch_size, target_count - len(records))
+        batch = repo_ids[start:start + size]
+        attempted_repo_ids.extend(batch)
+        start += len(batch)
         try:
             result = fetch(batch, token, as_of)
         except CollectionError as exc:
             fatal = {"reason": str(exc), "authentication_failed": isinstance(exc, AuthenticationError)}
-            failures.extend({"repo_id": repo, "reason": str(exc)} for repo in repo_ids[start:])
+            failures.extend({"repo_id": repo, "reason": str(exc)} for repo in batch)
             break
         errors = result.get("errors", [])
         for i, requested in enumerate(batch):
@@ -258,8 +341,8 @@ def publish_snapshot(fs, root, snapshot, expected_count):
 
 
 def run_notebook(dbutils):
-    defaults = {"volume_path": "/Volumes/hackcamp/raw/github", "repo_limit": "100",
-                "minimum_repos": "50", "batch_size": "5", "publish": "true"}
+    defaults = {"volume_path": "/Volumes/hackcamp/raw/github", "repo_limit": "1000",
+                "minimum_repos": "1000", "batch_size": "10", "publish": "true"}
     for name, default in defaults.items():
         dbutils.widgets.text(name, default)
     root = dbutils.widgets.get("volume_path").rstrip("/")
@@ -269,13 +352,14 @@ def run_notebook(dbutils):
     publish_value = dbutils.widgets.get("publish").lower()
     if not root.startswith("/Volumes/") or len(root.split("/")) < 5:
         raise ValueError("volume_path must be a Unity Catalog Volume path.")
-    if not 1 <= minimum <= limit <= len(CURATED_REPOS) or not 1 <= batch_size <= 10:
-        raise ValueError("Require 1 <= minimum_repos <= repo_limit <= 100 and batch_size <= 10.")
+    if not 1 <= minimum <= limit <= 1000 or not 1 <= batch_size <= 10:
+        raise ValueError("Require 1 <= minimum_repos <= repo_limit <= 1000 and batch_size <= 10.")
     if publish_value not in ("true", "false"):
         raise ValueError("publish must be true or false.")
     publish = publish_value == "true"
-    if publish and minimum < 50:
-        raise ValueError("Smoke runs must use publish=false; publishing requires minimum_repos >= 50.")
+    publication_gate = limit if limit > 100 else 50
+    if publish and minimum < publication_gate:
+        raise ValueError(f"Smoke runs must use publish=false; publishing requires minimum_repos >= {publication_gate}.")
 
     as_of = datetime.now(timezone.utc)
     run_id = as_of.strftime("%Y%m%dT%H%M%S") + "_" + uuid.uuid4().hex[:8]
@@ -290,9 +374,9 @@ def run_notebook(dbutils):
             "No GitHub requests or active-input changes were made; a summary cannot be saved "
             "until Volume access works."
         ) from None
-    requested = CURATED_REPOS[:limit]
+    requested, attempted = [], []
     summary = {"run_id": run_id, "source": "github_graphql", "pulled_at": iso_utc(as_of),
-               "requested_repos": requested, "requested_count": limit,
+               "requested_repos": requested, "target_count": limit, "requested_count": 0,
                "minimum_repos": minimum, "published": False, "meets_f1": False,
                "snapshot_path": snapshot, "summary_path": summary_path}
     records, failures, fatal = [], [], None
@@ -303,21 +387,26 @@ def run_notebook(dbutils):
             raise AuthenticationError("Set the Databricks secret hackcamp/github_token before scraping.") from None
         if not token.strip():
             raise AuthenticationError("The Databricks GitHub secret is empty.")
-        records, failures, fatal = collect_repos(requested, token, as_of, batch_size)
-        dbutils.fs.mkdirs(f"{snapshot}/repos")
-        for record in records:
-            filename = record["repo_id"].replace("/", "__") + ".json"
-            dbutils.fs.put(f"{snapshot}/repos/{filename}", json.dumps(record), overwrite=False)
+        requested = discover_repo_ids(limit, token)
+        summary.update(requested_repos=requested, requested_count=len(requested),
+                       discovery="curated" if limit <= 100 else "curated_plus_language_search")
+        records, failures, fatal = collect_repos(
+            requested, token, as_of, batch_size, target_count=limit, attempted_repo_ids=attempted
+        )
+        files = write_snapshot(dbutils.fs, snapshot, records)
+        summary.update(files=files, file_count=len(files))
         languages = sorted({r["payload"]["language"] for r in records if r["payload"]["language"]})
         summary["languages"] = languages
         auth_failed = fatal and fatal["authentication_failed"]
         if auth_failed or len(records) < minimum:
             raise CollectionError(f"Collected {len(records)}/{limit} repos; minimum is {minimum}. " + (fatal["reason"] if fatal else "See failures."))
-        meets_f1 = len(records) >= 50 and set(REPOS_BY_LANGUAGE).issubset(languages)
-        if publish and not meets_f1:
-            raise CollectionError("Publishing requires at least 50 real repos covering all five intended languages.")
+        language_coverage = set(REPOS_BY_LANGUAGE).issubset(languages)
+        publication_ready = len(records) >= publication_gate and language_coverage
+        meets_f1 = len(records) >= 1000 and language_coverage
+        if publish and not publication_ready:
+            raise CollectionError(f"Publishing requires {publication_gate} unique real repos covering all five intended languages.")
         if publish:
-            publish_snapshot(dbutils.fs, root, snapshot, len(records))
+            publish_snapshot(dbutils.fs, root, snapshot, len(files))
             summary["published"] = True
         summary["meets_f1"] = meets_f1
         summary["status"] = "published" if publish else "smoke_passed"
@@ -328,7 +417,8 @@ def run_notebook(dbutils):
             failures = [{"repo_id": repo, "reason": summary["error"]} for repo in requested]
         raise
     finally:
-        summary.update(successful_count=len(records), successful_repos=[r["repo_id"] for r in records],
+        summary.update(attempted_count=len(attempted), candidate_count=len(requested),
+                       successful_count=len(records), successful_repos=[r["repo_id"] for r in records],
                        failed_count=len(failures), failures=failures,
                        finished_at=iso_utc(datetime.now(timezone.utc)))
         dbutils.fs.put(summary_path, json.dumps(summary, indent=2), overwrite=True)

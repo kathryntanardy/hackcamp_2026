@@ -66,7 +66,8 @@ See [PRD.md](PRD.md) for the product requirements.
 ## GitHub scraping (ticket #3)
 
 One on-demand Databricks notebook collects real metrics for a curated corpus
-of 50–100 repos. It uses the existing workspace, Volume and bundle, with no
+of 1,000 unique repos. It retains the curated controls, discovers additional
+public repos across five languages, and deduplicates canonical IDs. It uses the existing workspace, Volume and bundle, with no
 additional Python packages. Setup requires a valid `school` profile and the
 Databricks secret `hackcamp/github_token`.
 
@@ -79,7 +80,7 @@ databricks bundle deploy -t dev --profile school
 databricks bundle run github_scrape -t dev --profile school --params repo_limit=5,minimum_repos=5,publish=false
 ```
 
-Collect and freeze the live snapshot (at least 50 successful repos across all
+Collect and freeze the live snapshot (1,000 unique successful repos across all
 five intended languages), then run the existing pipeline manually:
 
 ```sh
@@ -98,8 +99,9 @@ The job prints a summary and its Volume path. Every attempt saves
 `snapshots/<run_id>/summary.json` outside the Auto Loader input, including counts
 and failed repo IDs. Successful snapshots retain their JSON under
 `snapshots/<run_id>/repos/`, and the active copy is published to
-`/Volumes/hackcamp/raw/github/repos/`. The previous input is archived under that
-snapshot's `previous_repos/` directory; a failed publish attempts to restore it.
+`/Volumes/hackcamp/raw/github/repos/`. Records are batched into JSON Lines files (up to 100 records each), so 1,000
+repos occupy 10 data files. Verify record counts rather than file counts. The
+previous input is archived under that snapshot's `previous_repos/` directory; a failed publish attempts to restore it.
 Do not run the sample-seeding setup job after publishing a live snapshot.
 
 Missing release/commit data and deferred contributor, reply-rate and dependents
@@ -111,7 +113,7 @@ If the GitHub secret is missing, use the existing token helper described in
 [the workspace setup notes](.docs/HOUR1_CHECKS.md). The notebook reports this
 without exposing the secret. Long rate-limit waits stop collection rather than
 blocking the build; a partial result is publishable only if it still meets the
-50-repo/five-language gate and authentication succeeded.
+1,000-repo/five-language gate and authentication succeeded.
 
 Offline checks require only Python:
 

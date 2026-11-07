@@ -39,6 +39,12 @@ def records(count):
             for repo in scrape.CURATED_REPOS[:count]]
 
 
+def expanded_records(count):
+    languages = list(scrape.REPOS_BY_LANGUAGE)
+    return [scrape.normalize_repo(repo_payload(f"public/repo-{i}", languages[i % 5]), scrape.iso_utc(AS_OF))
+            for i in range(count)]
+
+
 class Response(io.BytesIO):
     def __init__(self, payload, headers=None):
         super().__init__(json.dumps(payload).encode())
@@ -92,7 +98,8 @@ class NotebookTests(unittest.TestCase):
         self.fs.put(self.root + "/repos/old_seed.json", '{"mock": true}')
 
     def dbutils(self, **overrides):
-        values = dict(overrides)
+        # Existing small-corpus modes remain supported explicitly.
+        values = {"repo_limit": "100", "minimum_repos": "50", **overrides}
 
         def text(name, default):
             values.setdefault(name, default)
@@ -111,11 +118,13 @@ class NotebookTests(unittest.TestCase):
         with patch.object(scrape, "collect_repos", return_value=(records(50), [], None)), redirect_stdout(io.StringIO()):
             result = scrape.run_notebook(self.dbutils(repo_limit="50"))
         self.assertTrue(result["published"])
-        self.assertTrue(result["meets_f1"])
-        self.assertEqual(len(self.fs.ls(self.root + "/repos")), 50)
+        self.assertFalse(result["meets_f1"])  # Legacy mode does not meet the new 1,000-repo requirement.
+        active = self.fs.ls(self.root + "/repos")
+        self.assertEqual(len(active), 1)
+        self.assertEqual(len(active[0].read_text().splitlines()), 50)
         self.assertFalse(self.fs.path(self.root + "/repos/old_seed.json").exists())
         self.assertTrue(self.fs.path(result["snapshot_path"] + "/previous_repos/old_seed.json").exists())
-        self.assertEqual(len(self.fs.ls(result["snapshot_path"] + "/repos")), 50)
+        self.assertEqual(len(self.fs.ls(result["snapshot_path"] + "/repos")), 1)
 
     def test_smoke_run_never_changes_active_input(self):
         with patch.object(scrape, "collect_repos", return_value=(records(5), [], None)), redirect_stdout(io.StringIO()):
@@ -147,7 +156,8 @@ class NotebookTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()), self.assertRaises(scrape.AuthenticationError):
             scrape.run_notebook(dbutils)
         summary = self.summary()
-        self.assertEqual(summary["failed_count"], 100)
+        self.assertEqual(summary["failed_count"], 0)
+        self.assertEqual(summary["attempted_count"], 0)
         self.assertNotIn("secret backend detail", json.dumps(summary))
         self.assertEqual(len(self.fs.ls(self.root + "/repos")), 1)
 
@@ -169,8 +179,94 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(len(self.fs.ls(self.root + "/repos")), 1)
         self.assertFalse(self.summary()["published"])
 
+    def test_thousand_repo_snapshot_publishes_ten_compatible_json_lines_files(self):
+        collected = expanded_records(1000)
+        candidates = [f"public/repo-{i}" for i in range(1200)]
+
+        def collect(ids, token, as_of, batch_size, *, target_count, attempted_repo_ids):
+            self.assertEqual(target_count, 1000)
+            attempted_repo_ids.extend(ids[:1000])
+            return collected, [], None
+
+        with patch.object(scrape, "discover_repo_ids", return_value=candidates), \
+                patch.object(scrape, "collect_repos", side_effect=collect), redirect_stdout(io.StringIO()):
+            result = scrape.run_notebook(self.dbutils(repo_limit="1000", minimum_repos="1000"))
+        self.assertTrue(result["published"])
+        self.assertEqual(result["successful_count"], 1000)
+        self.assertTrue(result["meets_f1"])
+        self.assertEqual(result["attempted_count"], 1000)
+        self.assertEqual(result["candidate_count"], 1200)
+        files = self.fs.ls(self.root + "/repos")
+        self.assertEqual(len(files), 10)
+        rows = [json.loads(line) for path in files for line in path.read_text().splitlines()]
+        self.assertEqual(len(rows), 1000)
+        self.assertEqual(len({row["repo_id"].lower() for row in rows}), 1000)
+        self.assertTrue(all(row["payload"]["source"] == "github_graphql" for row in rows))
+        self.assertEqual(sum(file["records"] for file in result["files"]), 1000)
+
+    def test_expanded_run_never_publishes_a_partial_thousand_repo_result(self):
+        with patch.object(scrape, "discover_repo_ids", return_value=[f"public/repo-{i}" for i in range(1200)]), \
+                patch.object(scrape, "collect_repos", return_value=(expanded_records(999), [], None)), \
+                redirect_stdout(io.StringIO()), self.assertRaises(scrape.CollectionError):
+            scrape.run_notebook(self.dbutils(repo_limit="1000", minimum_repos="1000"))
+        self.assertFalse(self.summary()["published"])
+        self.assertTrue(self.fs.path(self.root + "/repos/old_seed.json").exists())
+
+    def test_expanded_publication_cannot_lower_the_target_gate(self):
+        with self.assertRaisesRegex(ValueError, "minimum_repos >= 1000"):
+            scrape.run_notebook(self.dbutils(repo_limit="1000", minimum_repos="900"))
+
 
 class CollectionTests(unittest.TestCase):
+    def test_discovery_is_paginated_unique_interleaved_and_preserves_curated_controls(self):
+        calls, pauses = [], []
+
+        def search(language, token, cursor):
+            page = int(cursor or 0)
+            calls.append((language, cursor))
+            names = [scrape.CURATED_REPOS[0]] + [f"{language.lower()}/repo-{page * 100 + i}" for i in range(100)]
+            return names, str(page + 1)
+
+        found = scrape.discover_repo_ids(1000, "token", search=search, sleep=pauses.append)
+        self.assertEqual(found[:100], scrape.CURATED_REPOS)
+        self.assertEqual(len(found), 1200)
+        self.assertEqual(len({repo.lower() for repo in found}), 1200)
+        self.assertEqual({repo.split('/')[0] for repo in found[100:105]}, {lang.lower() for lang in scrape.REPOS_BY_LANGUAGE})
+        self.assertTrue(any(cursor is not None for _, cursor in calls))
+        self.assertEqual(len(pauses), len(calls) - 1)
+
+    def test_discovery_exhaustion_fails_without_an_infinite_search_loop(self):
+        calls = []
+
+        def search(language, token, cursor):
+            calls.append(language)
+            return [], None
+
+        with self.assertRaises(scrape.CollectionError):
+            scrape.discover_repo_ids(1000, "token", search=search, sleep=lambda _: None)
+        self.assertEqual(len(calls), 5)
+
+    def test_small_smoke_run_does_not_search(self):
+        found = scrape.discover_repo_ids(5, "token", search=lambda *a: self.fail("Unexpected search"))
+        self.assertEqual(found, scrape.CURATED_REPOS[:5])
+
+    def test_collection_refills_redirect_duplicates_and_stops_at_unique_target(self):
+        attempts = []
+
+        def fetch(ids, token, as_of):
+            return {"data": {f"r{i}": repo_payload("public/repo-0" if repo == "old/name" else repo)
+                             for i, repo in enumerate(ids)}}
+
+        found, failures, fatal = scrape.collect_repos(
+            ["public/repo-0", "old/name", "public/repo-1", "public/repo-2", "public/not-needed"],
+            "token", AS_OF, batch_size=2, fetch=fetch, target_count=3, attempted_repo_ids=attempts,
+        )
+        self.assertEqual(len(found), 3)
+        self.assertEqual(len({row["repo_id"] for row in found}), 3)
+        self.assertEqual(len(failures), 1)
+        self.assertIsNone(fatal)
+        self.assertNotIn("public/not-needed", attempts)
+
     def test_curated_list_is_unique_balanced_and_smoke_test_covers_languages(self):
         self.assertEqual(len(scrape.CURATED_REPOS), 100)
         self.assertEqual(len({r.lower() for r in scrape.CURATED_REPOS}), 100)

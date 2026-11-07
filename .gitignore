@@ -1,0 +1,17 @@
+# Frontend
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local configuration
+.env
+.env.*
+!.env.example
+.DS_Store

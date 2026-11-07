@@ -1,0 +1,12 @@
+<!-- reply 1 -->
+> kathryntanardy/hackcamp_2026#31 Scrape description, topics and security advisories. This is the new-columns-when-scraping ticket. It adds description and topics to the scrape and adds the separate advisory pass that fills silver.repo_advisories. It ends with re-running the 1,000-repo scrape. Every other ticket below depends on it.
+
+do we need more collumns based on what i want?
+
+---
+
+put anything that you recommend
+
+---
+
+Yes, push it

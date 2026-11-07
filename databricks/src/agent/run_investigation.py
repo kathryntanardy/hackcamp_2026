@@ -15,6 +15,7 @@ dbutils.library.restartPython()
 
 import json
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -39,15 +40,20 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 dbutils.widgets.text("budget_n", "5")
 dbutils.widgets.text("model_endpoint", "databricks-meta-llama-3-3-70b-instruct")
 dbutils.widgets.text("max_tool_calls", "8")
+dbutils.widgets.text("repo_timeout_sec", "180")
 dbutils.widgets.text("experiment_path", "/Users/philip03ho@gmail.com/hackcamp-agent")
 
 BUDGET_N = int(dbutils.widgets.get("budget_n"))
 MODEL = dbutils.widgets.get("model_endpoint")
 MAX_TOOL_CALLS = int(dbutils.widgets.get("max_tool_calls"))
+REPO_TIMEOUT_SEC = int(dbutils.widgets.get("repo_timeout_sec"))
 EXPERIMENT_PATH = dbutils.widgets.get("experiment_path")
 RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8]
 
-print(f"run_id={RUN_ID} model={MODEL} budget_n={BUDGET_N}")
+print(
+    f"run_id={RUN_ID} model={MODEL} budget_n={BUDGET_N} "
+    f"max_tool_calls={MAX_TOOL_CALLS} repo_timeout_sec={REPO_TIMEOUT_SEC}"
+)
 
 # COMMAND ----------
 
@@ -256,10 +262,12 @@ OPENAI_TOOLS = [
 ]
 
 SYSTEM_PROMPT = """You are a maintainer-risk analyst for open-source packages.
-Investigate ONE repository using the provided tools. Choose which tools to call yourself.
+Investigate ONE repository using the provided tools. Choose which tools to call and in what order — there is no fixed sequence.
 Do not invent metrics — every claim must come from a tool result.
-Prefer UC metric tools first; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
+Prefer UC metric tools; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
 Never open issues or post comments — tools are read-only.
+
+When signals conflict (e.g. low recent commits but steady releases, or high stars but archived), dig deeper with another tool before deciding — that often means mature/quiet rather than abandoned.
 
 Scoring rubric (align with baseline formula):
 - healthy: active releases/commits, shared ownership, maintainers reply
@@ -267,7 +275,7 @@ Scoring rubric (align with baseline formula):
 - at_risk: archived, long release gap, near-zero commits, unanswered backlog, single maintainer dominance
 - inconclusive: only if tools conflict and you cannot decide
 
-Stop calling tools when you have enough evidence (aim for confidence >= 0.7), or after the tool budget.
+Stop calling tools when confidence >= 0.7, or after the tool budget (max 8 calls).
 When done, reply with ONLY a JSON object (no markdown) matching:
 {
   "repo_id": "org/repo",
@@ -446,8 +454,8 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
     user_msg = (
         f"Investigate maintainer risk for `{repo_id}`.\n"
         f"Triage reason: {triage_reason}\n"
-        f"Start by calling get_repo_metrics, then choose further tools as needed.\n"
-        f"Tool budget: {MAX_TOOL_CALLS} calls."
+        f"Choose which tools to call and in what order (no fixed sequence).\n"
+        f"Tool budget: {MAX_TOOL_CALLS} calls. Per-repo wall clock: {REPO_TIMEOUT_SEC}s."
     )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -456,11 +464,30 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
     called_tools: set[str] = set()
     tool_calls = 0
     verdict: Verdict | None = None
+    started = time.monotonic()
+
+    def _timed_out() -> bool:
+        return (time.monotonic() - started) >= REPO_TIMEOUT_SEC
 
     with mlflow.start_span(name=f"investigate:{repo_id}", span_type="AGENT") as root:
-        root.set_inputs({"repo_id": repo_id, "triage_reason": triage_reason})
+        root.set_inputs(
+            {
+                "repo_id": repo_id,
+                "triage_reason": triage_reason,
+                "repo_timeout_sec": REPO_TIMEOUT_SEC,
+            }
+        )
 
         while tool_calls < MAX_TOOL_CALLS:
+            if _timed_out():
+                verdict = inconclusive(
+                    repo_id,
+                    tool_calls,
+                    f"Per-repo timeout after {REPO_TIMEOUT_SEC}s",
+                )
+                root.set_outputs(verdict.model_dump())
+                break
+
             with mlflow.start_span(name="llm_decide", span_type="CHAT_MODEL") as llm_span:
                 llm_span.set_inputs({"messages_tail": messages[-2:], "model": MODEL})
                 resp = llm.chat.completions.create(
@@ -500,7 +527,7 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
                     }
                 )
                 for tc in msg.tool_calls:
-                    if tool_calls >= MAX_TOOL_CALLS:
+                    if tool_calls >= MAX_TOOL_CALLS or _timed_out():
                         break
                     name = tc.function.name
                     try:
@@ -523,6 +550,14 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
                             "content": result,
                         }
                     )
+                if _timed_out() and verdict is None:
+                    verdict = inconclusive(
+                        repo_id,
+                        tool_calls,
+                        f"Per-repo timeout after {REPO_TIMEOUT_SEC}s",
+                    )
+                    root.set_outputs(verdict.model_dump())
+                    break
                 continue
 
             # No tool calls — expect final JSON verdict
@@ -530,8 +565,8 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
             try:
                 raw = extract_json(content)
                 verdict = validate_verdict(raw, repo_id, called_tools, tool_calls)
-                if tool_calls < 2:
-                    # Force at least 2 tools per PRD when model stops early
+                if len(called_tools) < 2:
+                    # Force at least 2 distinct tools per F4 when model stops early
                     messages.append({"role": "assistant", "content": content})
                     messages.append(
                         {
@@ -556,7 +591,7 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
                         ),
                     }
                 )
-                # one structured retry then fall through
+                # one structured retry then mark inconclusive
                 retry = llm.chat.completions.create(
                     model=MODEL,
                     messages=messages,

@@ -10,6 +10,8 @@ resources:
           default: databricks-meta-llama-3-3-70b-instruct
         - name: max_tool_calls
           default: "8"
+        - name: repo_timeout_sec
+          default: "180"
         - name: experiment_path
           default: /Users/philip03ho@gmail.com/hackcamp-agent
       tasks:
@@ -21,6 +23,7 @@ resources:
               budget_n: "{{job.parameters.budget_n}}"
               model_endpoint: "{{job.parameters.model_endpoint}}"
               max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
               experiment_path: "{{job.parameters.experiment_path}}"
           environment_key: agent_env
 

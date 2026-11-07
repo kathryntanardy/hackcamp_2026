@@ -51,8 +51,10 @@ SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
   g.importance, g.x, g.y, g.stars, g.is_archived,
   f.risk_level, f.changed_since_last,
   f.repo_id IS NOT NULL AS investigated,
-  coalesce(f.run_id = (SELECT run_id FROM latest_run), false) AS investigated_in_latest_run
+  coalesce(f.run_id = (SELECT run_id FROM latest_run), false) AS investigated_in_latest_run,
+  sm.summary
 FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
+LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 ORDER BY g.importance DESC""")
 
 
@@ -65,8 +67,9 @@ SELECT g.repo_id, g.name, g.owner, g.language, g.stars, g.dependents, g.is_archi
   g.days_since_release, g.commit_trend_pct,
   s.pushed_at, s.last_release_at, s.commits_90d, s.commits_prev_90d,
   s.open_issues, s.open_prs, s.contributors,
-  s.maintainer_reply_rate, s.top_contributor_share
+  s.maintainer_reply_rate, s.top_contributor_share, sm.summary
 FROM gold g LEFT JOIN hackcamp.silver.repos s ON s.repo_id = g.repo_id
+LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
     if not rows:
         raise HTTPException(404, f"repo {repo_id} not found")

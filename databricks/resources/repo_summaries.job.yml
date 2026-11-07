@@ -1,0 +1,15 @@
+resources:
+  jobs:
+    repo_summaries:
+      name: hackcamp-repo-summaries
+      description: >
+        Ticket #20: ai_query() one-line summaries into gold.repo_summaries for
+        repos with no agent finding. Only new repos hit the model on re-runs.
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: summarize_uninvestigated
+          sql_task:
+            file:
+              path: ../src/summaries/summarize_uninvestigated.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}

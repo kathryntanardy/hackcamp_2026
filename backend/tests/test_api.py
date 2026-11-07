@@ -28,7 +28,7 @@ def calls(monkeypatch):
                      "commit_trend_pct": -98.0, "pushed_at": None, "last_release_at": None,
                      "commits_90d": 1, "commits_prev_90d": 50, "open_issues": 40, "open_prs": 22,
                      "contributors": 35, "maintainer_reply_rate": 0.05,
-                     "top_contributor_share": 0.8}]
+                     "top_contributor_share": 0.8, "summary": "Stale but stable."}]
         if "LIMIT 2" in statement:
             return [FINDING, {**FINDING, "run_id": "r1", "evidence": None}]
         if "trace_steps" in statement:
@@ -63,6 +63,17 @@ def test_repo_detail_splits_metrics_and_verdicts(calls):
     assert body["verdict"]["evidence"][0]["tool"] == "get_release_history"
     assert body["previous_verdict"]["run_id"] == "r1"
     assert body["previous_verdict"]["evidence"] == []
+
+
+def test_repos_expose_summary(calls):
+    client.get("/api/repos")
+    assert "gold.repo_summaries" in calls[-1][0] and "sm.summary" in calls[-1][0]
+
+
+def test_repo_detail_has_summary_outside_metrics(calls):
+    body = client.get("/api/repos/moment/moment").json()
+    assert body["summary"] == "Stale but stable."
+    assert "summary" not in body["metrics"]
 
 
 def test_repo_detail_404(calls):

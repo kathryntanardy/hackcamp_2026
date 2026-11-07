@@ -14,6 +14,8 @@ The question: **which open-source packages that many people depend on are losing
 
 **Not the goal:** a complete or real-time picture of all of GitHub. Target 100 repos across 4–5 languages; 50 real repos is enough for the hackathon demo. Expanding to 500 is a stretch goal.
 
+**Why scan obviously fine open-source repos?** The corpus is not only dying packages. Famous, intentional OSS projects (React, Vue, Flask, …) are **controls and hard cases**. Scanning them proves the agent does not cry wolf: a quiet mature line is not the same as abandonment. Example: [`vuejs/vue`](https://github.com/vuejs/vue) is the Vue 2 line (maintenance / successor elsewhere); [`vuejs/core`](https://github.com/vuejs/core) is where Vue 3 lives. Both belong in the map — one teaches “migrate / follow the successor,” the other “healthy, keep watching.” Without healthy and hard-case stars, the product is just a red-flag list with no calibration.
+
 ## Users and judges
 
 | Who | What they want | What we show them |
@@ -58,13 +60,13 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | ID | Feature | Priority | Acceptance criteria |
 | --- | --- | --- | --- |
 | F1 | Data scraping and repo ingestion | P0 must | One on-demand Databricks notebook collects at least 50 real repos (target 100) from a curated list using GitHub APIs, writes the existing JSON envelope into the UC Volume, and feeds the existing bronze/silver/gold pipeline. A manual pipeline run is acceptable. Bounded retries and a count/error summary are sufficient; no custom scheduler, checkpoint system or external enrichment is required |
-| F2 | Baseline health score | P0 must | Gold rows use the MVP release/commit/activity formula below, with healthy, watchlist or at risk status; uncollected signals remain unknown and are excluded from the score. Archive status overrides the score. No maintainer-reply or contributor-history scrape is needed |
-| F3 | Agent triage | P0 must | Given a budget N (default 20), the agent picks which repos to investigate and logs why it chose them |
+| F2 | Baseline health score | P0 must | Gold rows use the MVP release/commit/activity formula below, with healthy, watchlist, at risk, or **ignored** status; uncollected signals remain unknown and are excluded from the score. Officially deprecated or archived-as-deprecated repos land in **ignored** (not scored as living risk). No maintainer-reply or contributor-history scrape is needed |
+| F3 | Agent triage | P0 must | Given a budget N (default 20), the agent picks which repos to investigate and logs why it chose them. **Skip repos already marked `ignored`** — deprecated lines get no future PR-review / investigation budget |
 | F4 | Agent investigation | P0 must | The agent calls at least 2 tools per repo, chosen by the model rather than a fixed sequence, and stops when it is confident or reaches 8 calls |
 | F5 | Structured verdict | P0 must | Each investigation writes one `findings` row matching the schema in Agent design, with every evidence item pointing to a tool result |
 | F6 | Reasoning trace | P0 must | Every investigation has an MLflow trace, and the repo drawer shows its tool calls and results in order |
-| F7 | Galaxy map | P0 must | Renders all repos as stars clustered by language, sized by importance and coloured by health; hover shows the name and score; click opens the drawer; 500 stars render smoothly |
-| F8 | Findings page | P0 must | Lists findings sorted by severity, then importance; filters by language and risk; a row click opens that repo on the map |
+| F7 | Galaxy map | P0 must | Renders all repos as stars clustered by language, sized by importance and coloured by health (**including gray ignored**); hover shows the name and score; click opens the drawer; 500 stars render smoothly |
+| F8 | Findings page | P0 must | Lists findings sorted by severity, then importance; filters by language and risk **including an Ignored bin**; a row click opens that repo on the map |
 | F9 | Evaluation | P1 should | The agent runs on 30–50 labelled repos; accuracy and false-positive rate are logged in MLflow and shown in the pitch |
 | F10 | Scheduled autonomy | P2 stretch | After the demo works, optionally chain the existing scraping, pipeline and agent tasks in a Lakeflow Job, reusing frozen data for the demo. Recurring scraping is not required within the 20-hour build |
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
@@ -78,25 +80,38 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 **Galaxy Map (`/`)**: the hero screen
 
 - Full-screen star field. Each language gets a fixed cluster centre, and repos are scattered around it with a seeded random offset so positions stay the same between reloads.
-- Star size = importance, the log of dependents (or stars if dependents are missing). Star colour = status: green healthy, amber watchlist, red at risk. A pulsing ring marks repos the agent investigated in the latest run.
-- Top bar: repos tracked, healthy, watchlist, at risk, last agent run time.
-- Filters: language, status, "investigated only".
+- Star size = importance, the log of dependents (or stars if dependents are missing). Star colour = status: green healthy, amber watchlist, red at risk, **gray ignored**. A pulsing ring marks repos the agent investigated in the latest run. Ignored stars stay on the map for context but are visually de-emphasized (dim / no pulse).
+- Top bar: repos tracked, healthy, watchlist, at risk, **ignored**, last agent run time.
+- Filters: language, status (including **Ignored**), "investigated only". Default map filter can hide ignored if cluttered; keep the bin available.
 - Hover shows a tooltip with the name, score and status. Click opens the drawer.
 
 **Findings (`/findings`)**: the agent's output
 
 - One row per finding: repo, risk level, confidence, a one-line headline, investigated time, a "new" badge.
-- Sorted by severity, then importance. Filters for language and risk.
+- Sorted by severity, then importance. Filters for language and risk, including an **Ignored** bin. Default list focuses on healthy / watchlist / at risk; ignored is a separate filter tab or chip so judges can still open a deprecated example.
 - Clicking a row jumps to the map with that star selected and the drawer open.
-- Header strip: latest run stats, i.e. repos triaged, investigated, tool calls made and eval score.
+- Header strip: latest run stats, i.e. repos triaged, investigated, tool calls made, **ignored count**, and eval score.
 
 **Repo drawer**: opens from either page
 
 - Header: name, GitHub link, language, stars, dependents.
 - Health gauge plus the collected metrics: days since last release, commits in the last 90 days vs the previous 90, and open issues/PR counts. Unanswered PRs, maintainer-response and contributor-share metrics show as unavailable until collected; missing data is not evidence of abandonment.
-- Agent verdict: risk level, confidence, a short explanation, an evidence list, and a recommended alternative if one was found.
+- Agent verdict: risk level, confidence, a short explanation, an evidence list, **recommended actions** (see below), and a successor/alternative repo if one applies.
 - **"How the agent decided" tab:** the MLflow trace as a step list showing tool name, inputs, a result summary and the model's reasoning at each step.
 - Previous verdict and its date, if one exists.
+
+**Recommended actions (by verdict)** — the point of investigating is a next step for the dependency owner, not a binary “alive/dead” stamp:
+
+| Verdict | Typical situation | Actions the UI / agent should surface |
+| --- | --- | --- |
+| `healthy` | Active OSS the team already bets on (e.g. `vuejs/core`, `facebook/react`) | **No change.** Keep on the watchlist; re-score on the next scheduled run. Do not invent alternatives. |
+| `watchlist` | Slowing cadence, aging releases, or rising concentration | **Monitor.** Pin a version policy, subscribe to releases, re-check after the next agent run; optional soft alternatives only if a clear successor exists. |
+| `hard_case` / mature-quiet (eval label; often maps to `healthy` or `watchlist` in the agent) | Project is intentional OSS but quiet because it is “done,” in maintenance, or development moved (e.g. `vuejs/vue` → Vue 3 in `vuejs/core`) | **Clarify, don’t panic.** Prefer a **successor / migration** action over “abandonment.” For Vue 2: plan migration to Vue 3 (`vuejs/core`), not a random alternative framework. Not the same as deprecated → ignored. |
+| `at_risk` | Still in use but maintainer exit, long silence, or thinning ownership — **not** an official deprecation | **Remediate.** Prefer official successor; else up to 3 healthier similar repos (`find_alternatives`); freeze upgrades until a replacement is chosen. Keep in triage for follow-up runs. |
+| `ignored` | Officially **deprecated** (README / project status / archive-with-deprecation). Maintainers will not do future PR reviews on that line | **Park it.** One-time note + optional successor link, then **drop from future investigation and PR-review attention**. Frontend copy: “Deprecated — ignored for ongoing review.” Gray star; Ignored filter bin. |
+| `inconclusive` | Conflicting tools / missing signals | **Gather more.** Do not recommend migration or ignore; flag for human review or a live-fetch stretch tool. |
+
+**Deprecated → ignored rule:** if evidence shows the repo is deprecated (or archived *because* it is deprecated), the verdict is `ignored`, not `at_risk`. Rationale: there is nothing useful to keep reviewing — no future maintainer PR reviews — so the product stops spending agent budget on it. Still show the star once so the map explains why it left the living watchlist. Hard cases like `vuejs/vue` (successor-moved, not necessarily “deprecated, stop watching”) stay watchlist / migrate, not ignored, unless an explicit deprecation notice is found.
 
 ## Agent design
 
@@ -104,12 +119,12 @@ One tool-calling agent, built with Mosaic AI Agent Framework on a Foundation Mod
 
 **Loop for each run**
 
-1. **Triage.** Read `gold_repo_health` plus the previous `findings`. Pick up to N repos (default 20) by importance × risk, favouring repos whose score changed since the last run. Log the chosen list and a one-line reason for each.
-2. **Investigate each pick.** Start from the repo's baseline metrics. Call tools in whatever order the model chooses. Dig deeper when signals conflict: low commits but steady releases may just mean the project is mature.
-3. **Stop.** Stop when confidence is at least 0.7, or after 8 tool calls, whichever comes first.
+1. **Triage.** Read `gold_repo_health` plus the previous `findings`. **Exclude** repos whose latest finding or gold status is `ignored` (deprecated). Pick up to N remaining repos (default 20) by importance × risk, favouring repos whose score changed since the last run. Log the chosen list and a one-line reason for each.
+2. **Investigate each pick.** Start from the repo's baseline metrics. Call tools in whatever order the model chooses. Dig deeper when signals conflict: low commits but steady releases may just mean the project is mature. Early-exit if tools show official deprecation → verdict `ignored`.
+3. **Stop.** Stop when confidence is at least 0.7, after a deprecation/`ignored` decision, or after 8 tool calls, whichever comes first.
 4. **Verdict.** Emit JSON matching the schema below. Code validates it, and an invalid output gets one retry before the repo is marked `inconclusive`.
-5. **Persist.** `MERGE` into `findings`, keyed on (repo\_id, run\_id). The trace id is stored on the row.
-6. **Memory.** On the next run, step 1 reads the previous verdicts, and the agent states what changed.
+5. **Persist.** `MERGE` into `findings`, keyed on (repo\_id, run\_id). The trace id is stored on the row. Writing `ignored` also sets gold `status = ignored` for that repo so later triage skips it.
+6. **Memory.** On the next run, step 1 reads the previous verdicts, skips ignored repos, and the agent states what changed only for living bins.
 
 **Tools**
 
@@ -121,7 +136,7 @@ One tool-calling agent, built with Mosaic AI Agent Framework on a Foundation Mod
 | `get_issue_backlog(repo)` | UC SQL function | Open issues and PR counts; response time and unanswered counts are unknown in the MVP |
 | `get_contributor_concentration(repo)` (stretch) | UC SQL function | Disabled until real contributor data is collected |
 | `fetch_recent_issues(repo, n)` (stretch) | GitHub fetch, cached to Delta | At most 5 issue titles; maintainer-reply analysis is deferred |
-| `fetch_readme_signals(repo)` (stretch) | GitHub fetch, cached to Delta | README flags for "deprecated", "unmaintained", "archived", "use X instead"; at most 5 demo repos |
+| `fetch_readme_signals(repo)` (stretch) | GitHub fetch, cached to Delta | README flags for "deprecated", "unmaintained", "archived", "use X instead"; at most 5 demo repos. A clear **deprecated** hit is enough to emit `ignored` and stop further tool spend |
 | `get_previous_finding(repo)` | UC SQL function over findings | Last verdict and date |
 | `find_alternatives(repo)` (P2) | Vector Search | Up to 3 similar healthy repos |
 
@@ -132,22 +147,39 @@ The required agent tools read the frozen snapshot and still support model-select
 ```json
 {
   "repo_id": "psf/requests",
-  "risk_level": "healthy | watchlist | at_risk | inconclusive",
+  "risk_level": "healthy | watchlist | at_risk | ignored | inconclusive",
   "confidence": 0.0,
   "headline": "one line for the findings list",
   "explanation": "2-4 sentences",
   "evidence": [{"signal": "no release in 410 days", "tool": "get_release_history", "value": 410}],
-  "changed_since_last": "newly_at_risk | recovered | unchanged | first_seen",
+  "changed_since_last": "newly_at_risk | recovered | unchanged | first_seen | newly_ignored",
+  "recommended_actions": ["monitor_on_schedule"],
   "alternatives": ["org/repo"],
   "tool_calls": 5
 }
 ```
+
+`recommended_actions` is a short list of action codes the UI can render as chips/copy. Allowed codes for the hackathon:
+
+| Code | When |
+| --- | --- |
+| `no_change` | Healthy control; stay on current major |
+| `monitor_on_schedule` | Healthy or watchlist; wait for the next run |
+| `pin_and_watch_releases` | Watchlist; tighten version policy |
+| `migrate_to_successor` | Hard case / at-risk with a known successor (e.g. `vuejs/vue` → `vuejs/core`) |
+| `replace_dependency` | At-risk with no single official successor; use `alternatives` |
+| `ignore_deprecated` | Deprecated → `ignored`; stop future PR-review / agent attention |
+| `human_review` | Inconclusive |
+
+`alternatives` stays empty for healthy controls. For successor moves, put the official next repo first (prefer `vuejs/core` over unrelated frameworks when investigating `vuejs/vue`). For `ignored`, `alternatives` may still list a documented successor once; the primary action is still `ignore_deprecated`.
 
 **Guardrails**
 
 - Every evidence item must name a tool that was actually called in the trace. Code checks this, and unsupported claims are stripped before saving.
 - A tool budget and a timeout per repo, so one repo can't burn the run.
 - Low temperature for verdicts. The system prompt includes the scoring rubric so the LLM and the formula agree on what each level means.
+- Do not recommend replacing a healthy or mature-quiet control with a random “similar” repo. Alternatives are for remediation or documented successors only.
+- **Deprecated ≠ at-risk.** Once deprecated evidence is confirmed, emit `ignored` + `ignore_deprecated`, and never re-triage that repo for “is it dying?” — maintainers will not review future PRs there.
 - The agent is read-only towards GitHub. It never opens issues or comments anywhere.
 
 ## Data sources and ingestion
@@ -165,7 +197,7 @@ The hackathon scrape runs on Databricks using the existing workspace, catalog, V
 **Layer 1: one notebook and a frozen snapshot (P0)**
 
 - **Execution:** one Python notebook under `databricks/src/ingest/`, one on-demand Lakeflow Job in the existing bundle. Actual requests execute on Databricks. Reuse the current Python environment and existing libraries or the standard library; no new crawler framework, service or cluster-management layer.
-- **Repo list:** a checked-in curated list of 50–100 repo IDs across Python, JavaScript, Go, Rust and Java. Reuse the IDs in the existing seed list, without its generated metrics. Include known archived/at-risk and healthy examples. Search-based discovery, general pagination and 500-repo coverage are stretch work.
+- **Repo list:** a checked-in curated list of 50–100 repo IDs across Python, JavaScript, Go, Rust and Java. Reuse the IDs in the existing seed list, without its generated metrics. Deliberately mix **at-risk**, **healthy controls**, and **hard cases** (mature-quiet or successor-moved lines such as `vuejs/vue`, with the active line `vuejs/core` as a healthy control / preferred alternative when that ID is in the corpus). Search-based discovery, general pagination and 500-repo coverage are stretch work.
 - **Metrics:** use small GitHub GraphQL batches (start with 5–10 repos) for name, owner, language, stars, archive flag, last push, latest release, commit totals since 90 and 180 days, and open issue/PR counts. Derive `commits_prev_90d` as the 180-day total minus the 90-day total using a fixed collection timestamp. Do not fetch per-commit or per-comment histories.
 - **Importance:** use `log10(stars + 1)` for the MVP. deps.dev, dependents mapping, OpenSSF and Criticality Score are deferred; no second source or credential is required.
 - **Auth:** read the GitHub token from `dbutils.secrets.get("hackcamp", "github_token")`. Never print or save the token.
@@ -194,8 +226,8 @@ Everything lives in catalog `hackcamp`, in schemas `raw`, `bronze`, `silver`, `g
 | --- | --- | --- |
 | `bronze.github_repos_raw` | One API response per repo per pull | `repo_id`, `payload` (JSON), `pulled_at` |
 | `silver.repos` | One row per repo | `repo_id`, `name`, `owner`, `language`, `stars`, `is_archived`, `pushed_at`, `last_release_at`, `commits_90d`, `commits_prev_90d`, `open_issues`, `open_prs`, `contributors`, `dependents` |
-| `gold.repo_health` | One row per repo per run | `repo_id`, `run_id`, `health_score`, `status`, `importance`, `days_since_release`, `commit_trend_pct`, `x`, `y`, `scored_at` |
-| `agent.findings` | One row per investigated repo per run | `repo_id`, `run_id`, `risk_level`, `confidence`, `headline`, `explanation`, `evidence` (array of structs), `changed_since_last`, `alternatives`, `tool_calls`, `trace_id`, `investigated_at` |
+| `gold.repo_health` | One row per repo per run | `repo_id`, `run_id`, `health_score`, `status` (`healthy` \| `watchlist` \| `at_risk` \| `ignored`), `importance`, `days_since_release`, `commit_trend_pct`, `x`, `y`, `scored_at` |
+| `agent.findings` | One row per investigated repo per run | `repo_id`, `run_id`, `risk_level` (includes `ignored`), `confidence`, `headline`, `explanation`, `evidence` (array of structs), `changed_since_last`, `recommended_actions`, `alternatives`, `tool_calls`, `trace_id`, `investigated_at` |
 | `agent.runs` | One row per agent run | `run_id`, `started_at`, `repos_triaged`, `repos_investigated`, `tool_calls_total`, `model`, `eval_score` |
 | `agent.tool_cache` | One row per live fetch | `tool`, `args_hash`, `response`, `fetched_at` |
 | `agent.eval_labels` | One row per labelled repo | `repo_id`, `label`, `label_source`, `notes` |
@@ -224,14 +256,16 @@ Each sub-score runs from 0 to 1:
 | s\_bus (deferred) | 1 − top contributor's share of the last 100 commits | 0.6 or more | 0.1 or less |
 | s\_activity | Days since last push | 30 days or less | 365 days or more |
 
-- **Thresholds:** 70 or more is healthy, 40 to 69 is watchlist, below 40 is at risk. An archived repo is always at risk.
-- **Importance** (star size and triage weight) = log10(stars + 1) in the MVP. Dependents-based importance is deferred.
-- **Triage priority** = importance × (100 − health), boosted when the score dropped by 10 or more points since the last run.
+- **Thresholds:** 70 or more is healthy, 40 to 69 is watchlist, below 40 is at risk. **Ignored overrides the formula:** if the repo is officially deprecated (README/project-status evidence, or archived *as* a deprecated line), set `status = ignored`, leave or null the numeric score for display, and exclude it from living triage. A bare archive without a deprecation story may still be `at_risk` until the agent confirms deprecate-and-park.
+- **Importance** (star size and triage weight) = log10(stars + 1) in the MVP. Dependents-based importance is deferred. Ignored repos keep importance for map sizing but get **zero triage priority**.
+- **Triage priority** = importance × (100 − health) for non-ignored rows only, boosted when the score dropped by 10 or more points since the last run.
 - The weights are a first guess. Tune them against the labelled eval set in hour 15, and note the final weights in the pitch.
 
 ## Databricks services
 
 The core services carry the Best Use of Databricks story; additional services support hosting, scheduling and optional features. Service names are from memory as of mid-2026, so check them against current docs.
+
+**Workspace:** trial / organiser-provided full workspace (profile `school`), confirmed in hour-1 probes — not Free Edition. Model Serving (Foundation Model endpoints), Vector Search, Databricks Apps, UC outbound HTTP, and serverless SQL warehouse are all available. Plan to host the React app + thin API on Databricks Apps and keep Apps / Vector Search / Model Serving in scope; do not design around Free Edition limits.
 
 | Service | Role in this product | Why judges care | Priority |
 | --- | --- | --- | --- |
@@ -239,7 +273,7 @@ The core services carry the Best Use of Databricks story; additional services su
 | Delta Lake | Every table; `MERGE` for findings; time travel to compare runs | Agent memory is just Delta history | Core |
 | Unity Catalog | Namespace, permissions, lineage across tables, functions and models | One governed lineage from raw API JSON to an AI verdict | Core |
 | UC functions | The agent's data tools | The agent's tools are governed, discoverable catalog objects | Core |
-| Foundation Model APIs | The model behind the agent | No model hosting to manage | Core |
+| Foundation Model APIs | The model behind the agent (`databricks-meta-llama-3-3-70b-instruct`; fallback `databricks-llama-4-maverick`) | No model hosting to manage | Core |
 | Mosaic AI Agent Framework | Agent loop, logged as an MLflow model | Platform-native agent rather than a script calling an API | Core |
 | MLflow Tracing and GenAI evaluation | Per-investigation traces; eval on the labelled set with LLM judges and custom metrics | Shows how the agent reasons and how well it performs | Core |
 | Lakeflow Jobs | Runs one on-demand scraping notebook; pipeline runs may be started manually | Source collection runs on Databricks, with visible task history | Core for F1 notebook; Stretch for F10 chaining/scheduling |
@@ -262,10 +296,11 @@ The pitch includes one measured number: how often the agent's verdict matches gr
 
 **Labelled set (30–50 repos, built in hours 9–10)**
 
-- **At risk:** repos that are archived, carry an official "unmaintained" or "deprecated" notice, or whose maintainers announced they're stepping down.
-- **Healthy:** well-known projects with releases in the last 90 days and several active maintainers.
-- **Hard cases:** mature or "done" projects that are quiet but fine, and projects that recently revived.
-- **Label source** goes in `eval_labels.label_source`, for example a link to the deprecation notice.
+- **At risk:** thinning maintenance or silence without an official “stop using this” notice — still worth remediating if you depend on it.
+- **Ignored:** official deprecation / unmaintained notices where maintainers will not review future PRs (e.g. `request/request`, Moment’s legacy status). Ground truth expects `ignored`, not endless `at_risk` re-investigation.
+- **Healthy:** well-known projects with releases in the last 90 days and several active maintainers (controls — scanning them is intentional so false-positive rate is measurable).
+- **Hard cases:** mature or "done" projects that are quiet but fine, successor-moved lines (e.g. `vuejs/vue` while Vue 3 continues in `vuejs/core`), and projects that recently revived. Ground truth is **not** “at risk” or “ignored” solely because commit volume dropped.
+- **Label source** goes in `eval_labels.label_source`, for example a link to the deprecation notice or the successor repo README. Eval `label` values: `at_risk`, `ignored`, `healthy`, `hard_case`.
 
 **How to score**
 
@@ -311,8 +346,8 @@ Record a backup video of the full demo by hour 19 in case the venue's wifi or th
 
 | Risk | Likelihood | Impact | Fallback |
 | --- | --- | --- | --- |
-| Workspace is Free Edition and lacks Model Serving, Vector Search or Apps | Medium | High | Run the agent from a notebook or job, drop find\_alternatives, and serve the frontend locally while reading the SQL warehouse |
-| UC functions can't make outbound HTTP calls | Medium | Medium | Live-fetch tools become plain Python tools in the agent; data tools stay UC functions |
+| Databricks Apps deploy or auth hiccup during the demo | Low | Medium | Keep a local Vite + FastAPI fallback against the same SQL warehouse; show Apps URL when healthy |
+| UC live-fetch tools fail under load or rate limits | Low | Medium | Fall back to cached Volume JSON / plain Python tools; data tools stay UC functions |
 | GitHub rate limits or a slow pull | Medium | High | Start with 5 real repos, then freeze 50 by hour 3; stop expanding at the time gate; bounded retries and a failure summary; replay the frozen dataset |
 | Agent output fails the schema or hallucinates evidence | Medium | Medium | Structured output plus validation, one retry, then `inconclusive`; strip evidence that has no matching tool call |
 | The agent is too slow for a live demo | Medium | Medium | Pre-run the full batch and keep one live investigation; show the job graph instead |
@@ -322,10 +357,10 @@ Record a backup video of the full demo by hour 19 in case the venue's wifi or th
 
 ## Open questions
 
+- [x] Workspace edition — **trial / full workspace** (`school`). Model Serving, Vector Search, Apps, and UC outbound HTTP all confirmed (see `.docs/HOUR1_CHECKS.md`).
+- [x] Foundation Model tool calling — lock agent on `databricks-meta-llama-3-3-70b-instruct`; fallback `databricks-llama-4-maverick`.
+- [x] UC Python outbound HTTP — works (`http_probe` → 200); live-fetch tools may be UC Python functions.
 - [ ] Does the hackathon provide a dataset or corpus? If so, it replaces Layer 1 ingestion.
-- [ ] Which workspace do we get: Free Edition, a trial, or an organizer-provided full workspace? This decides whether Model Serving, Vector Search and Apps are available.
 - [ ] What are the official judging criteria for Best Use of Databricks? Check them against the Users and judges assumption.
-- [ ] Which Foundation Model API models are available in the workspace, and which handles tool calling best?
-- [ ] Can UC Python functions make outbound HTTP calls in our workspace? Test this in hour 1.
 - [ ] Team size and who owns each workstream.
 - [ ] Exact start time, deadline, and demo length and format.

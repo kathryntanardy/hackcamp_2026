@@ -79,6 +79,18 @@ the Jobs UI if you need to stop overnight runs.
 databricks bundle run scheduled_autonomy -t dev --profile school --params budget_n=2,max_tool_calls=4
 ```
 
+## Unity Catalog lineage (ticket #16)
+
+Pipeline lineage is bronze → silver → gold. Agent findings are joined to gold so
+Catalog Explorer also shows gold → findings. Demo view:
+`hackcamp.gold.verdicts_lineage` (open its **Lineage** tab).
+
+```sh
+databricks bundle run lineage_capture -t dev --profile school
+```
+
+Links and the confirmed edge list: [`.docs/TICKET16_RUN.md`](.docs/TICKET16_RUN.md).
+
 ## GitHub scraping (ticket #3)
 
 One on-demand Databricks notebook collects real metrics for a curated corpus

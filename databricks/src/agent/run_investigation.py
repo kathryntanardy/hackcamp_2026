@@ -212,10 +212,16 @@ spark.sql("""
 findings_df = spark.createDataFrame(findings, schema=findings_schema)
 findings_df.createOrReplaceTempView("new_findings")
 
+# Join gold so Unity Catalog lineage records gold.repo_health → agent.findings
+# (createDataFrame alone is not a UC table source and leaves findings with no upstream).
 spark.sql(
     """
     MERGE INTO hackcamp.agent.findings AS t
-    USING new_findings AS s
+    USING (
+      SELECT s.*
+      FROM new_findings s
+      LEFT JOIN hackcamp.gold.repo_health g ON s.repo_id = g.repo_id
+    ) AS s
     ON t.repo_id = s.repo_id AND t.run_id = s.run_id
     WHEN MATCHED THEN UPDATE SET *
     WHEN NOT MATCHED THEN INSERT *

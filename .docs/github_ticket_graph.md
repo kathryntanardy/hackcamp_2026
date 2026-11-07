@@ -1,9 +1,9 @@
 # Ticket dependency graph
 
 Synced from GitHub issues on 2026-11-07 (`kathryntanardy/hackcamp_2026`).
-✅ = closed on GitHub **or done in workspace**. Open: **#14, #16–#29**. Closed/done: **#1–#13, #15**.
+✅ = closed on GitHub **or done in workspace**. Open: **#14, #17–#29**. Closed/done: **#1–#13, #15–#16**.
 
-Unblocked next (deps closed): **#14**, **#16**, **#18**, **#19**, **#20**, **#21**, **#22**.
+Unblocked next (deps closed): **#14**, **#18**, **#19**, **#20**, **#21**, **#22**.
 Blocked: **#17** (needs #14), **#23–#29** (`blocked-by-design` / after #22).
 
 ```mermaid
@@ -29,7 +29,7 @@ flowchart TB
     n13["#13 eval labels ✅"]
     n14["#14 MLflow eval"]
     n15["#15 scheduled job ✅"]
-    n16["#16 UC lineage"]
+    n16["#16 UC lineage ✅"]
   end
   subgraph AppServing["App + serving"]
     n12["#12 API+Apps ✅"]

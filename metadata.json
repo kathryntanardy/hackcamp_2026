@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6W180HCR0YAEZN2KNECZH4Y",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "databricks/src/agent/eval_metrics.py",
+    "databricks/src/pipelines/repo_health/transformations/02_silver.py",
+    "databricks/src/pipelines/repo_health/transformations/03_gold.py",
+    "databricks/tests/test_eval_metrics.py",
+    "databricks/tests/test_gold_score.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 2807,
+    "cache_read_tokens": 665882,
+    "output_tokens": 1575,
+    "api_call_count": 4
+  },
+  "redaction": {
+    "replacements": 38,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 12,
+      "key_context": 26,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}

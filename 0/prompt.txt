@@ -1,0 +1,94 @@
+Yes, deploy it
+
+---
+
+wdym grant it access
+
+---
+
+so i cant read the table?
+
+---
+
+how do i check
+
+---
+
+so what should i check for this tickeT?
+
+---
+
+i see nothing
+
+---
+
+who is this SHOW GRANTS `46ecc9c2-3494-479d-a8d0-f486a50b5584` ON SCHEMA hackcamp.gold; principal?
+
+---
+
+so its the api?
+
+---
+
+anything else i should check?
+
+---
+
+what should i do fro 1?
+
+---
+
+it only says {}
+
+---
+
+how can i check the json response?
+
+---
+
+```
+{"run_id":"20261107214610-41139bba","started_at":"2026-11-07T21:47:01.167302Z","repos_triaged":1,"repos_investigated":1,"tool_calls_total":4,"model":"databricks-meta-llama-3-3-70b-instruct","eval_score":null}
+```
+
+---
+
+❌ /api/findings/{repo}/trace is waiting on Pho86 to give the app Can Read on the hackcamp-agent experiment.
+
+test this
+
+---
+
+whats the differnece between those 2
+
+---
+
+whats the difference between 
+
+* ✅ `/api/repos`, `/api/repos/{repo}`, `/api/findings` and `/api/runs/latest` can all read the data (the SQL grants are in).
+* ❌ `/api/findings/{repo}/trace` is waiting on Pho86 to give the app Can Read on the `hackcamp-agent` experiment.
+
+---
+
+what doies the trac for?
+
+---
+
+test 12
+
+---
+
+test ❌ `/api/findings/{repo}/trace` is waiting on Pho86 to give the app Can Read on the `hackcamp-agent` experiment.
+
+---
+
+do i have permission t do it?
+
+---
+
+help fix it
+
+---
+
+test ❌ /api/findings/{repo}/trace is waiting on Pho86 to give the app Can Read on the hackcamp-agent experiment.
+
+is this still broken?

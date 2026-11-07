@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6W180HCR0YAEZN2KNECZH4Y",
+  "session_id": "302a0756-f71d-47ff-9a05-a7aca779041c",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T22:14:41.651691Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "save_step_count": 3,
+  "files_touched": [
+    "databricks/src/agent/eval_metrics.py",
+    "databricks/src/pipelines/repo_health/transformations/02_silver.py",
+    "databricks/src/pipelines/repo_health/transformations/03_gold.py",
+    "databricks/tests/test_eval_metrics.py",
+    "databricks/tests/test_gold_score.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "09d232e6069b",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 2807,
+    "cache_read_tokens": 665882,
+    "output_tokens": 1575,
+    "api_call_count": 4
+  },
+  "redaction": {
+    "replacements": 38,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 12,
+      "key_context": 26,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "session_metrics": {
+    "turn_count": 25
+  }
+}

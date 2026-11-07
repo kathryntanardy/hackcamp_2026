@@ -4,6 +4,7 @@ import ast
 import copy
 import importlib.util
 import json
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -93,6 +94,7 @@ def investigation_namespace(responses, budget=4):
         "mlflow": tracer, "llm": NS(chat=NS(completions=NS(create=create))),
         "json": json, "MODEL": "test-model", "RUN_ID": "test-run",
         "MAX_TOOL_CALLS": budget, "OPENAI_TOOLS": [], "SYSTEM_PROMPT": "PRIVATE_PROMPT_SENTINEL",
+        "REPO_TIMEOUT_SEC": 180, "time": time,
         "Verdict": Verdict, "ValidationError": RuntimeError, "public_summary": steps.public_summary,
         "extract_json": json.loads, "validate_verdict": validate,
         "execute_tool": lambda *args: json.dumps({"value": "x" * 4000}),
@@ -110,6 +112,53 @@ def exported_trace(tracer, trace_id):
 
 
 class InvestigationTraceTests(unittest.TestCase):
+    def test_expired_deadline_stops_before_any_model_call_and_keeps_trace_id(self):
+        namespace, tracer = investigation_namespace([])
+        namespace["REPO_TIMEOUT_SEC"] = 0
+        verdict, trace_id = namespace["investigate_repo"]("org/repo", "priority")
+        self.assertEqual(verdict.model_dump()["risk_level"], "inconclusive")
+        self.assertIn("Per-repo timeout", verdict.model_dump()["explanation"])
+        self.assertEqual(trace_id, tracer.spans[0].trace_id)
+        self.assertTrue(tracer.spans[0].attributes["timed_out"])
+        self.assertEqual(len(tracer.spans), 1)
+
+    def test_model_request_uses_remaining_budget_and_late_response_is_not_accepted(self):
+        namespace, tracer = investigation_namespace([])
+        clock, requests = [0.0], []
+        namespace["time"] = NS(monotonic=lambda: clock[0])
+        namespace["REPO_TIMEOUT_SEC"] = 5
+
+        def delayed_model(**kwargs):
+            requests.append(kwargs)
+            clock[0] = 6.0
+            return NS(choices=[NS(message=message(FINAL))])
+
+        namespace["llm"].chat.completions.create = delayed_model
+        verdict, trace_id = namespace["investigate_repo"]("org/repo", "priority")
+        self.assertEqual(requests[0]["timeout"], 5.0)
+        self.assertEqual(verdict.model_dump()["risk_level"], "inconclusive")
+        self.assertTrue(tracer.spans[0].attributes["timed_out"])
+        self.assertEqual(trace_id, tracer.spans[0].trace_id)
+
+    def test_timeout_after_tool_preserves_its_evidence_and_skips_remaining_tools(self):
+        namespace, tracer = investigation_namespace([message(names=("one", "two"))])
+        clock = [0.0]
+        namespace["time"] = NS(monotonic=lambda: clock[0])
+        namespace["REPO_TIMEOUT_SEC"] = 5
+
+        def delayed_tool(*args):
+            clock[0] = 6.0
+            return json.dumps({"value": "completed first tool"})
+
+        namespace["execute_tool"] = delayed_tool
+        verdict, trace_id = namespace["investigate_repo"]("org/repo", "priority")
+        tools = [span for span in tracer.spans if span.span_type == "TOOL"]
+        self.assertEqual([span.name for span in tools], ["one"])
+        self.assertEqual(tools[0].outputs["result"]["value"], "completed first tool")
+        self.assertEqual(verdict.model_dump()["tool_calls"], 1)
+        self.assertEqual(verdict.model_dump()["risk_level"], "inconclusive")
+        self.assertEqual(trace_id, tools[0].trace_id)
+
     def test_trace_captures_full_tool_results_and_own_root_id(self):
         namespace, tracer = investigation_namespace([
             message("Check releases and activity.", ("get_release_history", "get_commit_trend")), message(FINAL)

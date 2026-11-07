@@ -15,6 +15,7 @@ dbutils.library.restartPython()
 
 import json
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -39,15 +40,20 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 dbutils.widgets.text("budget_n", "5")
 dbutils.widgets.text("model_endpoint", "databricks-meta-llama-3-3-70b-instruct")
 dbutils.widgets.text("max_tool_calls", "8")
+dbutils.widgets.text("repo_timeout_sec", "180")
 dbutils.widgets.text("experiment_path", "")
 
 BUDGET_N = int(dbutils.widgets.get("budget_n"))
 MODEL = dbutils.widgets.get("model_endpoint")
 MAX_TOOL_CALLS = int(dbutils.widgets.get("max_tool_calls"))
+REPO_TIMEOUT_SEC = int(dbutils.widgets.get("repo_timeout_sec"))
 EXPERIMENT_PATH = dbutils.widgets.get("experiment_path").strip() or f"/Users/{WorkspaceClient().current_user.me().user_name}/hackcamp-agent"
 RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8]
 
-print(f"run_id={RUN_ID} model={MODEL} budget_n={BUDGET_N}")
+print(
+    f"run_id={RUN_ID} model={MODEL} budget_n={BUDGET_N} "
+    f"max_tool_calls={MAX_TOOL_CALLS} repo_timeout_sec={REPO_TIMEOUT_SEC}"
+)
 
 # COMMAND ----------
 
@@ -88,7 +94,7 @@ def _databricks_auth() -> tuple[str, str]:
 
 
 _DB_HOST, _DB_TOKEN = _databricks_auth()
-llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints")
+llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints", max_retries=0)
 
 # COMMAND ----------
 
@@ -242,17 +248,19 @@ OPENAI_TOOLS = [
 ]
 
 SYSTEM_PROMPT = """You are a maintainer-risk analyst for open-source packages.
-Investigate ONE repository using the provided tools. Choose which tools to call yourself.
+Investigate ONE repository using the provided tools. Choose which tools to call and in what order — there is no fixed sequence.
 Do not invent metrics — every claim must come from a tool result.
 Null or unavailable is unknown, not zero or evidence of abandonment.
 The MVP provides fixed 90-day commit windows, latest release and backlog counts.
 Do not claim weekly history, inter-release gaps, contributor concentration, or unanswered/response-time metrics from the snapshot.
 Contributor concentration is disabled until measured history exists.
 Only get_previous_finding may return historical verdicts; distinguish their date from the current snapshot.
-Prefer UC metric tools first; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
+Prefer UC metric tools; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
 When requesting tools, provide a brief public decision summary in assistant content when possible.
 Do not provide private chain-of-thought; final explanations should summarize the evidence.
 Never open issues or post comments — tools are read-only.
+
+When signals conflict (e.g. low recent commits but steady releases, or high stars but archived), dig deeper with another tool before deciding — that often means mature/quiet rather than abandoned.
 
 Scoring rubric (align with baseline formula):
 - healthy: active releases/commits, shared ownership, maintainers reply
@@ -260,7 +268,7 @@ Scoring rubric (align with baseline formula):
 - at_risk: archived, long release gap, near-zero commits, unanswered backlog, single maintainer dominance
 - inconclusive: evidence is missing, insufficient or conflicting; never force a risk verdict from unavailable metrics
 
-Stop calling tools when you have enough evidence (aim for confidence >= 0.7), or after the tool budget.
+Stop calling tools when confidence >= 0.7, or after the tool budget (max 8 calls).
 When done, reply with ONLY a JSON object (no markdown) matching:
 {
   "repo_id": "org/repo",
@@ -435,12 +443,12 @@ assert triage, "No repos to investigate — is gold.repo_health empty?"
 
 # COMMAND ----------
 
-def call_model(messages, *, phase="decide", temperature=0.2, tools=None):
+def call_model(messages, *, phase="decide", temperature=0.2, tools=None, timeout=90):
     """Trace every model call, including validation retries and budget finalization."""
     with mlflow.start_span(name=f"llm_{phase}", span_type="CHAT_MODEL") as span:
         span.set_attribute("phase", phase)
         span.set_inputs({"messages": messages, "model": MODEL})
-        kwargs = {"model": MODEL, "messages": messages, "temperature": temperature, "timeout": 90}
+        kwargs = {"model": MODEL, "messages": messages, "temperature": temperature, "timeout": timeout}
         if tools is not None:
             kwargs.update(tools=tools, tool_choice="auto")
         response = llm.chat.completions.create(**kwargs)
@@ -458,8 +466,8 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
     user_msg = (
         f"Investigate maintainer risk for `{repo_id}`.\n"
         f"Triage reason: {triage_reason}\n"
-        "Start by calling get_repo_metrics, then choose further tools as needed.\n"
-        f"Tool budget: {MAX_TOOL_CALLS} calls."
+        "Choose which tools to call and in what order (no fixed sequence).\n"
+        f"Tool budget: {MAX_TOOL_CALLS} calls. Per-repo wall clock: {REPO_TIMEOUT_SEC}s."
     )
     messages = [{"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg}]
@@ -467,18 +475,35 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
     tool_calls = 0
     decisions = 0
     verdict = None
+    deadline = time.monotonic() + REPO_TIMEOUT_SEC
+
+    def _timed_out():
+        return time.monotonic() >= deadline
+
+    def _call_with_deadline(messages, **kwargs):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+        message = call_model(messages, timeout=min(90, remaining), **kwargs)
+        if _timed_out():
+            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+        return message
+
     with mlflow.start_span(name=f"investigate:{repo_id}", span_type="AGENT") as root:
         # Capture the owning root directly; a global last-trace lookup can be stale.
         trace_id = root.trace_id
         if not trace_id:
             raise RuntimeError("Investigation did not receive an MLflow trace ID")
-        root.set_inputs({"repo_id": repo_id, "run_id": RUN_ID, "triage_reason": triage_reason})
+        root.set_inputs({"repo_id": repo_id, "run_id": RUN_ID, "triage_reason": triage_reason,
+                         "repo_timeout_sec": REPO_TIMEOUT_SEC})
         root.set_attribute("repo_id", repo_id)
         root.set_attribute("run_id", RUN_ID)
         try:
             while tool_calls < MAX_TOOL_CALLS and decisions < MAX_TOOL_CALLS + 2:
+                if _timed_out():
+                    raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
                 decisions += 1
-                msg = call_model(messages, tools=OPENAI_TOOLS)
+                msg = _call_with_deadline(messages, tools=OPENAI_TOOLS)
                 if msg.tool_calls:
                     messages.append({
                         "role": "assistant", "content": msg.content or "",
@@ -487,6 +512,8 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
                             for tc in msg.tool_calls],
                     })
                     for tc in msg.tool_calls:
+                        if _timed_out():
+                            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
                         if tool_calls >= MAX_TOOL_CALLS:
                             # Complete the model protocol without claiming an unexecuted tool span.
                             messages.append({"role": "tool", "tool_call_id": tc.id,
@@ -521,6 +548,8 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
                         called_tools.add(name)
                         tool_calls += 1
                         messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+                        if _timed_out():
+                            raise TimeoutError(f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
                     continue
 
                 content = msg.content or ""
@@ -535,7 +564,7 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
                 except (json.JSONDecodeError, ValidationError) as exc:
                     messages.extend([{"role": "assistant", "content": content}, {
                         "role": "user", "content": f"Your last reply was invalid ({exc}). Return ONLY valid verdict JSON."}])
-                    retry = call_model(messages, phase="structured_retry", temperature=0.1)
+                    retry = _call_with_deadline(messages, phase="structured_retry", temperature=0.1)
                     try:
                         verdict = validate_verdict(extract_json(retry.content or ""), repo_id, called_tools, tool_calls)
                     except Exception as exc2:
@@ -543,7 +572,7 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
                     break
             if verdict is None:
                 messages.append({"role": "user", "content": "Investigation limit reached. Return the final verdict JSON from available evidence now."})
-                final = call_model(messages, phase="budget_finalize", temperature=0.1)
+                final = _call_with_deadline(messages, phase="budget_finalize", temperature=0.1)
                 try:
                     verdict = validate_verdict(extract_json(final.content or ""), repo_id, called_tools, tool_calls)
                 except Exception as exc:
@@ -551,7 +580,11 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str]:
         except Exception as exc:
             root.set_status("ERROR")
             root.set_attribute("error_type", type(exc).__name__)
-            verdict = inconclusive(repo_id, tool_calls, f"Investigation failed: {type(exc).__name__}: {str(exc)[:300]}")
+            if isinstance(exc, TimeoutError) or _timed_out():
+                root.set_attribute("timed_out", True)
+                verdict = inconclusive(repo_id, tool_calls, f"Per-repo timeout after {REPO_TIMEOUT_SEC}s")
+            else:
+                verdict = inconclusive(repo_id, tool_calls, f"Investigation failed: {type(exc).__name__}: {str(exc)[:300]}")
         root.set_outputs(verdict.model_dump())
     return verdict, trace_id
 

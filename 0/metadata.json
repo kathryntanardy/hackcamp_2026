@@ -1,0 +1,40 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6W6W60TV49ZPZD9DPZPZH87",
+  "session_id": "87a4385f-f203-4271-8eb1-14ee3bb812be",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T23:53:07.369285Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "backend/tests/test_api.py",
+    "databricks/src/agent/agent_core.py",
+    "databricks/src/agent/memory.py",
+    "databricks/tests/test_memory.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "88b4a207d081",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 44,
+    "cache_creation_tokens": 67210,
+    "cache_read_tokens": 2152166,
+    "output_tokens": 14312,
+    "api_call_count": 22
+  },
+  "redaction": {
+    "replacements": 13,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 12,
+      "key_context": 1,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}

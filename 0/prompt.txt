@@ -1,0 +1,71 @@
+/prd_editor we're adding a new feature for acesssibity, using elevenlabs to voice navigation for the whole website and other stuff. Create a new ticket
+
+---
+
+/prd_editor search feature for the map, using natural language user can filter out nodes (using databricks vector search). Create a ticket and push the new prd please
+
+---
+
+do we need to modify existing tickets because of this?
+
+---
+
+for example do we need to chaneg schema for this or something?
+
+---
+
+what columns do we need more? do we need type of vulnerabilities? isnce thats how we're going to sort it at first?
+
+---
+
+/prd_editor we want to sort according type of vulnerabilities and language, and search by whatever.
+
+---
+
+/prd_editor  we want to sort according type of vulnerabilities, language, categories (Front-End, Back-end, machine learning, database, hardware, find me 6). So we need to add a new ticket for the scraping to add more columns,  so we can sort and filter with this. I also want a search filter that uses natural language to zoom in to the nodes (either 1 node or multiple nodes). Tell me the sortings you want to do, i want to approve it
+
+---
+
+i also want programming language
+
+---
+
+<!-- reply 1 -->
+> 1. “Vulnerability type” (I’d call it risk_types)
+> I’d build these from the metrics we already collect, not from security CVEs. CVE data on GitHub is tied to packages (npm, PyPI and so on) rather than repos, so it would mean matching 1,000 repos to their packages and adding a new data source. That doesn’t fit in 20 hours.
+> 
+> A repo can have more than one risk type, so the column is a list.
+> 
+> Risk type	Rule (same cut-offs as the health score)
+> stale_releases	No release in 540+ days
+> commit_decline	commits_90d is 20% or less of the previous 90 days
+> inactive	No push in 365+ days
+> archived	is_archived = true
+> deprecated	Status is ignored
+> none	None of the above
+
+i meant like CWE
+
+
+Here are 10 buckets. Each one covers the main CWEs that show up in OSS advisories:
+
+#	Bucket	CWEs included	Example
+1	Code execution	94, 77, 78 (code/command injection)	Log4Shell
+2	Unsafe deserialization	502	Python pickle or Java object loading
+3	Memory safety	787, 125, 416, 119 (buffer overflow, use-after-free)	Heartbleed
+4	Injection	89 (SQL), 79 (XSS), 91 (XML)	SQLi in an ORM, XSS in a template engine
+5	Path traversal & file access	22, 434, 59	../../ in archive extractors
+6	Prototype pollution	1321	lodash, minimist
+7	Denial of service	1333 (ReDoS), 400, 770 (resource exhaustion)	Regex hangs in a parser
+8	Data exposure	200, 532, 312 (info leak, secrets in logs)	requests proxy header leak
+9	Network & TLS	918 (SSRF), 295 (bad cert check), 601 (open redirect)	HTTP clients
+10	Auth & access control	287, 285, 862, 352 (CSRF)	Web frameworks, auth middleware
+(fallback)	Other / unclassified	anything unmapped or missing a CWE	—'
+
+---
+
+wo tell me what you want to change/add to the prd
+
+---
+
+okay change the prd, push it and add new tickets (like adding new columns when scraping so we can do the vector search)

@@ -1,0 +1,21 @@
+resources:
+  jobs:
+    live_fetch_test:
+      name: hackcamp-live-fetch-test
+      max_concurrent_runs: 1
+      parameters:
+        - name: test_repo
+          default: psf/requests
+      tasks:
+        - task_key: verify_cache
+          notebook_task:
+            notebook_path: ../src/agent/test_live_fetch_cache.py
+            source: WORKSPACE
+            base_parameters:
+              test_repo: "{{job.parameters.test_repo}}"
+          environment_key: live_env
+
+      environments:
+        - environment_key: live_env
+          spec:
+            environment_version: "4"

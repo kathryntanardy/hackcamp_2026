@@ -92,6 +92,10 @@ llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints")
 
 # COMMAND ----------
 
+# MAGIC %run ./live_fetch_tools
+
+# COMMAND ----------
+
 UC_TOOLS = {
     "get_repo_metrics": {
         "uc": "hackcamp.tools.get_repo_metrics",
@@ -128,6 +132,21 @@ UC_TOOLS = {
         "sql": "SELECT hackcamp.tools.get_previous_finding(?) AS r",
         "params": ["repo"],
         "description": "Most recent prior agent verdict for this repo, if any.",
+    },
+}
+
+LIVE_TOOLS = {
+    "fetch_recent_issues": {
+        "description": (
+            "Fetch the last n GitHub issues for a repo (titles) and whether a "
+            "maintainer replied. Read-only. Results are cached in Delta."
+        ),
+    },
+    "fetch_readme_signals": {
+        "description": (
+            "Scan the README/repo for deprecated, unmaintained, archived, or "
+            "'use X instead' signals. Read-only. Results are cached in Delta."
+        ),
     },
 }
 
@@ -207,11 +226,40 @@ OPENAI_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_recent_issues",
+            "description": LIVE_TOOLS["fetch_recent_issues"]["description"],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string"},
+                    "n": {"type": "integer", "default": 5},
+                },
+                "required": ["repo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_readme_signals",
+            "description": LIVE_TOOLS["fetch_readme_signals"]["description"],
+            "parameters": {
+                "type": "object",
+                "properties": {"repo": {"type": "string"}},
+                "required": ["repo"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """You are a maintainer-risk analyst for open-source packages.
 Investigate ONE repository using the provided tools. Choose which tools to call yourself.
 Do not invent metrics — every claim must come from a tool result.
+Prefer UC metric tools first; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
+Never open issues or post comments — tools are read-only.
 
 Scoring rubric (align with baseline formula):
 - healthy: active releases/commits, shared ownership, maintainers reply
@@ -277,12 +325,23 @@ def _safe_repo(repo_id: str) -> str:
     return repo_id
 
 
-def execute_uc_tool(name: str, args: dict[str, Any], allowed_repo: str) -> str:
-    if name not in UC_TOOLS:
-        return json.dumps({"error": f"unknown tool {name}"})
+def execute_tool(name: str, args: dict[str, Any], allowed_repo: str) -> str:
     repo = _safe_repo(str(args.get("repo", allowed_repo)))
     if repo != allowed_repo:
         return json.dumps({"error": "tool repo must match investigation target"})
+
+    if name in LIVE_TOOLS:
+        try:
+            if name == "fetch_recent_issues":
+                n = int(args.get("n", 5))
+                return json.dumps(fetch_recent_issues(repo, n=n))
+            if name == "fetch_readme_signals":
+                return json.dumps(fetch_readme_signals(repo))
+        except Exception as e:
+            return json.dumps({"error": f"{type(e).__name__}: {e}", "tool": name})
+
+    if name not in UC_TOOLS:
+        return json.dumps({"error": f"unknown tool {name}"})
 
     spec = UC_TOOLS[name]
     if name == "get_commit_trend":
@@ -452,7 +511,7 @@ def investigate_repo(repo_id: str, triage_reason: str) -> tuple[Verdict, str | N
 
                     with mlflow.start_span(name=name, span_type="TOOL") as tool_span:
                         tool_span.set_inputs(args)
-                        result = execute_uc_tool(name, args, repo_id)
+                        result = execute_tool(name, args, repo_id)
                         tool_span.set_outputs({"result": result[:2000]})
 
                     called_tools.add(name)

@@ -16,6 +16,9 @@ build/
 .databricks/
 databricks/.databricks/
 
+# Local-only docs / ticket dumps (do not push)
+.docs/local/
+
 # Local configuration
 .env
 .env.*

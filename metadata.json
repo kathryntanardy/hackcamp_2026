@@ -3,7 +3,7 @@
   "checkpoint_id": "01M6VYXHS3GK3KP4RYPMTA85GC",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 3,
+  "checkpoints_count": 7,
   "files_touched": [
     "databricks/src/agent/run_eval.py"
   ],
@@ -14,25 +14,32 @@
       "compact_transcript": "/0/transcript.jsonl",
       "content_hash": "/0/content_hash.txt",
       "prompt": "/0/prompt.txt"
+    },
+    {
+      "metadata": "/1/metadata.json",
+      "transcript": "/1/full.jsonl",
+      "compact_transcript": "/1/transcript.jsonl",
+      "content_hash": "/1/content_hash.txt",
+      "prompt": "/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 30,
-    "cache_creation_tokens": 9317,
-    "cache_read_tokens": 1682934,
-    "output_tokens": 5882,
-    "api_call_count": 13
+    "input_tokens": 72,
+    "cache_creation_tokens": 27654,
+    "cache_read_tokens": 3773417,
+    "output_tokens": 14693,
+    "api_call_count": 31
   },
   "redaction": {
-    "replacements": 17,
+    "replacements": 31,
     "layers": {
       "betterleaks": 0,
       "connection_string": 0,
       "credential_key": 0,
       "credential_value": 0,
       "credentialed_uri": 0,
-      "entropy": 12,
-      "key_context": 5,
+      "entropy": 24,
+      "key_context": 7,
       "provider_token": 0,
       "shell_stdin": 0
     }

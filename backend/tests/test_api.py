@@ -1,10 +1,9 @@
-from types import SimpleNamespace
+import json
 
 import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main
-from app.traces import spans_to_steps
 
 FINDING = {
     "run_id": "r2", "risk_level": "at_risk", "confidence": 0.9, "headline": "h",
@@ -32,12 +31,15 @@ def calls(monkeypatch):
                      "top_contributor_share": 0.8}]
         if "LIMIT 2" in statement:
             return [FINDING, {**FINDING, "run_id": "r1", "evidence": None}]
-        if "SELECT run_id, trace_id" in statement:
-            return [] if params["repo_id"] == "missing/repo" else [{"run_id": "r2", "trace_id": "tr-1"}]
+        if "trace_steps" in statement:
+            payload = {"trace_id": "tr-1", "steps": [{"order": 1, "tool_name": "t"}]}
+            return {"missing/repo": [],
+                    "old/repo": [{"repo_id": "old/repo", "run_id": "r1", "trace_id": "tr-0", "payload": None}],
+                    }.get(params["repo_id"], [{"repo_id": params["repo_id"], "run_id": "r2",
+                                               "trace_id": "tr-1", "payload": json.dumps(payload)}])
         return [{"repo_id": "a/b", **FINDING}]
 
     monkeypatch.setattr(main, "query", fake_query)
-    monkeypatch.setattr(main, "get_trace_steps", lambda tid: [{"step": 1, "tool": "t"}])
     return log
 
 
@@ -75,7 +77,12 @@ def test_findings_no_filters(calls):
 
 def test_trace(calls):
     body = client.get("/api/findings/moment/moment/trace").json()
-    assert body["trace_id"] == "tr-1" and body["steps"][0]["tool"] == "t"
+    assert body["trace_id"] == "tr-1" and body["steps"][0]["tool_name"] == "t"
+
+
+def test_trace_not_ready_for_old_findings(calls):
+    body = client.get("/api/findings/old/repo/trace").json()
+    assert body["status"] == "not_ready" and body["steps"] == [] and body["trace_id"] == "tr-0"
 
 
 def test_trace_404(calls):
@@ -85,19 +92,3 @@ def test_trace_404(calls):
 def test_runs_latest(calls):
     assert client.get("/api/runs/latest").json()["run_id"] == "r2"
 
-
-def span(t, kind, name, inputs=None, outputs=None):
-    return SimpleNamespace(start_time_ns=t, span_type=kind, name=name, inputs=inputs, outputs=outputs)
-
-
-def test_spans_to_steps_orders_and_attaches_reasoning():
-    spans = [
-        span(4, "TOOL", "get_commit_trend", {"repo": "a/b"}, {"result": "not json"}),
-        span(1, "AGENT", "investigate:a/b"),
-        span(2, "CHAT_MODEL", "llm_decide", outputs={"content": "check releases first"}),
-        span(3, "TOOL", "get_release_history", {"repo": "a/b"}, {"result": '{"days": 420}'}),
-    ]
-    steps = spans_to_steps(spans)
-    assert [s["tool"] for s in steps] == ["get_release_history", "get_commit_trend"]
-    assert steps[0]["result"] == {"days": 420} and steps[0]["reasoning"] == "check releases first"
-    assert steps[1]["result"] == "not json" and steps[1]["reasoning"] is None

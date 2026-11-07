@@ -1,159 +1,267 @@
 {
-  "repo_id": "moment/moment",
-  "run_id": "20261107200203-6f014084",
-  "trace_id": "tr-e7ed4b630c51de182d6cfc2dcb03fbc4",
-  "steps": [
-    {
-      "step": 1,
-      "tool": "get_repo_metrics",
-      "inputs": {
-        "repo": "moment/moment"
-      },
-      "result": {
-        "repo_id": "moment/moment",
-        "name": "moment",
-        "owner": "moment",
-        "language": "JavaScript",
-        "health_score": 12.34,
-        "status": "at_risk",
-        "importance": 5.1761,
-        "stars": 48000,
-        "dependents": 150000,
-        "is_archived": false,
-        "days_since_release": 420,
-        "commit_trend_pct": -98.0,
-        "commits_90d": 1,
-        "commits_prev_90d": 50,
-        "open_issues": 40,
-        "open_prs": 22,
-        "contributors": 35,
-        "maintainer_reply_rate": 0.05,
-        "top_contributor_share": 0.8,
-        "pushed_at": "2025-12-22 12:00:00",
-        "last_release_at": "2025-09-13 12:00:00",
-        "scored_at": "2026-11-07 19:47:20.979036"
-      },
-      "reasoning": null
-    },
-    {
-      "step": 2,
-      "tool": "get_contributor_concentration",
-      "inputs": {
-        "repo": "moment/moment"
-      },
-      "result": {
-        "repo_id": "moment/moment",
-        "top_contributor_share": 0.8,
-        "bus_factor_score": 0.2,
-        "contributors": 35,
-        "window": "last_100_commits_proxy",
-        "source": "silver_metrics"
-      },
-      "reasoning": null
-    },
-    {
-      "step": 3,
-      "tool": "get_release_history",
-      "inputs": {
-        "repo": "moment/moment"
-      },
-      "result": {
-        "repo_id": "moment/moment",
-        "last_release_at": "2025-09-13 12:00:00",
-        "days_since_release": 420,
-        "releases": [
-          {
-            "released_at": "2025-09-13 12:00:00"
-          }
-        ],
-        "source": "last_release_snapshot"
-      },
-      "reasoning": null
-    },
-    {
-      "step": 4,
-      "tool": "get_issue_backlog",
-      "inputs": {
-        "repo": "moment/moment"
-      },
-      "result": {
-        "repo_id": "moment/moment",
-        "open_issues": 40,
-        "open_prs": 22,
-        "maintainer_reply_rate": 0.05,
-        "estimated_unanswered": 38,
-        "median_first_response_hours": 336,
-        "source": "silver_metrics"
-      },
-      "reasoning": null
-    },
-    {
-      "step": 5,
-      "tool": "get_commit_trend",
-      "inputs": {
-        "repo": "moment/moment"
-      },
-      "result": {
-        "repo_id": "moment/moment",
-        "weeks_requested": 12,
-        "commits_90d": 1,
-        "commits_prev_90d": 50,
-        "avg_commits_per_week_recent": 0.08,
-        "avg_commits_per_week_previous": 4.17,
-        "trend_pct": -98.0,
-        "estimated_weekly": [
-          {
-            "week_offset": 1,
-            "commits": 4
-          },
-          {
-            "week_offset": 2,
-            "commits": 4
-          },
-          {
-            "week_offset": 3,
-            "commits": 4
-          },
-          {
-            "week_offset": 4,
-            "commits": 4
-          },
-          {
-            "week_offset": 5,
-            "commits": 4
-          },
-          {
-            "week_offset": 6,
-            "commits": 4
-          },
-          {
-            "week_offset": 7,
-            "commits": 0
-          },
-          {
-            "week_offset": 8,
-            "commits": 0
-          },
-          {
-            "week_offset": 9,
-            "commits": 0
-          },
-          {
-            "week_offset": 10,
-            "commits": 0
-          },
-          {
-            "week_offset": 11,
-            "commits": 0
-          },
-          {
-            "week_offset": 12,
-            "commits": 0
-          }
-        ],
-        "source": "derived_from_90d_windows"
-      },
-      "reasoning": null
-    }
-  ]
+    "trace_id": "tr-b0c3dd08d313820144aa3298c2bef91e",
+    "repo_id": "vuejs/vue",
+    "run_id": "20261107214610-41139bba",
+    "status": "OK",
+    "experiment_id": "3876070005521687",
+    "experiment_url": "https://dbc-a0a04386-0e40.cloud.databricks.com/ml/experiments/3876070005521687/traces",
+    "explanation": "The repository has not had a release in 1049 days and there have been no commits in the last 90 days. This suggests a lack of maintenance activity, which is a risk factor. Additionally, the repository has a large number of open issues and pull requests, which could indicate a need for more maintainers or contributors.",
+    "steps": [
+        {
+            "order": 1,
+            "span_id": "0eb837d9672ff837",
+            "kind": "decision",
+            "tool_name": null,
+            "phase": "decide",
+            "status": "OK",
+            "started_at_ms": 1794087993580,
+            "duration_ms": 1338,
+            "inputs": {
+                "model": "databricks-meta-llama-3-3-70b-instruct"
+            },
+            "outputs": {
+                "content_summary": null,
+                "tool_calls": [
+                    {
+                        "name": "get_repo_metrics",
+                        "arguments": "{ \"repo\": \"vuejs/vue\" }"
+                    }
+                ]
+            },
+            "result_summary": "Model selected tool calls without a public explanation.",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 2,
+            "span_id": "fa4f8e328bdeddf6",
+            "kind": "tool",
+            "tool_name": "get_repo_metrics",
+            "phase": null,
+            "status": "OK",
+            "started_at_ms": 1794087994918,
+            "duration_ms": 3655,
+            "inputs": {
+                "repo": "vuejs/vue"
+            },
+            "outputs": {
+                "repo_id": "vuejs/vue",
+                "found": true,
+                "name": "vue",
+                "owner": "vuejs",
+                "language": "TypeScript",
+                "health_score": 0.0,
+                "status": "at_risk",
+                "importance": 5.3276,
+                "stars": 212631,
+                "is_archived": false,
+                "pushed_at": "2024-10-10 07:24:15",
+                "last_release_at": "2023-12-24 15:02:39",
+                "days_since_release": 1049,
+                "commits_90d": 0,
+                "commits_prev_90d": 0,
+                "open_issues": 368,
+                "open_prs": 277,
+                "dependents": null,
+                "contributors": null,
+                "maintainer_reply_rate": null,
+                "top_contributor_share": null,
+                "unavailable_metrics": [
+                    "dependents",
+                    "contributors",
+                    "maintainer_reply_rate",
+                    "top_contributor_share"
+                ],
+                "data_as_of": "2026-11-07 21:06:29.607746",
+                "scored_at": "2026-11-07 21:16:15.56311",
+                "source": "gold_and_silver_snapshot"
+            },
+            "result_summary": "{\"repo_id\": \"vuejs/vue\", \"found\": true, \"name\": \"vue\", \"owner\": \"vuejs\", \"language\": \"TypeScript\", \"health_score\": 0.0, \"status\": \"at_risk\", \"importance\": 5.3276, \"stars\": 212631, \"is_archived\": false, \"pushed_at\": \"2024-10-10 07:24:15\", \"last_release_at\": \"2023-12-24 15:02:39\", \"days_since_release\": 1049, \"commits_90d\": 0, \"commits_prev_90d\": 0, \"open_issues\": 368, \"open_prs\": 277, \"dependents\": null, \"contributors\": null, \"maintainer_reply_rate\": null, \"top_contributor_share\": null, \"unavailable_metrics\": [\"dependents\", \"contributors\", \"maintainer_reply_rate\", \"top_contributor_share\"], \"data",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 3,
+            "span_id": "2fc189783e265731",
+            "kind": "decision",
+            "tool_name": null,
+            "phase": "decide",
+            "status": "OK",
+            "started_at_ms": 1794087998574,
+            "duration_ms": 626,
+            "inputs": {
+                "model": "databricks-meta-llama-3-3-70b-instruct"
+            },
+            "outputs": {
+                "content_summary": null,
+                "tool_calls": [
+                    {
+                        "name": "get_commit_trend",
+                        "arguments": "{ \"repo\": \"vuejs/vue\" }"
+                    }
+                ]
+            },
+            "result_summary": "Model selected tool calls without a public explanation.",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 4,
+            "span_id": "0d289d783ccd2b6e",
+            "kind": "tool",
+            "tool_name": "get_commit_trend",
+            "phase": null,
+            "status": "OK",
+            "started_at_ms": 1794087999201,
+            "duration_ms": 999,
+            "inputs": {
+                "repo": "vuejs/vue"
+            },
+            "outputs": {
+                "repo_id": "vuejs/vue",
+                "found": true,
+                "weeks_requested": 12,
+                "window_days": 90,
+                "commits_90d": 0,
+                "commits_prev_90d": 0,
+                "trend_pct": null,
+                "weekly_history_available": false,
+                "data_as_of": "2026-11-07 21:06:29.607746",
+                "source": "silver_90_day_snapshot"
+            },
+            "result_summary": "{\"repo_id\": \"vuejs/vue\", \"found\": true, \"weeks_requested\": 12, \"window_days\": 90, \"commits_90d\": 0, \"commits_prev_90d\": 0, \"trend_pct\": null, \"weekly_history_available\": false, \"data_as_of\": \"2026-11-07 21:06:29.607746\", \"source\": \"silver_90_day_snapshot\"}",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 5,
+            "span_id": "a826bbe629b1b236",
+            "kind": "decision",
+            "tool_name": null,
+            "phase": "decide",
+            "status": "OK",
+            "started_at_ms": 1794088000201,
+            "duration_ms": 454,
+            "inputs": {
+                "model": "databricks-meta-llama-3-3-70b-instruct"
+            },
+            "outputs": {
+                "content_summary": null,
+                "tool_calls": [
+                    {
+                        "name": "get_release_history",
+                        "arguments": "{ \"repo\": \"vuejs/vue\" }"
+                    }
+                ]
+            },
+            "result_summary": "Model selected tool calls without a public explanation.",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 6,
+            "span_id": "1106d86d2281ec6a",
+            "kind": "tool",
+            "tool_name": "get_release_history",
+            "phase": null,
+            "status": "OK",
+            "started_at_ms": 1794088000656,
+            "duration_ms": 875,
+            "inputs": {
+                "repo": "vuejs/vue"
+            },
+            "outputs": {
+                "repo_id": "vuejs/vue",
+                "found": true,
+                "last_release_at": "2023-12-24 15:02:39",
+                "days_since_release": 1049,
+                "full_history_available": false,
+                "releases": [
+                    {
+                        "released_at": "2023-12-24 15:02:39",
+                        "days_since_previous": null
+                    }
+                ],
+                "data_as_of": "2026-11-07 21:06:29.607746",
+                "source": "silver_latest_release_snapshot"
+            },
+            "result_summary": "{\"repo_id\": \"vuejs/vue\", \"found\": true, \"last_release_at\": \"2023-12-24 15:02:39\", \"days_since_release\": 1049, \"full_history_available\": false, \"releases\": [{\"released_at\": \"2023-12-24 15:02:39\", \"days_since_previous\": null}], \"data_as_of\": \"2026-11-07 21:06:29.607746\", \"source\": \"silver_latest_release_snapshot\"}",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 7,
+            "span_id": "36e07c2acd7b2fa2",
+            "kind": "decision",
+            "tool_name": null,
+            "phase": "decide",
+            "status": "OK",
+            "started_at_ms": 1794088001532,
+            "duration_ms": 847,
+            "inputs": {
+                "model": "databricks-meta-llama-3-3-70b-instruct"
+            },
+            "outputs": {
+                "content_summary": null,
+                "tool_calls": [
+                    {
+                        "name": "get_issue_backlog",
+                        "arguments": "{ \"repo\": \"vuejs/vue\" }"
+                    }
+                ]
+            },
+            "result_summary": "Model selected tool calls without a public explanation.",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 8,
+            "span_id": "0f6a98aff3a668df",
+            "kind": "tool",
+            "tool_name": "get_issue_backlog",
+            "phase": null,
+            "status": "OK",
+            "started_at_ms": 1794088002380,
+            "duration_ms": 863,
+            "inputs": {
+                "repo": "vuejs/vue"
+            },
+            "outputs": {
+                "repo_id": "vuejs/vue",
+                "found": true,
+                "open_issues": 368,
+                "open_prs": 277,
+                "maintainer_reply_rate": null,
+                "unanswered_count": null,
+                "estimated_unanswered": null,
+                "median_first_response_hours": null,
+                "response_metrics_available": false,
+                "data_as_of": "2026-11-07 21:06:29.607746",
+                "source": "silver_backlog_counts"
+            },
+            "result_summary": "{\"repo_id\": \"vuejs/vue\", \"found\": true, \"open_issues\": 368, \"open_prs\": 277, \"maintainer_reply_rate\": null, \"unanswered_count\": null, \"estimated_unanswered\": null, \"median_first_response_hours\": null, \"response_metrics_available\": false, \"data_as_of\": \"2026-11-07 21:06:29.607746\", \"source\": \"silver_backlog_counts\"}",
+            "reasoning": null,
+            "reasoning_available": false
+        },
+        {
+            "order": 9,
+            "span_id": "8b84e047268f24a8",
+            "kind": "decision",
+            "tool_name": null,
+            "phase": "budget_finalize",
+            "status": "OK",
+            "started_at_ms": 1794088003244,
+            "duration_ms": 5215,
+            "inputs": {
+                "model": "databricks-meta-llama-3-3-70b-instruct"
+            },
+            "outputs": {
+                "content_summary": "The repository has not had a release in 1049 days and there have been no commits in the last 90 days. This suggests a lack of maintenance activity, which is a risk factor. Additionally, the repository has a large number of open issues and pull requests, which could indicate a need for more maintainers or contributors.",
+                "tool_calls": []
+            },
+            "result_summary": "The repository has not had a release in 1049 days and there have been no commits in the last 90 days. This suggests a lack of maintenance activity, which is a risk factor. Additionally, the repository has a large number of open issues and pull requests, which could indicate a need for more maintainers or contributors.",
+            "reasoning": "The repository has not had a release in 1049 days and there have been no commits in the last 90 days. This suggests a lack of maintenance activity, which is a risk factor. Additionally, the repository has a large number of open issues and pull requests, which could indicate a need for more maintainers or contributors.",
+            "reasoning_available": true
+        }
+    ]
 }

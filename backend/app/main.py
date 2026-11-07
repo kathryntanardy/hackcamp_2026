@@ -6,7 +6,6 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from app.db import query
-from app.traces import get_trace_steps
 
 app = FastAPI(title="Open-Source Corpus Explorer API", version="0.1.0")
 
@@ -101,14 +100,22 @@ ORDER BY {SEVERITY}, g.importance DESC""", {"language": language, "risk": risk})
 
 @app.get("/api/findings/{repo_id:path}/trace")
 def get_trace(repo_id: str) -> dict:
+    """Steps come from agent.trace_steps, which the agent writes alongside each finding (#11)."""
     rows = query(f"""
 WITH {LATEST_FINDING}
-SELECT run_id, trace_id FROM latest_finding WHERE repo_id = :repo_id""", {"repo_id": repo_id})
-    if not rows or not rows[0]["trace_id"]:
-        raise HTTPException(404, f"no trace for {repo_id}")
-    trace_id = rows[0]["trace_id"]
-    return {"repo_id": repo_id, "run_id": rows[0]["run_id"], "trace_id": trace_id,
-            "steps": get_trace_steps(trace_id)}
+SELECT f.repo_id, f.run_id, f.trace_id, t.payload
+FROM latest_finding f
+LEFT JOIN hackcamp.agent.trace_steps t
+  ON t.trace_id = f.trace_id AND t.repo_id = f.repo_id AND t.run_id = f.run_id
+WHERE f.repo_id = :repo_id""", {"repo_id": repo_id})
+    if not rows:
+        raise HTTPException(404, f"no finding for {repo_id}")
+    r = rows[0]
+    if not r["payload"]:
+        # Finding predates trace export; rerun the agent to populate it.
+        return {"repo_id": r["repo_id"], "run_id": r["run_id"], "trace_id": r["trace_id"],
+                "status": "not_ready", "steps": []}
+    return json.loads(r["payload"])
 
 
 @app.get("/api/runs/latest")

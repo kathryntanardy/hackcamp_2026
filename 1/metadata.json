@@ -1,0 +1,77 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6W6NPETHX6HFCSB7Q449VH9",
+  "session_id": "a0d4fa8d-20ba-4e9a-bcfa-f27c49232d1c",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T23:49:33.939134Z",
+  "branch": "main",
+  "checkpoints_count": 5,
+  "save_step_count": 5,
+  "files_touched": [
+    "databricks/resources/agent_run.job.yml",
+    "databricks/resources/scheduled_autonomy.job.yml",
+    "databricks/src/agent/run_investigation.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "bc438f764260",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 140,
+    "cache_creation_tokens": 202369,
+    "cache_read_tokens": 6383142,
+    "output_tokens": 39635,
+    "api_call_count": 56
+  },
+  "redaction": {
+    "replacements": 29,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 12,
+      "key_context": 17,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01CdJxxXBwwJGPJ4gBinNTWF",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "prd_editor"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "bc438f764260",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 309,
+        "end": 310,
+        "entry_ids": [
+          "20661ebf-3813-44d7-b5a8-7a7b6e4f0677"
+        ],
+        "tool_use_id": "toolu_01CdJxxXBwwJGPJ4gBinNTWF"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01CdJxxXBwwJGPJ4gBinNTWF"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: prd_editor",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  }
+}

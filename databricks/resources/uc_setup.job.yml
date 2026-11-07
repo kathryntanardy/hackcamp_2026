@@ -44,6 +44,16 @@ resources:
               source: WORKSPACE
             warehouse_id: ${var.warehouse_id}
 
+        - task_key: grant_team_access
+          depends_on:
+            - task_key: create_uc
+            - task_key: create_trace_steps
+          sql_task:
+            file:
+              path: ../src/setup/grant_team_access.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+
         - task_key: seed_sample_repos
           depends_on:
             - task_key: create_uc

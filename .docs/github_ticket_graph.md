@@ -1,7 +1,10 @@
 # Ticket dependency graph
 
-✅ = done in workspace. #3 has a verified 100-repo live snapshot; #6 has passed
-fixture and live-catalog verification (see `TICKET3_RUN.md` and `TICKET6_RUN.md`).
+Synced from GitHub issues on 2026-11-07 (`kathryntanardy/hackcamp_2026`).
+✅ = closed on GitHub **or done in workspace**. Open: **#14, #16–#29**. Closed/done: **#1–#13, #15**.
+
+Unblocked next (deps closed): **#14**, **#16**, **#18**, **#19**, **#20**, **#21**, **#22**.
+Blocked: **#17** (needs #14), **#23–#29** (`blocked-by-design` / after #22).
 
 ```mermaid
 flowchart TB
@@ -25,11 +28,11 @@ flowchart TB
   subgraph EvalJobs["Eval + jobs"]
     n13["#13 eval labels ✅"]
     n14["#14 MLflow eval"]
-    n15["#15 scheduled job"]
+    n15["#15 scheduled job ✅"]
     n16["#16 UC lineage"]
   end
   subgraph AppServing["App + serving"]
-    n12["#12 API+Apps"]
+    n12["#12 API+Apps ✅"]
     n21["#21 model serving"]
   end
   subgraph Frontend["Frontend"]

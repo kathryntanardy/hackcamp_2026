@@ -59,9 +59,25 @@ databricks bundle deploy -t dev --profile school
 databricks bundle run uc_setup -t dev --profile school
 databricks bundle run repo_health -t dev --profile school
 databricks bundle run agent_run -t dev --profile school
+# F10 / ticket #15 — pipeline then agent on a daily schedule
+databricks bundle run scheduled_autonomy -t dev --profile school
 ```
 
 See [PRD.md](PRD.md) for the product requirements.
+
+## Scheduled autonomy (ticket #15)
+
+Lakeflow Job `hackcamp-scheduled-autonomy` chains `repo_health` (bronze→silver→gold)
+into `agent_run` (investigate → findings + traces). Scraping stays a separate
+on-demand job so the schedule reuses the frozen Volume snapshot.
+
+Default schedule: daily 10:00 America/Los_Angeles (`UNPAUSED`). Override
+`budget_n` / `model_endpoint` / `experiment_path` as job parameters. Pause from
+the Jobs UI if you need to stop overnight runs.
+
+```sh
+databricks bundle run scheduled_autonomy -t dev --profile school --params budget_n=2,max_tool_calls=4
+```
 
 ## GitHub scraping (ticket #3)
 

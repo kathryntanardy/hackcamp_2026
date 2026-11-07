@@ -1,0 +1,45 @@
+resources:
+  jobs:
+    scheduled_autonomy:
+      name: hackcamp-scheduled-autonomy
+      description: >
+        F10 / ticket #15 — end-to-end autonomy: repo_health pipeline
+        (bronze→silver→gold scoring) then agent investigation → findings.
+        Reuses the frozen Volume snapshot; scraping stays a separate on-demand job.
+      max_concurrent_runs: 1
+      timeout_seconds: 7200
+      schedule:
+        # Daily mid-morning Pacific — visible on the Jobs schedule graph for F10.
+        # Pause from the UI if you need to stop overnight credit burn.
+        quartz_cron_expression: "0 0 10 * * ?"
+        timezone_id: America/Los_Angeles
+        pause_status: UNPAUSED
+      parameters:
+        - name: budget_n
+          default: "3"
+        - name: model_endpoint
+          default: databricks-meta-llama-3-3-70b-instruct
+        - name: max_tool_calls
+          default: "8"
+        - name: repo_timeout_sec
+          default: "180"
+        - name: experiment_path
+          default: /Users/${workspace.current_user.userName}/hackcamp-agent
+      tasks:
+        # Pipeline includes gold scoring — no separate score task needed.
+        - task_key: refresh_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.repo_health.id}
+            full_refresh: false
+
+        - task_key: run_agent
+          depends_on:
+            - task_key: refresh_pipeline
+          run_job_task:
+            job_id: ${resources.jobs.agent_run.id}
+            job_parameters:
+              budget_n: "{{job.parameters.budget_n}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"

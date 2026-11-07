@@ -48,7 +48,7 @@ class ToolSafetyTests(unittest.TestCase):
             verify.call_tool(spark, "ticket6_", "get_repo_metrics", "missing/repo")
 
     def test_disabled_contributor_tool_is_not_available_to_the_model_or_dispatcher(self):
-        source = (ROOT / "src/agent/run_investigation.py").read_text()
+        source = (ROOT / "src/agent/agent_core.py").read_text()
         tree = ast.parse(source)
         selected = [node for node in tree.body if isinstance(node, ast.Assign)
                     and any(isinstance(t, ast.Name) and t.id in ("UC_TOOLS", "LIVE_TOOLS", "OPENAI_TOOLS") for t in node.targets)]

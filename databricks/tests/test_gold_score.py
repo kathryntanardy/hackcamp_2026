@@ -12,6 +12,7 @@ pyspark = pytest.importorskip("pyspark")
 from pyspark.sql import SparkSession  # noqa: E402
 
 SOURCE = Path(__file__).resolve().parents[1] / "src/pipelines/repo_health/transformations/03_gold.py"
+sys.path.insert(0, str(SOURCE.parent))  # 03_gold imports deprecated_repos from its own folder
 
 
 @pytest.fixture(scope="module")
@@ -107,8 +108,9 @@ def test_all_bad_signals_is_at_risk(scored):
     assert scored["a/stale"].status == "at_risk"
 
 
-def test_archived_is_always_at_risk(scored):
-    assert scored["a/archived"].status == "at_risk"
+def test_archived_is_parked_as_ignored(scored):
+    # PRD: archived/deprecated lines are ignored, not living risk
+    assert scored["a/archived"].status == "ignored"
 
 
 def test_no_signals_gives_null_score_and_watchlist(scored):

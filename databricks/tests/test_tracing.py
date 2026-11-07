@@ -100,7 +100,7 @@ def investigation_namespace(responses, budget=4):
         "execute_tool": lambda *args: json.dumps({"value": "x" * 4000}),
         "inconclusive": lambda repo, count, reason: Verdict({"repo_id": repo, "risk_level": "inconclusive", "tool_calls": count, "explanation": reason}),
     }
-    tree = ast.parse((ROOT / "src/agent/run_investigation.py").read_text())
+    tree = ast.parse((ROOT / "src/agent/agent_core.py").read_text())
     functions = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in ("call_model", "investigate_repo")]
     exec(compile(ast.Module(body=functions, type_ignores=[]), "investigation_tracing", "exec"), namespace)
     return namespace, tracer

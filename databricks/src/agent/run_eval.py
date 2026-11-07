@@ -16,15 +16,24 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+import uuid
+from datetime import datetime, timezone
+
+from databricks.sdk import WorkspaceClient
+
 dbutils.widgets.text("model_endpoint", "databricks-meta-llama-3-3-70b-instruct")
 dbutils.widgets.text("max_tool_calls", "8")
-dbutils.widgets.text("experiment_path", "/Users/philip03ho@gmail.com/hackcamp-agent")
+dbutils.widgets.text("repo_timeout_sec", "180")
+dbutils.widgets.text("experiment_path", "")
 dbutils.widgets.text("limit", "0")  # 0 = all labelled repos; set e.g. 5 for a smoke run
 dbutils.widgets.text("run_judge", "true")
 
 MODEL = dbutils.widgets.get("model_endpoint")
 MAX_TOOL_CALLS = int(dbutils.widgets.get("max_tool_calls"))
-EXPERIMENT_PATH = dbutils.widgets.get("experiment_path")
+REPO_TIMEOUT_SEC = int(dbutils.widgets.get("repo_timeout_sec"))
+EXPERIMENT_PATH = dbutils.widgets.get("experiment_path").strip() or f"/Users/{WorkspaceClient().current_user.me().user_name}/hackcamp-agent"
+# investigate_repo tags traces with RUN_ID; prefix keeps eval traces apart from real runs
+RUN_ID = "eval-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8]
 LIMIT = int(dbutils.widgets.get("limit"))
 RUN_JUDGE = dbutils.widgets.get("run_judge").lower() == "true"
 

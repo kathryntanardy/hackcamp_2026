@@ -58,3 +58,10 @@ def test_ignored_counts_as_flagged():
     assert s["at_risk_recall"] == 1.0
     assert s["hard_case_false_alarm_rate"] == 1.0
     assert s["at_risk_precision"] == 0.5
+
+
+def test_ignored_label_is_a_positive():
+    # PRD relabelled deprecated repos as ignored; catching them is a hit, not a false alarm
+    s = m.score([row("ignored", "ignored"), row("ignored", "at_risk"), row("ignored", "healthy")])
+    assert s["at_risk_precision"] == 1.0
+    assert s["at_risk_recall"] == 2 / 3

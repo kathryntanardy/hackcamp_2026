@@ -265,19 +265,22 @@ When signals conflict (e.g. low recent commits but steady releases, or high star
 Scoring rubric (align with baseline formula):
 - healthy: active releases/commits, shared ownership, maintainers reply
 - watchlist: slowing activity, rising bus factor, aging releases
-- at_risk: archived, long release gap, near-zero commits, unanswered backlog, single maintainer dominance
+- at_risk: thinning maintenance or long silence without an official deprecation notice
+- ignored: officially deprecated / unmaintained (README or project status) or archived-as-deprecated — park it; maintainers will not review future PRs
 - inconclusive: evidence is missing, insufficient or conflicting; never force a risk verdict from unavailable metrics
 
-Stop calling tools when confidence >= 0.7, or after the tool budget (max 8 calls).
+If tools show official deprecation (or gold status already ignored), emit risk_level=ignored and stop. Do not keep investigating parked lines.
+
+Stop calling tools when confidence >= 0.7, after an ignored decision, or after the tool budget (max 8 calls).
 When done, reply with ONLY a JSON object (no markdown) matching:
 {
   "repo_id": "org/repo",
-  "risk_level": "healthy|watchlist|at_risk|inconclusive",
+  "risk_level": "healthy|watchlist|at_risk|ignored|inconclusive",
   "confidence": 0.0,
   "headline": "one line",
   "explanation": "2-4 sentences",
   "evidence": [{"signal": "...", "tool": "get_release_history", "value": "..."}],
-  "changed_since_last": "newly_at_risk|recovered|unchanged|first_seen",
+  "changed_since_last": "newly_at_risk|recovered|unchanged|first_seen|newly_ignored",
   "alternatives": [],
   "tool_calls": 0
 }
@@ -306,7 +309,7 @@ class Verdict(BaseModel):
     @field_validator("risk_level")
     @classmethod
     def _risk(cls, v: str) -> str:
-        allowed = {"healthy", "watchlist", "at_risk", "inconclusive"}
+        allowed = {"healthy", "watchlist", "at_risk", "ignored", "inconclusive"}
         if v not in allowed:
             raise ValueError(f"risk_level must be one of {allowed}")
         return v
@@ -314,7 +317,13 @@ class Verdict(BaseModel):
     @field_validator("changed_since_last")
     @classmethod
     def _changed(cls, v: str) -> str:
-        allowed = {"newly_at_risk", "recovered", "unchanged", "first_seen"}
+        allowed = {
+            "newly_at_risk",
+            "recovered",
+            "unchanged",
+            "first_seen",
+            "newly_ignored",
+        }
         if v not in allowed:
             return "first_seen"
         return v
@@ -404,11 +413,30 @@ def inconclusive(repo_id: str, tool_calls: int, reason: str) -> Verdict:
 
 # COMMAND ----------
 
+# Parked / deprecated lines: skip gold `ignored` and any prior ignored finding.
+prev_ignored = (
+    spark.table("hackcamp.agent.findings")
+    .filter(F.col("risk_level") == "ignored")
+    .select("repo_id")
+    .distinct()
+)
+ignored_gold = (
+    spark.table("hackcamp.gold.repo_health")
+    .filter(F.col("status") == "ignored")
+    .select("repo_id")
+)
+parked = ignored_gold.union(prev_ignored).distinct()
+parked_n = parked.count()
+print(f"triage: skipping {parked_n} ignored/deprecated repo(s)")
+
 candidates = (
     spark.table("hackcamp.gold.repo_health")
+    .filter(F.col("status") != "ignored")
+    .join(parked, on="repo_id", how="left_anti")
     .withColumn(
         "priority",
-        F.col("importance") * (F.lit(100.0) - F.col("health_score")),
+        F.col("importance")
+        * (F.lit(100.0) - F.coalesce(F.col("health_score"), F.lit(50.0))),
     )
     .orderBy(F.col("priority").desc())
     .limit(BUDGET_N)
@@ -434,7 +462,9 @@ for r in triage_rows:
     triage.append({"repo_id": r.repo_id, "reason": reason, **r.asDict()})
     print(f"triage: {r.repo_id} — {reason}")
 
-assert triage, "No repos to investigate — is gold.repo_health empty?"
+assert triage, (
+    "No repos to investigate — is gold.repo_health empty, or is everything ignored?"
+)
 
 # COMMAND ----------
 

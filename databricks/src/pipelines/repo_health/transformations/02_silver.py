@@ -7,7 +7,10 @@ from pyspark.sql.window import Window
 
 @dp.materialized_view(
     name="hackcamp.silver.repos",
-    comment="Normalized repo metrics — one row per repo_id",
+    comment=(
+        "Latest normalized GitHub metrics per repo_id. "
+        "Source for gold scoring and UC agent tools."
+    ),
     table_properties={"quality": "silver"},
 )
 @dp.expect_or_drop("has_repo_id", "repo_id IS NOT NULL")

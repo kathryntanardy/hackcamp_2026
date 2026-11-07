@@ -10,7 +10,10 @@ def _volume_path() -> str:
 
 @dp.table(
     name="hackcamp.bronze.github_repos_raw",
-    comment="Raw GitHub API responses — one row per repo per pull",
+    comment=(
+        "Raw GitHub API envelopes (one row per repo per pull) from the UC Volume. "
+        "Prefer silver.repos / gold.repo_health for analytics."
+    ),
     table_properties={
         "quality": "bronze",
         "pipelines.autoOptimize.zOrderCols": "repo_id",

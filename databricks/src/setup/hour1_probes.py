@@ -170,11 +170,12 @@ print(f"Wrote {out_path}")
 spark.sql(
     """
     CREATE TABLE IF NOT EXISTS hackcamp.agent.hour1_checks (
-      checked_at TIMESTAMP,
-      http_probe_result STRING,
-      recommended_model STRING,
-      summary_json STRING
+      checked_at TIMESTAMP COMMENT 'When the hour-1 probe notebook wrote this row.',
+      http_probe_result STRING COMMENT 'UC Python outbound HTTP probe result.',
+      recommended_model STRING COMMENT 'FM endpoint locked after the tool-calling bakeoff.',
+      summary_json STRING COMMENT 'Full probe summary blob for setup debugging.'
     ) USING DELTA
+    COMMENT 'Environment self-check from hour-1 setup; diagnostics only — not part of the repo-health analytical data product.'
     """
 )
 spark.createDataFrame(

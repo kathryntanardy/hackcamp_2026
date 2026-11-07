@@ -3,6 +3,8 @@
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
+from deprecated_repos import KNOWN_DEPRECATED_REPOS
+
 
 def _clamp01_or_null(raw, value):
     """Clamp to [0,1], but keep NULL when the input is missing.
@@ -41,7 +43,12 @@ def _renormalized_score(subscores):
 
 @dp.materialized_view(
     name="hackcamp.gold.repo_health",
-    comment="Baseline health scores and galaxy-map coordinates per repo",
+    comment=(
+        "Baseline maintainer-risk scores and galaxy-map coordinates. "
+        "status: healthy | watchlist | at_risk | ignored "
+        "(ignored = deprecated/archived; excluded from living triage). "
+        "importance is ecosystem weight (log stars/dependents), not the same as health_score."
+    ),
     table_properties={"quality": "gold"},
 )
 def repo_health():
@@ -71,8 +78,13 @@ def repo_health():
         ]
     )
 
+    # Deprecated / archived lines: park as ignored (no living triage / PR-review budget).
+    # Bare formula risk stays at_risk/watchlist/healthy for everything else.
+    is_ignored = F.col("is_archived") | F.col("repo_id").isin(
+        list(KNOWN_DEPRECATED_REPOS)
+    )
     status = (
-        F.when(F.col("is_archived"), F.lit("at_risk"))
+        F.when(is_ignored, F.lit("ignored"))
         .when(health_score.isNull(), F.lit("watchlist"))  # insufficient data
         .when(health_score >= 70, F.lit("healthy"))
         .when(health_score >= 40, F.lit("watchlist"))

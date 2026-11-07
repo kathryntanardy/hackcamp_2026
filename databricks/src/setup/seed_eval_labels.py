@@ -8,40 +8,42 @@
 from pyspark.sql import Row
 from pyspark.sql.types import StringType, StructField, StructType
 
-# label ∈ {at_risk, healthy, hard_case}
+# label ∈ {at_risk, ignored, healthy, hard_case}
+# ignored = officially deprecated (park; no future PR-review attention)
 # hard_case = mature/quiet-but-fine OR recently revived / ambiguous formula cases
 LABELS = [
-    # --- at_risk ---
+    # --- ignored (deprecated / archived-as-deprecated) ---
     Row(
         "request/request",
-        "at_risk",
+        "ignored",
         "https://github.com/request/request/issues/3142",
-        "Officially deprecated/archived; maintainers directed users elsewhere.",
+        "Officially deprecated/archived; maintainers directed users elsewhere — park, do not re-triage.",
     ),
     Row(
         "moment/moment",
-        "at_risk",
+        "ignored",
         "https://momentjs.com/docs/#/-project-status/",
-        "Project status: legacy; Moment team recommends alternatives.",
+        "Project status: legacy; Moment team recommends alternatives — ignored for ongoing review.",
     ),
     Row(
         "dgrijalva/jwt-go",
-        "at_risk",
+        "ignored",
         "https://github.com/dgrijalva/jwt-go",
         "Archived GitHub repo; community moved to golang-jwt/jwt.",
     ),
     Row(
         "gorilla/mux",
-        "at_risk",
+        "ignored",
         "https://github.com/gorilla/mux/issues/714",
-        "Gorilla toolkit archived/unmaintained announcement era; mux activity stalled.",
+        "Gorilla toolkit archived/unmaintained; no future maintainer PR reviews.",
     ),
     Row(
         "codehaus/jackson",
-        "at_risk",
+        "ignored",
         "https://github.com/codehaus/jackson",
         "Legacy Codehaus Jackson line; superseded by FasterXML/jackson.",
     ),
+    # --- at_risk (still living remediation; not officially parked) ---
     Row(
         "kennethreitz/records",
         "at_risk",

@@ -2619,3 +2619,34 @@ img {
   color: inherit;
   text-decoration: underline;
 }
+
+.scan-diff {
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.scan-diff__line.is-add {
+  background: #e8f6ee;
+  color: #1f7a45;
+}
+
+.scan-diff__line.is-del {
+  background: #fdecea;
+  color: var(--color-danger);
+}
+
+.scan-diff__line.is-hunk,
+.scan-diff__line.is-file {
+  color: var(--color-text-muted);
+}
+
+.scan-report-link {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}

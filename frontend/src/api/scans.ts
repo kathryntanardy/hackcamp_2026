@@ -13,6 +13,8 @@ export type ScanFinding = {
   cve_id?: string | null
   vuln_bucket?: string | null
   code_url?: string | null
+  code_fix?: string | null
+  report_url?: string | null
 }
 
 export type SecurityScan = {

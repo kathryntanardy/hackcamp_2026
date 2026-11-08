@@ -76,12 +76,25 @@ def code_url(repo_id: str, commit_sha: str, file: str, line: int | None) -> str:
     return f"{url}#L{line}" if line else url
 
 
+def contribute_fix(f: dict) -> str | None:
+    """Only offer a patch when it's useful and grounded: no released fix yet, and Gemini located
+    the vulnerable code in a file it was shown."""
+    fix = (f.get("code_fix") or "").strip()
+    if not fix or f.get("patched_versions") or not f.get("file") or "@@" not in fix:
+        return None
+    return fix
+
+
 def enrich(findings: list[dict], repo_id: str, commit_sha: str) -> list[dict]:
     """Fields added after Gemini answers, so they cost no tokens."""
     return [{**f, "vuln_bucket": bucket_for_cwe(f.get("cwe")),
              "code_url": code_url(repo_id, commit_sha, f["file"], f.get("line")) if f.get("file") else None,
              # Trimmed on read so older stored scans get short workarounds too.
-             "workaround": first_sentence(f.get("workaround") or "")}
+             "workaround": first_sentence(f.get("workaround") or ""),
+             "code_fix": contribute_fix(f),
+             # Security fixes go through a private report, never a public PR. Older scans lack
+             # report_url, so fall back to the repo's Security tab.
+             "report_url": f.get("report_url") or f"https://github.com/{repo_id}/security"}
             for f in findings]
 
 
@@ -101,6 +114,7 @@ RESPONSE_SCHEMA = {
                     "title": {"type": "STRING"},
                     "description": {"type": "STRING"},
                     "recommendation": {"type": "STRING"},
+                    "code_fix": {"type": "STRING"},
                 },
                 "required": ["file", "severity", "title", "description", "recommendation"],
             },
@@ -116,7 +130,12 @@ path traversal, SSRF, auth/session flaws, weak crypto, memory-safety issues, ReD
 Rules:
 - Only report issues you can point to in the code shown. No generic advice.
 - For each issue give the file path, the line number (from the line prefixes), severity,
-  a CWE id like "CWE-79" if one fits, what's wrong, and a concrete fix (code if helpful).
+  a CWE id like "CWE-79" if one fits, what's wrong, and a recommendation: 1-2 plain-English
+  sentences on how to fix it (no code there).
+- code_fix: for contributors who want to fix this upstream. A unified diff ("--- a/<path>",
+  "+++ b/<path>", "@@" hunks with real context lines copied from the file shown) that fixes the
+  vulnerable code. Only include it when the vulnerable code is in the files shown; otherwise use
+  an empty string. Never invent code you were not shown.
 - Prefer one of these CWE ids when it fits: {preferred_cwes}.
 - If nothing real stands out, return an empty findings list and say so in the summary.
 - Summary: 2-3 sentences on the overall security posture of these files.
@@ -148,9 +167,14 @@ this project exactly how to fix or mitigate it.
 Rules:
 - Return exactly one finding per advisory, with its ghsa_id.
 - description: 1-2 sentences on what an attacker can do, in plain English.
-- recommendation: the fix. If a patched version exists, say which version to upgrade to first.
-  If none exists, give a concrete code-level fix (a patch to the library code, as code) based on
-  the source files shown.
+- recommendation: for users of the library, 1-2 plain-English sentences, no code. If a patched
+  version exists, say which version to upgrade to. If none exists, say there is no fixed release
+  yet and what to do instead.
+- code_fix: for contributors who want to fix this upstream. A unified diff ("--- a/<path>",
+  "+++ b/<path>", "@@" hunks with real context lines copied from the file shown) that fixes the
+  vulnerable code. Only include it when the vulnerable code is in the files shown; otherwise use
+  an empty string. Never invent code you were not shown.
+  Only give a code_fix for advisories with NO patched version; patched ones are already fixed.
 - workaround: how to stay safe without changing the library, written as a terse checklist item
   with a single action, e.g. "Reject inputs over 1,000 characters before calling parse()."
   Empty string if there is no sensible workaround.
@@ -252,6 +276,18 @@ def fetch_advisories(repo_id: str, client: httpx.Client) -> list[dict]:
     resp.raise_for_status()
     items = [a for a in resp.json() if a.get("ghsa_id") and a.get("state", "published") == "published"]
     return [normalize_advisory(a) for a in items[:MAX_ADVISORIES]]
+
+
+def report_url(repo_id: str, client: httpx.Client) -> str:
+    """Where a contributor should send a security fix: the private vulnerability report form if
+    the repo has it enabled, else the security policy page (which links SECURITY.md contacts)."""
+    try:
+        resp = client.get(f"{GITHUB_API}/repos/{repo_id}/private-vulnerability-reporting")
+        enabled = resp.status_code == 200 and resp.json().get("enabled") is True
+    except (httpx.HTTPError, ValueError):
+        enabled = False
+    path = "security/advisories/new" if enabled else "security/policy"
+    return f"https://github.com/{repo_id}/{path}"
 
 
 def advisory_hints(advisories: list[dict]) -> tuple[str, ...]:
@@ -358,6 +394,7 @@ def scan_repo(repo_id: str) -> dict:
     with httpx.Client(headers=_github_headers(), timeout=30, follow_redirects=True) as gh:
         advisories = fetch_advisories(repo_id, gh)
         sha, files = fetch_files(repo_id, gh, advisory_hints(advisories))
+        report = report_url(repo_id, gh)
     base = {"repo_id": repo_id, "commit_sha": sha, "model": model, "files": list(files),
             "mode": "advisories" if advisories else "code",
             "advisory_ids": [a["ghsa_id"] for a in advisories]}
@@ -366,9 +403,11 @@ def scan_repo(repo_id: str) -> dict:
             result = ask_gemini(build_advisory_prompt(repo_id, advisories, files), client, model,
                                 ADVISORY_RESPONSE_SCHEMA)
         findings = attach_advisories(result.get("findings", []), advisories)
-        return {**base, "summary": result.get("summary", ""), "findings": findings}
+        return {**base, "summary": result.get("summary", ""),
+                "findings": [{**f, "report_url": report} for f in findings]}
     if not files:
         return {**base, "summary": "No security-relevant source files found to scan.", "findings": []}
     with httpx.Client() as client:
         result = ask_gemini(build_prompt(repo_id, files), client, model)
-    return {**base, "summary": result.get("summary", ""), "findings": result.get("findings", [])}
+    return {**base, "summary": result.get("summary", ""),
+            "findings": [{**f, "report_url": report} for f in result.get("findings", [])]}

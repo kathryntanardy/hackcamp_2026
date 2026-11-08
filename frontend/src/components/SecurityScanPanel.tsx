@@ -24,6 +24,20 @@ function RichText({ text }: { text: string }) {
   )
 }
 
+function DiffBlock({ diff }: { diff: string }) {
+  return (
+    <pre className="trace-step__inputs scan-diff">
+      {diff.split('\n').map((line, i) => {
+        const kind = line.startsWith('+++') || line.startsWith('---') ? 'is-file'
+          : line.startsWith('@@') ? 'is-hunk'
+          : line.startsWith('+') ? 'is-add'
+          : line.startsWith('-') ? 'is-del' : ''
+        return <span className={`scan-diff__line ${kind}`} key={i}>{line || ' '}{'\n'}</span>
+      })}
+    </pre>
+  )
+}
+
 function FindingCard({ f }: { f: ScanFinding }) {
   return (
     <li className="advisory-card">
@@ -65,6 +79,24 @@ function FindingCard({ f }: { f: ScanFinding }) {
         <div className="trace-step__block">
           <p className="trace-step__label">Workaround</p>
           <RichText text={f.workaround} />
+        </div>
+      ) : null}
+      {f.code_fix ? (
+        <div className="trace-step__block scan-contribute">
+          <p className="trace-step__label">Contribute a fix</p>
+          <p className="advisory-card__ids">
+            Gemini's suggested patch for this repo. Review it, then send it privately to the
+            maintainers. Don't open a public PR: it would reveal the vulnerability before a fixed
+            release exists.
+          </p>
+          <DiffBlock diff={f.code_fix} />
+          {f.report_url ? (
+            <a className="scan-report-link" href={f.report_url} target="_blank" rel="noreferrer">
+              {f.report_url.endsWith('/advisories/new')
+                ? 'Report privately on GitHub ↗'
+                : 'See how to report on GitHub ↗'}
+            </a>
+          ) : null}
         </div>
       ) : null}
     </li>

@@ -282,3 +282,33 @@ def test_dedupes_and_trims_workaround_on_read():
                                   {"ghsa_id": a["ghsa_id"], "workaround": "dupe"}], [a])
     assert len(out) == 1
     assert scan.enrich(out, "a/b", "abc")[0]["workaround"] == "Limit input."
+
+
+DIFF = "--- a/x.go\n+++ b/x.go\n@@ -1,2 +1,3 @@\n m := re.Find(s)\n+if m == nil { return }\n use(m[1])"
+
+
+def test_contribute_fix_only_when_unpatched_and_located():
+    base = {"file": "x.go", "code_fix": DIFF}
+    assert scan.contribute_fix(base) == DIFF
+    assert scan.contribute_fix({**base, "patched_versions": "1.2.3"}) is None  # already fixed upstream
+    assert scan.contribute_fix({**base, "file": None}) is None  # Gemini didn't see the code
+    assert scan.contribute_fix({**base, "code_fix": "Add a nil check."}) is None  # not a diff
+    assert scan.contribute_fix({"file": "x.go"}) is None
+
+
+def test_enrich_adds_code_fix_and_report_url():
+    out = scan.enrich([{"file": "x.go", "line": 2, "severity": "low", "title": "t", "description": "d",
+                        "recommendation": "r", "code_fix": DIFF,
+                        "report_url": "https://github.com/a/b/security/advisories/new"}], "a/b", "abc")[0]
+    assert out["code_fix"] == DIFF and out["report_url"].endswith("/security/advisories/new")
+    old = scan.enrich([{"file": "x.go", "severity": "low", "title": "t", "description": "d",
+                        "recommendation": "r"}], "a/b", "abc")[0]
+    assert old["code_fix"] is None and old["report_url"] == "https://github.com/a/b/security"
+
+
+def test_report_url_prefers_private_reporting():
+    def client(enabled_status, body):
+        return httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(enabled_status, json=body)))
+    assert scan.report_url("a/b", client(200, {"enabled": True})) == "https://github.com/a/b/security/advisories/new"
+    assert scan.report_url("a/b", client(200, {"enabled": False})) == "https://github.com/a/b/security/policy"
+    assert scan.report_url("a/b", client(404, {})) == "https://github.com/a/b/security/policy"

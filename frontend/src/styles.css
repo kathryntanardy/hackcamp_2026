@@ -469,8 +469,8 @@ img {
 }
 
 .map-zoom__btn img {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .map-zoom__divider {
@@ -594,8 +594,8 @@ img {
 }
 
 .map-search__field img {
-  width: 15px;
-  height: 15px;
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
 }
 

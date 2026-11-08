@@ -78,7 +78,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | F12 | Find alternatives | P2 if time | For an at-risk repo, the agent returns up to 3 similar healthy repos from Vector Search |
 | F13 | Run-over-run memory | P2 if time | The agent reads its previous finding for each repo; the UI shows newly at risk and recovered badges |
 | F14 | Natural-language map search | P1 should | The user types a natural-language query on the galaxy map; Databricks Vector Search matches it against repo name, description, topics and advisory summaries. One match zooms to that star and opens the drawer; several matches zoom to fit them and dim the rest; zero matches shows "no matches" and leaves the map unchanged. Clearing the query restores the full map |
-| F15 | Categories and vulnerability buckets | P1 should | Every repo has one of 6 categories (Front-end, Back-end, Machine learning, Database, Hardware/embedded, DevOps & infra) or `other`, and a list of CWE vulnerability buckets from its GitHub security advisories (see Pages and UX). The map lays out flowers by vulnerability bucket; Findings filters by category and bucket |
+| F15 | Categories and vulnerability buckets | P1 should | Every repo has one of 6 categories (Front-end, Back-end, Machine learning, Database, Hardware/embedded, DevOps & infra) or `other`, and a list of CWE vulnerability buckets from its GitHub security advisories (see Pages and UX). The map lays out flowers by vulnerability bucket by default, with category and bucket facet filters plus a cluster toggle (vulnerabilities / language `x,y` / category `cat_x,cat_y`); Findings filters by category, bucket, language and risk, and sorts by severity, health score, importance, days since release, advisory count / max severity / max CVSS, or language |
 
 ## Pages and UX
 
@@ -91,7 +91,7 @@ One map screen plus slide-out drawers. Built in React with a canvas map.
 - Each flower label lists **High / Med / Low** counts from **maintainer health status**, not GitHub advisory severity: High = `at_risk`, Med = `watchlist`, Low = `healthy`. Hovering a level highlights matching nodes on that flower; clicking a level zooms so the whole flower fits the viewport and opens the drawer filtered to that band. Clicking the category name opens the drawer filtered to the whole flower. Users looking for vulnerable packages use High.
 - Advisory severity and CVSS stay on the repo drawer and Findings sorts; they do not drive the map High / Med / Low chips.
 - The drawer starts closed. Click a node to slide it open on that repo and center the star in the remaining map (not under the drawer); click a flower to open a filtered list and frame that flower the same way. Click empty map whitespace to close it (a pan/drag does not close). The Findings tab keeps the map visible and opens the Findings drawer by default.
-- No map chrome for corpus totals or facet filters; the navbar is brand and page tabs only. Deprecated repos stay out of the map and list by serving rules, with no Ignored tab, chip or opt-in display.
+- Map facet bar (F15): category and vulnerability-bucket filters, plus a cluster toggle for vulnerability flowers vs language (`x`,`y`) vs category (`cat_x`,`cat_y`) scatter. No corpus totals chrome; the navbar stays brand and page tabs only. Deprecated repos stay out of the map and list by serving rules, with no Ignored tab, chip or opt-in display.
 - Search box (F14): a natural-language query zooms to the repos Vector Search matches (one star: zoom and open the drawer; several: zoom to fit, dim the rest). It is a search, not a chatbot.
 - Hover shows a tooltip with the name, score and status. Click opens that repo in the drawer.
 
@@ -99,7 +99,7 @@ One map screen plus slide-out drawers. Built in React with a canvas map.
 
 - Opened by the Findings tab; the galaxy map stays underneath.
 - One row per finding: repo, risk level, confidence, a one-line headline, investigated time, a "new" badge.
-- Server-paginated: the API returns 50 findings per page with a total count; changing page or risk filter fetches that slice only.
+- Server-paginated: the API returns 50 findings per page with a total count; changing page, sort or filters fetches that slice only (`sort`, `category`, `vuln_bucket`, `language`, `risk` on `/api/findings`).
 - Sorted by severity, then importance by default; other sorts: health score, importance, days since release, advisory count / max severity / max CVSS, programming language. Filters for language, category, vulnerability bucket and risk. Only eligible repos appear; deprecated repos cannot be restored through a filter, search result or historical finding.
 - Clicking a row selects that star on the map and opens its detail in the same drawer stack; back returns to the findings list.
 - Header strip: latest run stats, i.e. eligible repos triaged, investigated and tool calls made. Exclusion counts remain in operational logs rather than product risk totals.

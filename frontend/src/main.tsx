@@ -1,10 +1,11 @@
-import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { fetchFindings } from './api/findings'
+import { fetchFindings, type FindingsSort } from './api/findings'
 import { mapRepoToListItem } from './api/mapRepoToListItem'
 import { mapRepoToMapPoint } from './api/mapRepoToMapPoint'
 import { mapRepoToSidebar } from './api/mapRepoToSidebar'
 import { fetchRepo, fetchRepos } from './api/repos'
+import { fetchSearch } from './api/search'
 import type { FindingListEntry } from './api/types'
 import {
   FindingsView,
@@ -25,16 +26,76 @@ import { RepoSidebarSkeleton } from './components/RepoSidebarSkeleton'
 import { SidebarPanel } from './components/SidebarPanel'
 import { TopNavbar, type TopNavbarTab } from './components/TopNavbar'
 import { useFavourites } from './favourites/useFavourites'
+import { boundsOf } from './map/camera'
 import {
   flowerWorldBounds,
   layoutFlowerMap,
   type SeverityFocus,
 } from './map/flowers'
-import type { MapRepo } from './map/types'
+import type { MapRepo, WorldBounds } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
 import './styles.css'
 
 const FINDINGS_PAGE_SIZE = 50
+/** Wait for typing to settle before hitting Vector Search (local matches show instantly). */
+const SEARCH_DEBOUNCE_MS = 450
+/** Short queries stay local — VS embedding latency isn't worth it for 1–2 chars. */
+const SEARCH_VS_MIN_CHARS = 3
+/** Screen padding when framing search hits (wider than flower zoom). */
+const SEARCH_FIT_PADDING = 180
+
+/** Expand match bounds so a single star / tight cluster isn't face-filling. */
+function searchViewBounds(matches: Pick<MapRepo, 'x' | 'y'>[]): WorldBounds | null {
+  const bounds = boundsOf(matches)
+  if (!bounds) return null
+  const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+  const pad = Math.max(18, span * 0.7)
+  return {
+    minX: bounds.minX - pad,
+    maxX: bounds.maxX + pad,
+    minY: bounds.minY - pad,
+    maxY: bounds.maxY + pad,
+  }
+}
+
+function localSearchIds(
+  needle: string,
+  mapRepos: MapRepo[],
+  listRepos: RepoListItem[],
+  scope: MapSearchScope,
+): string[] {
+  const q = needle.toLowerCase()
+  const listById = new Map(listRepos.map((repo) => [repo.id, repo]))
+  const ids: string[] = []
+  for (const repo of mapRepos) {
+    const name = repo.name.toLowerCase()
+    const language = (repo.language || '').toLowerCase()
+    const overview = repo.overview.toLowerCase()
+    const list = listById.get(repo.id)
+    const category = (list?.category || repo.category || '').toLowerCase()
+    const description = (list?.description || '').toLowerCase()
+    const buckets = repo.vulnBuckets.map((bucket) => bucket.toLowerCase()).join(' ')
+    let hit = false
+    if (scope === 'name') {
+      hit = name.includes(q) || repo.id.toLowerCase().includes(q)
+    } else if (scope === 'category') {
+      hit = category.includes(q)
+    } else if (scope === 'vulnerabilities') {
+      hit = buckets.includes(q)
+    } else {
+      hit =
+        name.includes(q) ||
+        language.includes(q) ||
+        overview.includes(q) ||
+        category.includes(q) ||
+        description.includes(q) ||
+        buckets.includes(q) ||
+        repo.id.toLowerCase().includes(q)
+    }
+    if (hit) ids.push(repo.id)
+  }
+  return ids
+}
 
 function App() {
   const [repos, setRepos] = useState<RepoListItem[]>([])
@@ -49,12 +110,21 @@ function App() {
   const [findingsError, setFindingsError] = useState<string | null>(null)
   const [findingsLoading, setFindingsLoading] = useState(false)
   const [riskFilter, setRiskFilter] = useState<FindingsRiskFilter>('all')
+  const [findingsCategory, setFindingsCategory] = useState<string | null>(null)
+  const [findingsBucket, setFindingsBucket] = useState<string | null>(null)
+  const [findingsLanguage, setFindingsLanguage] = useState<string | null>(null)
+  const [findingsSort, setFindingsSort] = useState<FindingsSort>('severity')
 
   const [tab, setTab] = useState<TopNavbarTab>('map')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(580)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchScope, setSearchScope] = useState<MapSearchScope>('all')
+  /** null = no active search; array (maybe empty) = latest hits for the query. */
+  const [searchMatchIds, setSearchMatchIds] = useState<string[] | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const searchAppliedKey = useRef<string | null>(null)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<RepoSidebarProps | null>(null)
@@ -98,6 +168,10 @@ function App() {
     fetchFindings(
       {
         ...(riskFilter === 'all' ? {} : { risk: riskFilter }),
+        ...(findingsCategory ? { category: findingsCategory } : {}),
+        ...(findingsBucket ? { vuln_bucket: findingsBucket } : {}),
+        ...(findingsLanguage ? { language: findingsLanguage } : {}),
+        sort: findingsSort,
         limit: FINDINGS_PAGE_SIZE,
         offset: (findingsPage - 1) * FINDINGS_PAGE_SIZE,
       },
@@ -115,7 +189,15 @@ function App() {
         setFindingsLoading(false)
       })
     return () => controller.abort()
-  }, [tab, riskFilter, findingsPage])
+  }, [
+    tab,
+    riskFilter,
+    findingsCategory,
+    findingsBucket,
+    findingsLanguage,
+    findingsSort,
+    findingsPage,
+  ])
 
   useEffect(() => {
     if (!selectedId) {
@@ -145,25 +227,10 @@ function App() {
     return () => controller.abort()
   }, [selectedId])
 
-  const filteredMapRepos = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return rawMapRepos
-    return rawMapRepos.filter((repo) => {
-      const name = repo.name.toLowerCase()
-      const language = (repo.language || '').toLowerCase()
-      const overview = repo.overview.toLowerCase()
-      if (searchScope === 'name') return name.includes(q)
-      if (searchScope === 'language') return language.includes(q)
-      if (searchScope === 'category') {
-        return overview.includes(q) || name.includes(q)
-      }
-      return name.includes(q) || language.includes(q) || overview.includes(q)
-    })
-  }, [rawMapRepos, searchQuery, searchScope])
-
+  // Search dims non-matches instead of removing them from the galaxy.
   const flowerLayout = useMemo(
-    () => layoutFlowerMap(filteredMapRepos),
-    [filteredMapRepos],
+    () => layoutFlowerMap(rawMapRepos),
+    [rawMapRepos],
   )
 
   const mapFitPoints = useMemo(() => flowerLayout.flowers.flatMap(flower => {
@@ -183,14 +250,29 @@ function App() {
     return ids
   }, [flowerLayout.repos, severityFocus])
 
+  const searchMatchSet = useMemo(() => {
+    // Dim only when there is at least one hit; zero matches leave the map alone (F14).
+    if (!searchMatchIds || searchMatchIds.length === 0) return null
+    return new Set(searchMatchIds)
+  }, [searchMatchIds])
+
+  const findingLanguages = useMemo(() => {
+    const set = new Set<string>()
+    for (const repo of rawMapRepos) {
+      if (repo.language) set.add(repo.language)
+    }
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [rawMapRepos])
+
   const filteredRepos = useMemo(() => {
-    const ids = new Set(filteredMapRepos.map((repo) => repo.id))
+    const hitSet =
+      searchMatchIds == null ? null : new Set(searchMatchIds)
     return repos.filter((repo) => {
-      if (!ids.has(repo.id)) return false
+      if (hitSet && !hitSet.has(repo.id)) return false
       if (severityMatchedIds && !severityMatchedIds.has(repo.id)) return false
       return true
     })
-  }, [repos, filteredMapRepos, severityMatchedIds])
+  }, [repos, searchMatchIds, severityMatchedIds])
 
   const severityFocusLabel = useMemo(() => {
     if (!severityFocus) return null
@@ -260,6 +342,117 @@ function App() {
     setView('list')
     setSidebarOpen(focus != null)
   }, [])
+
+  const applySearchHits = useCallback(
+    (ids: string[], key: string) => {
+      if (searchAppliedKey.current === key) return
+      searchAppliedKey.current = key
+      if (ids.length === 0) return
+      const idSet = new Set(ids)
+      const matches = flowerLayout.repos.filter((repo) => idSet.has(repo.id))
+      if (matches.length === 0) return
+      const view = searchViewBounds(matches)
+      if (matches.length === 1) {
+        const point = matches[0]
+        setSelectedId(point.id)
+        setSidebarOpen(true)
+        setDetailFromList(false)
+        setListMode('browse')
+        setSeverityFocus(null)
+        setTab('map')
+        setView('detail')
+        if (view) {
+          fitToBoundsAnimated(view, SEARCH_FIT_PADDING, sidebarFocusInsets())
+        }
+        return
+      }
+      setSelectedId(null)
+      setView('list')
+      if (view) {
+        fitToBoundsAnimated(view, SEARCH_FIT_PADDING, sidebarFocusInsets())
+      }
+    },
+    [fitToBoundsAnimated, flowerLayout.repos, sidebarFocusInsets],
+  )
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim()
+    if (!trimmed) {
+      setSearchMatchIds(null)
+      setSearchLoading(false)
+      setSearchError(null)
+      if (searchAppliedKey.current != null) {
+        searchAppliedKey.current = null
+        if (flowerLayout.repos.length > 0) fitToRepos(flowerLayout.repos, true)
+      }
+      return
+    }
+
+    const localIds = localSearchIds(trimmed, rawMapRepos, repos, searchScope)
+    setSearchMatchIds(localIds)
+    setSearchError(null)
+
+    // Field scopes stay local only (debounced so camera framing settles with typing).
+    if (searchScope !== 'all') {
+      setSearchLoading(false)
+      const timer = window.setTimeout(() => {
+        applySearchHits(
+          localIds,
+          `${searchScope}:${trimmed}:${[...localIds].sort().join(',')}`,
+        )
+      }, SEARCH_DEBOUNCE_MS)
+      return () => window.clearTimeout(timer)
+    }
+
+    // Short "All" queries: local only after debounce.
+    if (trimmed.length < SEARCH_VS_MIN_CHARS) {
+      setSearchLoading(false)
+      const timer = window.setTimeout(() => {
+        applySearchHits(
+          localIds,
+          `all-local:${trimmed}:${[...localIds].sort().join(',')}`,
+        )
+      }, SEARCH_DEBOUNCE_MS)
+      return () => window.clearTimeout(timer)
+    }
+
+    // Refine with Vector Search after debounce; keep local results visible meanwhile.
+    setSearchLoading(true)
+    const controller = new AbortController()
+    const corpusIds = new Set(rawMapRepos.map((repo) => repo.id))
+    const timer = window.setTimeout(() => {
+      fetchSearch({ q: trimmed }, controller.signal)
+        .then((res) => {
+          const ranked = res.repo_ids.length > 0 ? res.repo_ids : localIds
+          const ids = ranked.filter((id) => corpusIds.has(id))
+          setSearchMatchIds(ids)
+          setSearchLoading(false)
+          applySearchHits(ids, `all:${trimmed}:${ids.join(',')}`)
+        })
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return
+          setSearchLoading(false)
+          setSearchError(err instanceof Error ? err.message : 'Search failed')
+          applySearchHits(
+            localIds,
+            `all-fallback:${trimmed}:${[...localIds].sort().join(',')}`,
+          )
+        })
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [
+    applySearchHits,
+    fitToRepos,
+    flowerLayout.repos,
+    rawMapRepos,
+    repos,
+    searchQuery,
+    searchScope,
+  ])
 
   const handleBackgroundClick = useCallback(() => {
     setSidebarOpen(false)
@@ -336,7 +529,6 @@ function App() {
       if (listMode === 'saved') setListMode('browse')
     }
     const point = flowerLayout.repos.find((repo) => repo.id === id)
-      ?? filteredMapRepos.find((repo) => repo.id === id)
       ?? rawMapRepos.find((repo) => repo.id === id)
     if (point) {
       focusOnPoint({ x: point.x, y: point.y }, point.importance, insets)
@@ -378,7 +570,6 @@ function App() {
     selectedId == null
       ? null
       : flowerLayout.repos.find((repo) => repo.id === selectedId)
-        ?? filteredMapRepos.find((repo) => repo.id === selectedId)
         ?? rawMapRepos.find((repo) => repo.id === selectedId)
         ?? null
 
@@ -444,8 +635,29 @@ function App() {
         error={findingsError}
         selectedId={selectedId}
         riskFilter={riskFilter}
+        categoryFilter={findingsCategory}
+        bucketFilter={findingsBucket}
+        languageFilter={findingsLanguage}
+        sort={findingsSort}
+        languages={findingLanguages}
         onRiskFilterChange={(next) => {
           setRiskFilter(next)
+          setFindingsPage(1)
+        }}
+        onCategoryFilterChange={(next) => {
+          setFindingsCategory(next)
+          setFindingsPage(1)
+        }}
+        onBucketFilterChange={(next) => {
+          setFindingsBucket(next)
+          setFindingsPage(1)
+        }}
+        onLanguageFilterChange={(next) => {
+          setFindingsLanguage(next)
+          setFindingsPage(1)
+        }}
+        onSortChange={(next) => {
+          setFindingsSort(next)
           setFindingsPage(1)
         }}
         onPageChange={setFindingsPage}
@@ -490,6 +702,7 @@ function App() {
             flowers={flowerLayout.flowers}
             camera={camera}
             selectedId={selectedId}
+            matchIds={searchMatchSet}
             pinnedSeverity={severityFocus}
             onSelectRepo={handleSelectRepo}
             onPinnedSeverityChange={handlePinnedSeverityChange}
@@ -503,6 +716,8 @@ function App() {
             query={searchQuery}
             scope={searchScope}
             results={filteredRepos}
+            loading={searchLoading}
+            error={searchError}
             onQueryChange={setSearchQuery}
             onScopeChange={setSearchScope}
             onSelectResult={handleSelectRepo}

@@ -20,8 +20,9 @@ Interactive API docs: https://REPLACE_WITH_SITE_ORIGIN/docs
 - GET /api/health — service liveness
 - GET /api/repos — corpus snapshot (health, category, vuln_buckets, advisory stats)
 - GET /api/repos/{owner}/{name} — repo detail, metrics, verdict, advisories
-- GET /api/findings — latest agent findings (optional ?language= & ?risk=)
+- GET /api/findings — latest agent findings (optional ?language= & ?risk=; paginated ?limit=&offset=)
 - GET /api/findings/{owner}/{name}/trace — investigation steps for a finding
+- GET /api/search — natural-language map search via Vector Search (?q= required)
 - GET /api/runs/latest — latest agent run stats
 - GET /openapi.json — full OpenAPI schema
 

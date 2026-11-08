@@ -65,6 +65,7 @@ function glyphColor(
   repo: MapRepo,
   flowers: FlowerCluster[],
   severityFocus: SeverityFocus | null,
+  matchIds: ReadonlySet<string> | null,
 ): { fill: string; dim: boolean; lit: boolean } {
   const tone = repo.vulnerabilityTone
   let base = SEVERITY_GLYPH.none
@@ -77,19 +78,30 @@ function glyphColor(
     }
   }
 
-  if (!severityFocus) return { fill: base, dim: false, lit: false }
+  let dim = false
+  let lit = false
 
-  const onFocusedFlower = repo.flowerId === severityFocus.flowerId
-  if (!onFocusedFlower) return { fill: base, dim: true, lit: false }
-
-  // Whole-category focus: keep every node on that flower visible.
-  if (severityFocus.tone == null) {
-    return { fill: base, dim: false, lit: false }
+  if (severityFocus) {
+    const onFocusedFlower = repo.flowerId === severityFocus.flowerId
+    if (!onFocusedFlower) {
+      dim = true
+    } else if (severityFocus.tone == null) {
+      dim = false
+    } else if (repo.vulnerabilityTone === severityFocus.tone) {
+      base = SEVERITY_HIGHLIGHT
+      lit = true
+    } else {
+      dim = true
+    }
   }
 
-  const matches = repo.vulnerabilityTone === severityFocus.tone
-  if (matches) return { fill: SEVERITY_HIGHLIGHT, dim: false, lit: true }
-  return { fill: base, dim: true, lit: false }
+  // Search matches dim non-hits (and can stack with severity dimming).
+  if (matchIds) {
+    if (matchIds.has(repo.id)) lit = true
+    else dim = true
+  }
+
+  return { fill: base, dim, lit }
 }
 
 export function drawMap(
@@ -104,6 +116,7 @@ export function drawMap(
   height: number,
   nowMs = 0,
   severityFocus: SeverityFocus | null = null,
+  matchIds: ReadonlySet<string> | null = null,
 ): void {
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = '#fafafa'
@@ -122,10 +135,19 @@ export function drawMap(
     placed.set(repo.id, dispersePoint(repo, focusRepo, amount))
   }
 
+  const flowerHasMatch = (flowerId: string) => {
+    if (!matchIds) return true
+    for (const repo of repos) {
+      if (repo.flowerId === flowerId && matchIds.has(repo.id)) return true
+    }
+    return false
+  }
+
   for (const flower of flowers) {
     const center = worldToScreen(flower.center, camera)
     const dimOutside =
-      severityFocus != null && severityFocus.flowerId !== flower.id
+      (severityFocus != null && severityFocus.flowerId !== flower.id) ||
+      (matchIds != null && !flowerHasMatch(flower.id))
     drawFlowerBloom(
       ctx,
       center,
@@ -160,7 +182,7 @@ export function drawMap(
     const screen = worldToScreen(world, camera)
     const isSelected = repo.id === selectedId
     const isHovered = repo.id === hoveredId
-    const { fill, dim, lit } = glyphColor(repo, flowers, severityFocus)
+    const { fill, dim, lit } = glyphColor(repo, flowers, severityFocus, matchIds)
     const grow = growFactor(isHovered, isSelected, amount) * (lit ? 1.12 : 1)
     const size = xFontSize(repo.importance, camera.scale, grow)
     if (!isOnScreen(screen, size, width, height)) continue

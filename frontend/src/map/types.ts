@@ -5,11 +5,14 @@ export type MapRepo = {
   name: string
   overview: string
   language: string | null
+  category: string | null
   status: MapStatus
   importance: number
   healthScore: number | null
+  /** Language-cluster world coords from gold (x, y). */
   x: number
   y: number
+  /** Category-cluster world coords from gold (cat_x, cat_y). */
   catX: number
   catY: number
   vulnerabilityScore: string

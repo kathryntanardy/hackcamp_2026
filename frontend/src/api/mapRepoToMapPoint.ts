@@ -71,6 +71,7 @@ export function mapRepoToMapPoint(repo: RepoListEntry): MapRepo | null {
     name: repo.name || repo.repo_id,
     overview: repo.summary?.trim() || '',
     language: repo.language,
+    category: repo.category?.trim() || null,
     status: normalizeStatus(repo.status),
     importance: repo.importance ?? 0,
     healthScore: repo.health_score == null || Number.isNaN(repo.health_score)

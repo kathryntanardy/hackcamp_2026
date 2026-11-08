@@ -1,16 +1,19 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import chevronDownIcon from '../assets/icons/chevron-down.svg'
+import chevronUpIcon from '../assets/icons/chevron-up.svg'
 import searchIcon from '../assets/icons/search.svg'
 import plusIcon from '../assets/icons/plus.svg'
 import minusIcon from '../assets/icons/minus.svg'
 import type { RepoListItem } from './RepoListSidebar'
 
-export type MapSearchScope = 'all' | 'name' | 'category' | 'language'
+export type MapSearchScope = 'all' | 'vulnerabilities' | 'category' | 'name'
 
 export type MapSearchBarProps = {
   query?: string
   scope?: MapSearchScope
   results?: RepoListItem[]
+  loading?: boolean
+  error?: string | null
   onQueryChange?: (query: string) => void
   onScopeChange?: (scope: MapSearchScope) => void
   onSelectResult?: (repoId: string) => void
@@ -20,9 +23,9 @@ export type MapSearchBarProps = {
 
 const SCOPE_OPTIONS: { id: MapSearchScope; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'name', label: 'Name' },
+  { id: 'vulnerabilities', label: 'Vulnerabilities' },
   { id: 'category', label: 'Category' },
-  { id: 'language', label: 'Language' },
+  { id: 'name', label: 'Repository' },
 ]
 
 const MAX_VISIBLE_RESULTS = 8
@@ -31,33 +34,36 @@ export function MapSearchBar({
   query = '',
   scope = 'all',
   results = [],
+  loading = false,
+  error = null,
   onQueryChange,
   onScopeChange,
   onSelectResult,
   onZoomIn,
   onZoomOut,
 }: MapSearchBarProps) {
-  const [scopeOpen, setScopeOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [resultsOpen, setResultsOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const listId = useId()
+  const menuId = useId()
   const resultsId = useId()
-  const activeLabel = SCOPE_OPTIONS.find((o) => o.id === scope)?.label ?? 'All'
   const trimmed = query.trim()
   const visibleResults = results.slice(0, MAX_VISIBLE_RESULTS)
   const showResults = resultsOpen && trimmed.length > 0
+  const buttonLabel =
+    SCOPE_OPTIONS.find((option) => option.id === scope)?.label ?? 'All'
 
   useEffect(() => {
-    if (!scopeOpen && !showResults) return
+    if (!menuOpen && !showResults) return
     function onPointerDown(event: PointerEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setScopeOpen(false)
+        setMenuOpen(false)
         setResultsOpen(false)
       }
     }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        setScopeOpen(false)
+        setMenuOpen(false)
         setResultsOpen(false)
       }
     }
@@ -67,12 +73,11 @@ export function MapSearchBar({
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [scopeOpen, showResults])
+  }, [menuOpen, showResults])
 
   function selectResult(repoId: string) {
     setResultsOpen(false)
-    setScopeOpen(false)
-    // Blur so mobile keyboard closes before the detail sheet opens.
+    setMenuOpen(false)
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
     }
@@ -102,20 +107,31 @@ export function MapSearchBar({
         <div className="map-search__scope">
           <button
             type="button"
-            className="map-search__scope-btn"
+            className={`map-search__scope-btn${menuOpen ? ' is-open' : ''}`}
             aria-haspopup="listbox"
-            aria-expanded={scopeOpen}
-            aria-controls={listId}
+            aria-expanded={menuOpen}
+            aria-controls={menuId}
             onClick={() => {
               setResultsOpen(false)
-              setScopeOpen((open) => !open)
+              setMenuOpen((open) => !open)
             }}
           >
-            <span>{activeLabel}</span>
-            <img src={chevronDownIcon} alt="" width={24} height={24} />
+            <span>{buttonLabel}</span>
+            <img
+              src={menuOpen ? chevronUpIcon : chevronDownIcon}
+              alt=""
+              width={16}
+              height={16}
+            />
           </button>
-          {scopeOpen ? (
-            <ul className="map-search__menu" id={listId} role="listbox" aria-label="Search scope">
+
+          {menuOpen ? (
+            <ul
+              className="map-search__menu"
+              id={menuId}
+              role="listbox"
+              aria-label="Search scope"
+            >
               {SCOPE_OPTIONS.map((option) => (
                 <li key={option.id} role="option" aria-selected={scope === option.id}>
                   <button
@@ -123,7 +139,7 @@ export function MapSearchBar({
                     className={`map-search__menu-item${scope === option.id ? ' is-active' : ''}`}
                     onClick={() => {
                       onScopeChange?.(option.id)
-                      setScopeOpen(false)
+                      setMenuOpen(false)
                     }}
                   >
                     {option.label}
@@ -150,7 +166,7 @@ export function MapSearchBar({
               onChange={(event) => {
                 onQueryChange?.(event.target.value)
                 setResultsOpen(true)
-                setScopeOpen(false)
+                setMenuOpen(false)
               }}
             />
             <img src={searchIcon} alt="" width={15} height={15} />
@@ -158,8 +174,14 @@ export function MapSearchBar({
 
           {showResults ? (
             <ul className="map-search__results" id={resultsId} role="listbox" aria-label="Search results">
-              {visibleResults.length === 0 ? (
-                <li className="map-search__results-empty">No repositories match “{trimmed}”.</li>
+              {visibleResults.length === 0 && loading ? (
+                <li className="map-search__results-empty">Searching…</li>
+              ) : visibleResults.length === 0 && error ? (
+                <li className="map-search__results-empty is-error" role="alert">
+                  {error}
+                </li>
+              ) : visibleResults.length === 0 ? (
+                <li className="map-search__results-empty">No matches for “{trimmed}”.</li>
               ) : (
                 visibleResults.map((repo) => (
                   <li key={repo.id} role="option">
@@ -177,9 +199,17 @@ export function MapSearchBar({
                   </li>
                 ))
               )}
-              {results.length > MAX_VISIBLE_RESULTS ? (
+              {loading && visibleResults.length > 0 ? (
+                <li className="map-search__results-more">Refining…</li>
+              ) : null}
+              {error && visibleResults.length > 0 ? (
+                <li className="map-search__results-empty is-error" role="alert">
+                  {error}
+                </li>
+              ) : null}
+              {!loading && !error && results.length > MAX_VISIBLE_RESULTS ? (
                 <li className="map-search__results-more">
-                  +{results.length - MAX_VISIBLE_RESULTS} more in the sidebar
+                  +{results.length - MAX_VISIBLE_RESULTS} more on the map
                 </li>
               ) : null}
             </ul>

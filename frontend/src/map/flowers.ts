@@ -69,6 +69,40 @@ function petalRadius(theta: number, petals: number, base: number): number {
   return base * (0.38 + 0.62 * Math.pow(wave, 0.85))
 }
 
+export type MapLayoutMode = 'flowers' | 'language' | 'category'
+
+/**
+ * Language / category cluster scatter using gold `x,y` or `cat_x,cat_y`.
+ * Nodes keep their warehouse positions; no flower blooms.
+ */
+export function layoutClusterMap(
+  repos: MapRepo[],
+  mode: 'language' | 'category',
+): {
+  repos: MapRepo[]
+  flowers: FlowerCluster[]
+} {
+  if (repos.length === 0) return { repos: [], flowers: [] }
+  const positioned = repos.map((repo) => ({
+    ...repo,
+    x: mode === 'category' ? repo.catX : repo.x,
+    y: mode === 'category' ? repo.catY : repo.y,
+    flowerId: primaryBucket(repo),
+  }))
+  return { repos: positioned, flowers: [] }
+}
+
+export function layoutMapRepos(
+  repos: MapRepo[],
+  mode: MapLayoutMode = 'flowers',
+): {
+  repos: MapRepo[]
+  flowers: FlowerCluster[]
+} {
+  if (mode === 'flowers') return layoutFlowerMap(repos)
+  return layoutClusterMap(repos, mode)
+}
+
 /**
  * Place repos into vulnerability-bucket flowers.
  * Each node keeps identity; `x`/`y` become flower-layout display coords.

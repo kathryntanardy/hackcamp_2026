@@ -6,6 +6,10 @@ export type FindingListEntry = {
   health_score: number | null
   category: string | null
   vuln_buckets: string[]
+  days_since_release?: number | null
+  advisory_count?: number | null
+  max_severity?: string | null
+  max_cvss?: number | null
   run_id: string
   risk_level: string
   confidence: number

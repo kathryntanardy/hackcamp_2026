@@ -22,6 +22,8 @@ export type GalaxyMapProps = {
   flowers: FlowerCluster[]
   camera: MapCamera
   selectedId?: string | null
+  /** When set, non-matching nodes (and empty flowers) are dimmed. */
+  matchIds?: ReadonlySet<string> | null
   pinnedSeverity?: SeverityFocus | null
   onSelectRepo?: (id: string) => void
   onPinnedSeverityChange?: (focus: SeverityFocus | null) => void
@@ -47,6 +49,7 @@ export function GalaxyMap({
   flowers,
   camera,
   selectedId = null,
+  matchIds = null,
   pinnedSeverity = null,
   onSelectRepo,
   onPinnedSeverityChange,
@@ -67,11 +70,13 @@ export function GalaxyMap({
   const flowersRef = useRef(flowers)
   const cameraRef = useRef(camera)
   const selectedRef = useRef(selectedId)
+  const matchIdsRef = useRef(matchIds)
   const severityRef = useRef(severityFocus)
   reposRef.current = repos
   flowersRef.current = flowers
   cameraRef.current = camera
   selectedRef.current = selectedId
+  matchIdsRef.current = matchIds
   severityRef.current = severityFocus
 
   useEffect(() => {
@@ -157,6 +162,7 @@ export function GalaxyMap({
             height,
             now,
             severityRef.current,
+            matchIdsRef.current,
           )
         }
       }

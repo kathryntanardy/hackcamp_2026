@@ -276,23 +276,27 @@ FROM hackcamp.agent.runs ORDER BY started_at DESC LIMIT 1""")
     return rows[0]
 
 
-SCANS_DDL = """CREATE TABLE IF NOT EXISTS hackcamp.agent.code_scans (
-  repo_id STRING NOT NULL, commit_sha STRING, model STRING, files STRING,
-  summary STRING, findings STRING, scanned_at TIMESTAMP)"""
+# Replaces agent.code_scans (code-only). mode = "advisories" | "code"; list columns are JSON.
+SCANS_TABLE = "hackcamp.agent.security_scans"
+SCANS_DDL = f"""CREATE TABLE IF NOT EXISTS {SCANS_TABLE} (
+  repo_id STRING NOT NULL, mode STRING, commit_sha STRING, model STRING, files STRING,
+  advisory_ids STRING, summary STRING, findings STRING, scanned_at TIMESTAMP)"""
 
 
 def _scan_row(r: dict) -> dict:
     return {**r, "files": json.loads(r["files"] or "[]"),
+            "advisory_ids": json.loads(r["advisory_ids"] or "[]"),
             "findings": scan.enrich(json.loads(r["findings"] or "[]"), r["repo_id"], r["commit_sha"])}
 
 
 @app.get("/api/scans/{repo_id:path}")
 def get_scan(repo_id: str) -> dict:
-    """Latest stored Gemini code scan for a repo."""
+    """Latest stored Gemini security scan (advisory fixes or code review) for a repo."""
     rows = query(f"""
 WITH {REPO_SCOPE}
-SELECT c.repo_id, c.commit_sha, c.model, c.files, c.summary, c.findings, c.scanned_at
-FROM hackcamp.agent.code_scans c JOIN eligible_gold g ON g.repo_id = c.repo_id
+SELECT c.repo_id, c.mode, c.commit_sha, c.model, c.files, c.advisory_ids, c.summary, c.findings,
+  c.scanned_at
+FROM {SCANS_TABLE} c JOIN eligible_gold g ON g.repo_id = c.repo_id
 WHERE c.repo_id = :repo_id
 ORDER BY c.scanned_at DESC LIMIT 1""", {"repo_id": repo_id})
     if not rows:
@@ -302,7 +306,8 @@ ORDER BY c.scanned_at DESC LIMIT 1""", {"repo_id": repo_id})
 
 @app.post("/api/scans/{repo_id:path}")
 def run_scan(repo_id: str) -> dict:
-    """Run a fresh Gemini scan of the repo's riskiest files and store it."""
+    """Run a fresh Gemini scan and store it: fixes for the repo's advisories if it has any,
+    otherwise a review of its riskiest source files."""
     if not query(f"WITH {REPO_SCOPE} SELECT repo_id FROM eligible_gold WHERE repo_id = :repo_id", {"repo_id": repo_id}):
         raise HTTPException(404, f"repo {repo_id} not found")
     try:
@@ -313,11 +318,13 @@ def run_scan(repo_id: str) -> dict:
     except (httpx.HTTPError, RuntimeError, KeyError, ValueError) as e:
         raise HTTPException(502, f"scan failed: {e}")
     query(SCANS_DDL)
-    row = {"repo_id": repo_id, "commit_sha": result["commit_sha"], "model": result["model"],
-           "files": json.dumps(result["files"]), "summary": result["summary"],
+    row = {"repo_id": repo_id, "mode": result["mode"], "commit_sha": result["commit_sha"],
+           "model": result["model"], "files": json.dumps(result["files"]),
+           "advisory_ids": json.dumps(result["advisory_ids"]), "summary": result["summary"],
            "findings": json.dumps(result["findings"])}
-    query("""INSERT INTO hackcamp.agent.code_scans
-VALUES (:repo_id, :commit_sha, :model, :files, :summary, :findings, current_timestamp())""", row)
+    query(f"""INSERT INTO {SCANS_TABLE}
+VALUES (:repo_id, :mode, :commit_sha, :model, :files, :advisory_ids, :summary, :findings,
+  current_timestamp())""", row)
     return get_scan(repo_id)
 
 

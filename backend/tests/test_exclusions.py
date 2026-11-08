@@ -83,9 +83,9 @@ def history(monkeypatch):
         repo_id=f["repo_id"], run_id=f["run_id"], trace_id=f["trace_id"],
         payload=json.dumps({"trace_id": f["trace_id"], "steps": []}),
     ) for f in findings])
-    table("code_scans", [dict(
-        repo_id=rid, commit_sha="abc", model="test", files='["src/auth.py"]',
-        summary="Stored scan", findings="[]", scanned_at="2026-11-07",
+    table("security_scans", [dict(
+        repo_id=rid, mode="code", commit_sha="abc", model="test", files='["src/auth.py"]',
+        advisory_ids="[]", summary="Stored scan", findings="[]", scanned_at="2026-11-07",
     ) for rid in ELIGIBLE | EXCLUDED])
 
     statements = []
@@ -94,7 +94,7 @@ def history(monkeypatch):
         statements.append(statement)
         for schema, names in {
             "gold": ["repo_health", "repo_summaries"],
-            "agent": ["findings", "runs", "trace_steps", "code_scans"],
+            "agent": ["findings", "runs", "trace_steps", "security_scans"],
             "silver": ["repos", "repo_advisories"],
         }.items():
             for name in names:

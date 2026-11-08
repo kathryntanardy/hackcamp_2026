@@ -1,5 +1,7 @@
-"""On-demand Gemini code scan: pick the riskiest-looking files from a GitHub repo,
-send them to Gemini, and get back vulnerabilities with fix recommendations."""
+"""On-demand Gemini security scan. Two modes:
+- "advisories": the repo has published GitHub security advisories, so Gemini explains how to
+  fix or work around each one, using the advisory details plus the most relevant source files.
+- "code": no advisories, so Gemini reviews the riskiest-looking files for unreported vulnerabilities."""
 
 import base64
 import functools
@@ -15,6 +17,9 @@ GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-3.6-flash"
 
 MAX_FILES = 15
+MAX_ADVISORIES = 10
+MAX_ADVISORY_DESC = 3000
+MAX_OUTPUT_TOKENS = 16384
 MAX_FILE_BYTES = 60_000
 MAX_TOTAL_CHARS = 400_000
 RETRY_DELAY = 5  # seconds; grows per attempt
@@ -35,7 +40,7 @@ RISKY_KEYWORDS = {
     "permission": 4, "acl": 4, "admin": 3, "unsafe": 4,
 }
 SKIP_PARTS = re.compile(
-    r"(^|/)(tests?|__tests__|spec|specs|testdata|fixtures?|examples?|docs?|benches?|"
+    r"(^|/)(tests?|__tests__|spec|specs|testdata|fixtures?|examples?|docs?|docs_src|scripts|benches?|"
     r"vendor|third_party|node_modules|dist|build|\.github)(/|$)|(_test|\.test|\.spec)\.",
     re.IGNORECASE,
 )
@@ -74,7 +79,8 @@ def code_url(repo_id: str, commit_sha: str, file: str, line: int | None) -> str:
 def enrich(findings: list[dict], repo_id: str, commit_sha: str) -> list[dict]:
     """Fields added after Gemini answers, so they cost no tokens."""
     return [{**f, "vuln_bucket": bucket_for_cwe(f.get("cwe")),
-             "code_url": code_url(repo_id, commit_sha, f["file"], f.get("line"))} for f in findings]
+             "code_url": code_url(repo_id, commit_sha, f["file"], f.get("line")) if f.get("file") else None}
+            for f in findings]
 
 
 RESPONSE_SCHEMA = {
@@ -115,6 +121,47 @@ Rules:
 
 {files}"""
 
+# Same finding shape as the code scan plus the advisory it answers; file/line are optional
+# because the vulnerable code may not be among the files shown.
+_ADVISORY_ITEM = RESPONSE_SCHEMA["properties"]["findings"]["items"]
+ADVISORY_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "summary": {"type": "STRING"},
+        "findings": {"type": "ARRAY", "items": {
+            "type": "OBJECT",
+            "properties": {"ghsa_id": {"type": "STRING"},
+                           "workaround": {"type": "STRING"},
+                           **_ADVISORY_ITEM["properties"]},
+            "required": ["ghsa_id", "severity", "title", "description", "recommendation"],
+        }},
+    },
+    "required": ["summary", "findings"],
+}
+
+ADVISORY_PROMPT = """You are a senior application-security engineer. The GitHub repository {repo_id}
+has the published security advisories below. For EACH advisory, tell a developer who depends on
+this project exactly how to fix or mitigate it.
+
+Rules:
+- Return exactly one finding per advisory, with its ghsa_id.
+- description: 1-2 sentences on what an attacker can do, in plain English.
+- recommendation: the fix. If a patched version exists, say which version to upgrade to first.
+  If none exists, give a concrete code-level fix (a patch to the library code, as code) based on
+  the source files shown.
+- workaround: how to stay safe without changing the library (e.g. validate input before calling
+  the vulnerable function, disable an option). Empty string if there is no sensible workaround.
+- If you can locate the vulnerable code in the files shown, give its file path and line number
+  (from the line prefixes). Otherwise leave file and line out. Never invent a location.
+- severity: reuse the advisory's severity. cwe: the advisory's CWE id like "CWE-79" if it has one.
+- Summary: 2-3 sentences on how urgent these advisories are overall and what to do first.
+
+ADVISORIES:
+{advisories}
+
+SOURCE FILES:
+{files}"""
+
 
 @functools.cache
 def _databricks_github_token() -> str | None:
@@ -135,25 +182,27 @@ def _github_headers() -> dict:
     return headers
 
 
-def score_path(path: str, size: int) -> float:
-    """Higher = more worth scanning. 0 = skip."""
+def score_path(path: str, size: int, hints: tuple[str, ...] = ()) -> float:
+    """Higher = more worth scanning. 0 = skip. Hints (from advisories) outrank keywords."""
     ext = os.path.splitext(path)[1].lower()
     if ext not in SOURCE_EXT or SKIP_PARTS.search(path) or size > MAX_FILE_BYTES or size < 200:
         return 0
     lower = path.lower()
     score = sum(w for k, w in RISKY_KEYWORDS.items() if k in lower)
+    score += sum(20 for h in hints if h in lower)
     return score + 0.5 if score else 0.1  # plain source files only fill leftover slots
 
 
-def pick_files(tree: list[dict], limit: int = MAX_FILES) -> list[str]:
-    scored = [(score_path(t["path"], t.get("size", 0)), t["path"])
+def pick_files(tree: list[dict], limit: int = MAX_FILES, hints: tuple[str, ...] = ()) -> list[str]:
+    scored = [(score_path(t["path"], t.get("size", 0), hints), t["path"])
               for t in tree if t.get("type") == "blob"]
     scored = [s for s in scored if s[0] > 0]
     scored.sort(key=lambda s: (-s[0], len(s[1])))
     return [p for _, p in scored[:limit]]
 
 
-def fetch_files(repo_id: str, client: httpx.Client) -> tuple[str, dict[str, str]]:
+def fetch_files(repo_id: str, client: httpx.Client,
+                hints: tuple[str, ...] = ()) -> tuple[str, dict[str, str]]:
     """Return (commit_sha, {path: content}) for the chosen files on the default branch."""
     repo = client.get(f"{GITHUB_API}/repos/{repo_id}")
     repo.raise_for_status()
@@ -162,7 +211,7 @@ def fetch_files(repo_id: str, client: httpx.Client) -> tuple[str, dict[str, str]
     tree.raise_for_status()
     body = tree.json()
     files, total = {}, 0
-    for path in pick_files(body["tree"]):
+    for path in pick_files(body["tree"], hints=hints):
         raw = client.get(f"https://raw.githubusercontent.com/{repo_id}/{body['sha']}/{path}")
         if raw.status_code != 200:
             continue
@@ -174,16 +223,64 @@ def fetch_files(repo_id: str, client: httpx.Client) -> tuple[str, dict[str, str]
     return body["sha"], files
 
 
-def build_prompt(repo_id: str, files: dict[str, str]) -> str:
+def normalize_advisory(raw: dict) -> dict:
+    cwes = [c["cwe_id"] for c in raw.get("cwes") or [] if isinstance(c, dict) and c.get("cwe_id")]
+    cwes += [c for c in raw.get("cwe_ids") or [] if c and c not in cwes]
+    return {
+        "ghsa_id": raw["ghsa_id"], "cve_id": raw.get("cve_id"), "severity": raw.get("severity"),
+        "cwes": cwes, "summary": raw.get("summary") or "",
+        "description": (raw.get("description") or "")[:MAX_ADVISORY_DESC],
+        "html_url": raw.get("html_url") or f"https://github.com/advisories/{raw['ghsa_id']}",
+        "published_at": raw.get("published_at"),
+        "packages": [{"ecosystem": (v.get("package") or {}).get("ecosystem"),
+                      "name": (v.get("package") or {}).get("name"),
+                      "vulnerable_versions": v.get("vulnerable_version_range"),
+                      "patched_versions": v.get("patched_versions"),
+                      "vulnerable_functions": v.get("vulnerable_functions") or []}
+                     for v in raw.get("vulnerabilities") or []],
+    }
+
+
+def fetch_advisories(repo_id: str, client: httpx.Client) -> list[dict]:
+    """Published repository security advisories, full detail (patched versions, functions)."""
+    resp = client.get(f"{GITHUB_API}/repos/{repo_id}/security-advisories", params={"per_page": 100})
+    if resp.status_code == 404:
+        return []
+    resp.raise_for_status()
+    items = [a for a in resp.json() if a.get("ghsa_id") and a.get("state", "published") == "published"]
+    return [normalize_advisory(a) for a in items[:MAX_ADVISORIES]]
+
+
+def advisory_hints(advisories: list[dict]) -> tuple[str, ...]:
+    """Lowercase name fragments of vulnerable functions, used to pull matching files first."""
+    hints = set()
+    for a in advisories:
+        for pkg in a["packages"]:
+            for fn in pkg["vulnerable_functions"]:
+                hints.update(w.lower() for w in re.split(r"[^A-Za-z0-9]+", fn) if len(w) >= 4)
+    return tuple(sorted(hints))
+
+
+def _file_blocks(files: dict[str, str]) -> str:
     blocks = []
     for path, text in files.items():
         numbered = "\n".join(f"{i}: {line}" for i, line in enumerate(text.splitlines(), 1))
         blocks.append(f"=== FILE: {path} ===\n{numbered}")
+    return "\n\n".join(blocks)
+
+
+def build_prompt(repo_id: str, files: dict[str, str]) -> str:
     preferred = ", ".join(f"CWE-{c}" for c in CWE_TO_BUCKET)
-    return PROMPT.format(repo_id=repo_id, preferred_cwes=preferred, files="\n\n".join(blocks))
+    return PROMPT.format(repo_id=repo_id, preferred_cwes=preferred, files=_file_blocks(files))
 
 
-def ask_gemini(prompt: str, client: httpx.Client, model: str) -> dict:
+def build_advisory_prompt(repo_id: str, advisories: list[dict], files: dict[str, str]) -> str:
+    adv = json.dumps([{k: v for k, v in a.items() if k != "html_url"} for a in advisories], indent=1)
+    return ADVISORY_PROMPT.format(repo_id=repo_id, advisories=adv,
+                                  files=_file_blocks(files) or "(no source files available)")
+
+
+def ask_gemini(prompt: str, client: httpx.Client, model: str, schema: dict = RESPONSE_SCHEMA) -> dict:
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
         raise RuntimeError("GEMINI_API_KEY is not set")
@@ -195,8 +292,9 @@ def ask_gemini(prompt: str, client: httpx.Client, model: str) -> dict:
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
                     "temperature": 0.2,
+                    "maxOutputTokens": MAX_OUTPUT_TOKENS,  # stops runaway repeat loops early
                     "responseMimeType": "application/json",
-                    "responseSchema": RESPONSE_SCHEMA,
+                    "responseSchema": schema,
                 },
             },
             timeout=180,
@@ -206,17 +304,51 @@ def ask_gemini(prompt: str, client: httpx.Client, model: str) -> dict:
         time.sleep(RETRY_DELAY * (attempt + 1))
     resp.raise_for_status()
     text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-    return json.loads(text)
+    result = json.loads(text)
+    result["findings"] = [{k: _strip_echo(v) for k, v in f.items()} for f in result.get("findings", [])]
+    return result
+
+
+def _strip_echo(value):
+    """Gemini sometimes repeats its whole JSON answer inside a string field; cut that tail off."""
+    if not isinstance(value, str):
+        return value
+    i = value.find("```json")
+    return value[:i].rstrip() if i >= 0 and '"findings"' in value[i:] else value
+
+
+def attach_advisories(findings: list[dict], advisories: list[dict]) -> list[dict]:
+    """Add the advisory's link and versions from GitHub data rather than trusting the model."""
+    by_id = {a["ghsa_id"]: a for a in advisories}
+    out = []
+    for f in findings:
+        a = by_id.get(f.get("ghsa_id"))
+        if a:
+            f = {**f, "advisory_url": a["html_url"], "cve_id": a["cve_id"],
+                 "patched_versions": ", ".join(p["patched_versions"] for p in a["packages"]
+                                               if p["patched_versions"]) or None,
+                 "cwe": f.get("cwe") or (a["cwes"][0] if a["cwes"] else None)}
+        out.append(f)
+    return out
 
 
 def scan_repo(repo_id: str) -> dict:
+    """Advisory fixes if the repo has published advisories, otherwise a code review."""
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
     with httpx.Client(headers=_github_headers(), timeout=30, follow_redirects=True) as gh:
-        sha, files = fetch_files(repo_id, gh)
+        advisories = fetch_advisories(repo_id, gh)
+        sha, files = fetch_files(repo_id, gh, advisory_hints(advisories))
+    base = {"repo_id": repo_id, "commit_sha": sha, "model": model, "files": list(files),
+            "mode": "advisories" if advisories else "code",
+            "advisory_ids": [a["ghsa_id"] for a in advisories]}
+    if advisories:
+        with httpx.Client() as client:
+            result = ask_gemini(build_advisory_prompt(repo_id, advisories, files), client, model,
+                                ADVISORY_RESPONSE_SCHEMA)
+        findings = attach_advisories(result.get("findings", []), advisories)
+        return {**base, "summary": result.get("summary", ""), "findings": findings}
     if not files:
-        return {"repo_id": repo_id, "commit_sha": sha, "model": model, "files": [],
-                "summary": "No security-relevant source files found to scan.", "findings": []}
+        return {**base, "summary": "No security-relevant source files found to scan.", "findings": []}
     with httpx.Client() as client:
         result = ask_gemini(build_prompt(repo_id, files), client, model)
-    return {"repo_id": repo_id, "commit_sha": sha, "model": model, "files": list(files),
-            "summary": result.get("summary", ""), "findings": result.get("findings", [])}
+    return {**base, "summary": result.get("summary", ""), "findings": result.get("findings", [])}

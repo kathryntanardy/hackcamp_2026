@@ -23,15 +23,27 @@ app = FastAPI(title="Open-Source Corpus Explorer API", version="0.1.0")
 # Vite build output copied here before Databricks Apps deploy (`frontend/dist` → `static`).
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-GOLD = """gold AS (
-  SELECT * FROM hackcamp.gold.repo_health
-  QUALIFY row_number() OVER (PARTITION BY repo_id ORDER BY scored_at DESC) = 1
+GOLD = """ranked_gold AS (
+  SELECT *, row_number() OVER (
+    PARTITION BY repo_id ORDER BY scored_at DESC, run_id DESC
+  ) AS _gold_rank FROM hackcamp.gold.repo_health
+), gold AS (
+  SELECT * FROM ranked_gold WHERE _gold_rank = 1
 )"""
-# Live UC schema: risk_level includes legacy 'ignored' rows; product surfaces exclude them.
-LATEST_FINDING = """latest_finding AS (
-  SELECT * FROM hackcamp.agent.findings
-  WHERE coalesce(risk_level, '') <> 'ignored'
-  QUALIFY row_number() OVER (PARTITION BY repo_id ORDER BY investigated_at DESC) = 1
+# Rank all findings before checking eligibility so an older verdict cannot replace
+# the latest ignored verdict. Historical rows remain available internally.
+LATEST_FINDING = """ranked_findings AS (
+  SELECT *, row_number() OVER (
+    PARTITION BY repo_id ORDER BY investigated_at DESC, run_id DESC
+  ) AS _finding_rank FROM hackcamp.agent.findings
+), latest_finding AS (
+  SELECT * FROM ranked_findings WHERE _finding_rank = 1
+)"""
+REPO_SCOPE = f"""{GOLD}, {LATEST_FINDING}, eligible_gold AS (
+  SELECT g.* FROM gold g
+  LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
+  WHERE coalesce(g.status, '') <> 'ignored'
+    AND coalesce(f.risk_level, '') <> 'ignored'
 )"""
 LATEST_RUN = """latest_run AS (
   SELECT run_id FROM hackcamp.agent.runs ORDER BY started_at DESC LIMIT 1
@@ -116,7 +128,7 @@ def health() -> HealthResponse:
 @app.get("/api/repos")
 def list_repos() -> list[dict]:
     rows = query(f"""
-WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
+WITH {REPO_SCOPE}, {LATEST_RUN}
 SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
   g.importance, g.x, g.y, g.cat_x, g.cat_y, g.stars, g.is_archived,
   g.category, to_json(g.vuln_buckets) AS vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
@@ -124,7 +136,7 @@ SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
   f.repo_id IS NOT NULL AS investigated,
   coalesce(f.run_id = (SELECT run_id FROM latest_run), false) AS investigated_in_latest_run,
   sm.summary
-FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
+FROM eligible_gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
 LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 ORDER BY g.importance DESC""")
     for row in rows:
@@ -135,7 +147,7 @@ ORDER BY g.importance DESC""")
 @app.get("/api/repos/{repo_id:path}")
 def get_repo(repo_id: str) -> dict:
     rows = query(f"""
-WITH {GOLD}
+WITH {REPO_SCOPE}
 SELECT g.repo_id, g.name, g.owner, g.language, g.stars, g.dependents, g.is_archived,
   g.health_score, g.status, g.importance, g.x, g.y, g.cat_x, g.cat_y, g.scored_at,
   g.category, to_json(g.vuln_buckets) AS vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
@@ -144,7 +156,7 @@ SELECT g.repo_id, g.name, g.owner, g.language, g.stars, g.dependents, g.is_archi
   s.open_issues, s.open_prs, s.contributors,
   s.maintainer_reply_rate, s.top_contributor_share, s.advisory_fetch_status,
   s.description, to_json(s.topics) AS topics, sm.summary
-FROM gold g LEFT JOIN hackcamp.silver.repos s ON s.repo_id = g.repo_id
+FROM eligible_gold g LEFT JOIN hackcamp.silver.repos s ON s.repo_id = g.repo_id
 LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
     if not rows:
@@ -188,14 +200,13 @@ def list_findings(
     offset = max(0, int(offset))
     # LIMIT/OFFSET as literals — warehouse drivers often reject bound values here.
     rows = query(f"""
-WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
+WITH {REPO_SCOPE}, {LATEST_RUN}
 SELECT f.repo_id, g.name, g.language, g.importance, g.health_score,
   g.category, to_json(g.vuln_buckets) AS vuln_buckets, {FINDING_COLS},
   f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run,
   COUNT(*) OVER() AS total_count
-FROM latest_finding f LEFT JOIN gold g ON g.repo_id = f.repo_id
-WHERE coalesce(f.risk_level, '') <> 'ignored'
-  AND (:language IS NULL OR g.language = :language)
+FROM latest_finding f JOIN eligible_gold g ON g.repo_id = f.repo_id
+WHERE (:language IS NULL OR g.language = :language)
   AND (:risk IS NULL OR f.risk_level = :risk)
 ORDER BY {SEVERITY}, g.importance DESC
 LIMIT {limit} OFFSET {offset}""", {"language": language, "risk": risk})
@@ -213,9 +224,10 @@ LIMIT {limit} OFFSET {offset}""", {"language": language, "risk": risk})
 def get_trace(repo_id: str) -> dict:
     """Steps come from agent.trace_steps, which the agent writes alongside each finding (#11)."""
     rows = query(f"""
-WITH {LATEST_FINDING}
+WITH {REPO_SCOPE}
 SELECT f.repo_id, f.run_id, f.trace_id, t.payload
 FROM latest_finding f
+JOIN eligible_gold g ON g.repo_id = f.repo_id
 LEFT JOIN hackcamp.agent.trace_steps t
   ON t.trace_id = f.trace_id AND t.repo_id = f.repo_id AND t.run_id = f.run_id
 WHERE f.repo_id = :repo_id""", {"repo_id": repo_id})
@@ -252,10 +264,12 @@ def _scan_row(r: dict) -> dict:
 @app.get("/api/scans/{repo_id:path}")
 def get_scan(repo_id: str) -> dict:
     """Latest stored Gemini code scan for a repo."""
-    rows = query("""
-SELECT repo_id, commit_sha, model, files, summary, findings, scanned_at
-FROM hackcamp.agent.code_scans WHERE repo_id = :repo_id
-ORDER BY scanned_at DESC LIMIT 1""", {"repo_id": repo_id})
+    rows = query(f"""
+WITH {REPO_SCOPE}
+SELECT c.repo_id, c.commit_sha, c.model, c.files, c.summary, c.findings, c.scanned_at
+FROM hackcamp.agent.code_scans c JOIN eligible_gold g ON g.repo_id = c.repo_id
+WHERE c.repo_id = :repo_id
+ORDER BY c.scanned_at DESC LIMIT 1""", {"repo_id": repo_id})
     if not rows:
         raise HTTPException(404, f"no scan for {repo_id}")
     return _scan_row(rows[0])
@@ -264,7 +278,7 @@ ORDER BY scanned_at DESC LIMIT 1""", {"repo_id": repo_id})
 @app.post("/api/scans/{repo_id:path}")
 def run_scan(repo_id: str) -> dict:
     """Run a fresh Gemini scan of the repo's riskiest files and store it."""
-    if not query(f"WITH {GOLD} SELECT repo_id FROM gold WHERE repo_id = :repo_id", {"repo_id": repo_id}):
+    if not query(f"WITH {REPO_SCOPE} SELECT repo_id FROM eligible_gold WHERE repo_id = :repo_id", {"repo_id": repo_id}):
         raise HTTPException(404, f"repo {repo_id} not found")
     try:
         result = scan.scan_repo(repo_id)
@@ -315,10 +329,9 @@ def search(q: str = Query(min_length=1), language: str | None = None, category: 
     # Re-check against live gold: drops stale index rows for excluded repos, applies the
     # filters Vector Search can't (array bucket, investigated flag).
     rows = query(f"""
-WITH {GOLD}, {LATEST_FINDING}
-SELECT g.repo_id FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
+WITH {REPO_SCOPE}
+SELECT g.repo_id FROM eligible_gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
 WHERE array_contains(from_json(:ids, 'array<string>'), g.repo_id)
-  AND g.status <> 'ignored'
   AND (:vuln_bucket IS NULL OR array_contains(g.vuln_buckets, cast(:vuln_bucket AS STRING)))
   AND (NOT :investigated_only OR f.repo_id IS NOT NULL)""",
                  {"ids": json.dumps(ranked), "vuln_bucket": vuln_bucket,

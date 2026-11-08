@@ -54,7 +54,7 @@ def test_sql_post_filter_drops_ineligible_and_keeps_rank(fake):
                                              "investigated_only": "true"}).json()
     assert body["repo_ids"] == ["a/a", "b/b"]
     stmt, params = fake["sql_calls"][0]
-    assert "g.status <> 'ignored'" in stmt
+    assert "FROM eligible_gold g" in stmt
     assert params["vuln_bucket"] == "Injection" and params["investigated_only"] is True
 
 

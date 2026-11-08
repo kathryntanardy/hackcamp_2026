@@ -76,7 +76,7 @@ def db(monkeypatch):
 
     def fake_query(statement, params=None):
         log.append(statement)
-        if "FROM gold WHERE" in statement:
+        if "FROM eligible_gold WHERE" in statement:
             return [] if params["repo_id"] == "missing/repo" else [{"repo_id": params["repo_id"]}]
         if statement.startswith("INSERT"):
             rows.append({**params, "scanned_at": "2026-11-07T20:00:00"})

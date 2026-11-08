@@ -166,6 +166,11 @@ function App() {
     [filteredMapRepos],
   )
 
+  const mapFitPoints = useMemo(() => flowerLayout.flowers.flatMap(flower => {
+    const bounds = flowerWorldBounds(flower)
+    return [{ x: bounds.minX, y: bounds.minY }, { x: bounds.maxX, y: bounds.maxY }]
+  }), [flowerLayout.flowers])
+
   const severityMatchedIds = useMemo(() => {
     if (!severityFocus) return null
     const ids = new Set<string>()
@@ -218,15 +223,15 @@ function App() {
 
   useEffect(() => {
     if (flowerLayout.repos.length === 0) return
-    fitToRepos(flowerLayout.repos, true)
-  }, [flowerLayout.repos, fitToRepos])
+    fitToRepos(mapFitPoints, true)
+  }, [mapFitPoints, fitToRepos])
 
   const handleViewportChange = useCallback(
     (width: number, height: number) => {
       setViewportSize(width, height)
-      if (flowerLayout.repos.length > 0) fitToRepos(flowerLayout.repos)
+      if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints)
     },
-    [fitToRepos, flowerLayout.repos, setViewportSize],
+    [fitToRepos, mapFitPoints, setViewportSize],
   )
 
   /** When the sidebar is closed, reserve its width so focus lands in the map that remains. */
@@ -472,6 +477,8 @@ function App() {
       <div className="app-shell__main">
         <TopNavbar
           activeTab={tab}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(open => !open)}
           onTabChange={handleTabChange}
           onViewSaved={handleViewSaved}
           findingsActive={findingsActive}

@@ -4,6 +4,7 @@
 # MAGIC Run `github_scrape` with the existing bundle. No pip installs are needed.
 # MAGIC For a smoke run: `repo_limit=5`, `minimum_repos=5`, `publish=false`.
 # MAGIC The default run publishes only after collecting 1,000 unique real repos.
+# MAGIC Nightly runs use `repo_source=existing` to refresh only the active demo corpus.
 
 # COMMAND ----------
 
@@ -354,6 +355,33 @@ def write_snapshot(fs, snapshot, records):
     return files
 
 
+def existing_repo_ids(fs, root):
+    """Keep the active demo corpus; never discover replacements during refresh."""
+    repo_ids, seen = [], set()
+    max_bytes = 64 * 1024 * 1024
+    try:
+        for entry in sorted(fs.ls(f"{root}/repos"), key=lambda entry: entry.name):
+            if not entry.name.endswith(".json"):
+                continue
+            content = fs.head(f"{root}/repos/{entry.name}", max_bytes)
+            if len(content.encode("utf-8")) >= max_bytes:
+                raise ValueError("Snapshot file exceeds the read limit")
+            for line in content.splitlines():
+                if not line.strip():
+                    continue
+                repo_id = json.loads(line)["repo_id"]
+                if not isinstance(repo_id, str) or len(repo_id.split("/")) != 2 or not all(repo_id.split("/")):
+                    raise ValueError("Invalid repository ID")
+                if repo_id.lower() not in seen:
+                    seen.add(repo_id.lower())
+                    repo_ids.append(repo_id)
+        if not 1 <= len(repo_ids) <= 1000:
+            raise ValueError("Expected 1–1,000 existing repositories")
+    except Exception:
+        raise CollectionError("Cannot read the existing repository snapshot; active input was not changed.") from None
+    return repo_ids
+
+
 def normalize_repo(repo, pulled_at):
     branch = repo.get("defaultBranchRef") or {}
     history = branch.get("target") or {}
@@ -465,7 +493,7 @@ def publish_snapshot(fs, root, snapshot, expected_count):
 def run_notebook(dbutils):
     defaults = {"volume_path": "/Volumes/hackcamp/raw/github", "repo_limit": "1000",
                 "minimum_repos": "1000", "batch_size": "10", "publish": "true",
-                "fetch_advisories": "true"}
+                "fetch_advisories": "true", "repo_source": "discover"}
     for name, default in defaults.items():
         dbutils.widgets.text(name, default)
     root = dbutils.widgets.get("volume_path").rstrip("/")
@@ -474,6 +502,9 @@ def run_notebook(dbutils):
     batch_size = int(dbutils.widgets.get("batch_size"))
     publish_value = dbutils.widgets.get("publish").lower()
     advisories_value = dbutils.widgets.get("fetch_advisories").lower()
+    repo_source = dbutils.widgets.get("repo_source").lower()
+    if repo_source not in ("discover", "existing"):
+        raise ValueError("repo_source must be discover or existing.")
     if not root.startswith("/Volumes/") or len(root.split("/")) < 5:
         raise ValueError("volume_path must be a Unity Catalog Volume path.")
     if not 1 <= minimum <= limit <= 1000 or not 1 <= batch_size <= 10:
@@ -485,7 +516,7 @@ def run_notebook(dbutils):
     publish = publish_value == "true"
     fetch_advisories = advisories_value == "true"
     publication_gate = limit if limit > 100 else 50
-    if publish and minimum < publication_gate:
+    if publish and repo_source == "discover" and minimum < publication_gate:
         raise ValueError(f"Smoke runs must use publish=false; publishing requires minimum_repos >= {publication_gate}.")
 
     as_of = datetime.now(timezone.utc)
@@ -514,9 +545,16 @@ def run_notebook(dbutils):
             raise AuthenticationError("Set the Databricks secret hackcamp/github_token before scraping.") from None
         if not token.strip():
             raise AuthenticationError("The Databricks GitHub secret is empty.")
-        requested = discover_repo_ids(limit, token)
+        if repo_source == "existing":
+            requested = existing_repo_ids(dbutils.fs, root)
+            # Require every existing repo to refresh before replacing the snapshot.
+            limit = minimum = publication_gate = len(requested)
+            summary.update(target_count=limit, minimum_repos=minimum)
+        else:
+            requested = discover_repo_ids(limit, token)
         summary.update(requested_repos=requested, requested_count=len(requested),
-                       discovery="curated" if limit <= 100 else "curated_plus_language_search")
+                       discovery="existing_snapshot" if repo_source == "existing" else
+                       ("curated" if limit <= 100 else "curated_plus_language_search"))
         records, failures, fatal = collect_repos(
             requested, token, as_of, batch_size, target_count=limit, attempted_repo_ids=attempted
         )
@@ -544,7 +582,7 @@ def run_notebook(dbutils):
         if auth_failed or len(records) < minimum:
             raise CollectionError(f"Collected {len(records)}/{limit} repos; minimum is {minimum}. " + (fatal["reason"] if fatal else "See failures."))
         language_coverage = set(REPOS_BY_LANGUAGE).issubset(languages)
-        publication_ready = len(records) >= publication_gate and language_coverage
+        publication_ready = len(records) >= publication_gate and (repo_source == "existing" or language_coverage)
         meets_f1 = len(records) >= 1000 and language_coverage
         if publish and not publication_ready:
             raise CollectionError(f"Publishing requires {publication_gate} unique real repos covering all five intended languages.")

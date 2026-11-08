@@ -77,6 +77,9 @@ class LocalFS:
             output.write(content)
         return True
 
+    def head(self, path, max_bytes):
+        return self.path(path).read_bytes()[:max_bytes].decode("utf-8")
+
     def mv(self, source, destination, recurse=False):
         target = self.path(destination)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -141,6 +144,42 @@ class NotebookTests(unittest.TestCase):
         self.assertFalse(result["meets_f1"])
         self.assertEqual(result["status"], "smoke_passed")
         self.assertEqual(len(self.fs.ls(self.root + "/repos")), 1)
+
+    def seed_existing(self, count):
+        self.fs.path(self.root + "/repos/old_seed.json").unlink()
+        scrape.write_snapshot(self.fs, self.root, records(count))
+
+    def test_existing_refresh_uses_only_saved_ids_without_discovery(self):
+        self.seed_existing(5)
+        expected = [row["repo_id"] for row in records(5)]
+        with patch.object(scrape, "discover_repo_ids") as discover, \
+                patch.object(scrape, "collect_repos", return_value=(records(5), [], None)) as collect, \
+                redirect_stdout(io.StringIO()):
+            result = scrape.run_notebook(self.dbutils(repo_source="existing"))
+        discover.assert_not_called()
+        self.assertEqual(collect.call_args.args[0], expected)
+        self.assertEqual(collect.call_args.kwargs["target_count"], 5)
+        self.assertEqual(result["minimum_repos"], 5)
+        self.assertTrue(result["published"])
+        self.assertEqual(result["discovery"], "existing_snapshot")
+
+    def test_existing_refresh_cannot_drop_unavailable_repos(self):
+        self.seed_existing(5)
+        original = self.fs.head(self.root + "/repos/repos_0000.json", 1000000)
+        with patch.object(scrape, "collect_repos", return_value=(records(4), [], None)), \
+                redirect_stdout(io.StringIO()), self.assertRaises(scrape.CollectionError):
+            scrape.run_notebook(self.dbutils(repo_source="existing"))
+        self.assertEqual(self.fs.head(self.root + "/repos/repos_0000.json", 1000000), original)
+        self.assertFalse(self.summary()["published"])
+
+    def test_invalid_existing_snapshot_never_falls_back_to_discovery(self):
+        with patch.object(scrape, "discover_repo_ids") as discover, \
+                patch.object(scrape, "collect_repos") as collect, \
+                redirect_stdout(io.StringIO()), self.assertRaises(scrape.CollectionError):
+            scrape.run_notebook(self.dbutils(repo_source="existing"))
+        discover.assert_not_called()
+        collect.assert_not_called()
+        self.assertTrue(self.fs.path(self.root + "/repos/old_seed.json").exists())
 
     def test_below_minimum_retains_old_input_and_saves_failure_summary(self):
         failures = [{"repo_id": repo, "reason": "Unavailable"} for repo in scrape.CURATED_REPOS[49:]]

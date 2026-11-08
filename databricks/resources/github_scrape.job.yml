@@ -8,6 +8,8 @@ resources:
       max_concurrent_runs: 1
       timeout_seconds: 7200
       parameters:
+        - name: repo_source
+          default: "discover"
         - name: volume_path
           default: ${var.volume_path}
         - name: repo_limit
@@ -26,6 +28,7 @@ resources:
             notebook_path: ../src/ingest/scrape_github_repos.py
             source: WORKSPACE
             base_parameters:
+              repo_source: "{{job.parameters.repo_source}}"
               volume_path: "{{job.parameters.volume_path}}"
               repo_limit: "{{job.parameters.repo_limit}}"
               minimum_repos: "{{job.parameters.minimum_repos}}"

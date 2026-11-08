@@ -75,7 +75,7 @@ databricks bundle deploy -t dev --profile school
 databricks bundle run uc_setup -t dev --profile school
 databricks bundle run repo_health -t dev --profile school
 databricks bundle run agent_run -t dev --profile school
-# F10 / ticket #15 — pipeline then agent on a daily schedule
+# Daily GitHub scrape, pipeline refresh, then agent investigation
 databricks bundle run scheduled_autonomy -t dev --profile school
 ```
 
@@ -139,11 +139,20 @@ not rerun scraping or pipeline refreshes. See [the initial 500-repo run](.docs/C
 
 ## Scheduled autonomy (ticket #15)
 
-Lakeflow Job `hackcamp-scheduled-autonomy` chains `repo_health` (bronze→silver→gold)
-into `agent_run` (investigate → findings + traces). Scraping stays a separate
-on-demand job so the schedule reuses the frozen Volume snapshot.
+Lakeflow Job `hackcamp-scheduled-autonomy` chains `github_scrape` (fresh data for
+the existing demo repositories, including security advisories) into a full `repo_health`
+refresh (bronze→silver→gold), then `agent_run` (investigate → findings + traces)
+and summaries for repositories without findings or summaries. Each step waits
+for the previous one to succeed; a failed scrape prevents scoring and investigation.
+The full refresh ensures Auto Loader rereads the scraper's replaced filenames.
+The nightly scrape uses `repo_source=existing`: it reads repository IDs from the
+active snapshot, does not discover new repos, and requires every existing repo
+to refresh successfully before publishing. If the active snapshot is missing or
+invalid, the job stops rather than replacing the demo corpus.
 
-Default schedule: daily 10:00 America/Los_Angeles (`UNPAUSED`). Override
+Default schedule: every night at **23:00 America/Vancouver** (`UNPAUSED`). All existing repos
+receive refreshed source data and scoring; detailed AI investigation still defaults
+to 10 priority repos per run. Security scans remain on demand. Override
 `budget_n` / `model_endpoint` / `experiment_path` as job parameters. Pause from
 the Jobs UI if you need to stop overnight runs.
 
@@ -167,11 +176,18 @@ Links and the confirmed edge list: [`.docs/TICKET16_RUN.md`](.docs/TICKET16_RUN.
 
 ## GitHub scraping (ticket #3)
 
-One on-demand Databricks notebook collects real metrics for a curated corpus
+One Databricks notebook collects real metrics for a curated corpus
 of 1,000 unique repos. It retains the curated controls, discovers additional
 public repos across five languages, and deduplicates canonical IDs. It uses the existing workspace, Volume and bundle, with no
-additional Python packages. Setup requires a valid `school` profile and the
+additional Python packages. It runs first in the daily workflow and can also be
+triggered on demand. Setup requires a valid `school` profile and the
 Databricks secret `hackcamp/github_token`.
+
+Standalone runs default to `repo_source=discover` (curated controls plus language
+search). Pass `--params repo_source=existing` to refresh only the current saved
+repos, as the nightly workflow does. In existing mode, the target and required
+successful count are taken from that snapshot instead of `repo_limit` and
+`minimum_repos`.
 
 From `databricks/`, validate and deploy the bundle, then run a five-repo smoke
 test. The smoke test leaves the current pipeline input untouched.

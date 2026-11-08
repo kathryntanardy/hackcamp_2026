@@ -3,16 +3,15 @@ resources:
     scheduled_autonomy:
       name: hackcamp-scheduled-autonomy
       description: >
-        F10 / ticket #15 — end-to-end autonomy: repo_health pipeline
-        (bronze→silver→gold scoring) then agent investigation → findings.
-        Reuses the frozen Volume snapshot; scraping stays a separate on-demand job.
+        Nightly refresh of existing GitHub repos → repo_health pipeline (bronze→silver→gold scoring)
+        → agent investigation → findings and summaries.
       max_concurrent_runs: 1
       timeout_seconds: 7200
       schedule:
-        # Daily mid-morning Pacific — visible on the Jobs schedule graph for F10.
+        # Every night at 11 PM in the user's Vancouver timezone.
         # Pause from the UI if you need to stop overnight credit burn.
-        quartz_cron_expression: "0 0 10 * * ?"
-        timezone_id: America/Los_Angeles
+        quartz_cron_expression: "0 0 23 * * ?"
+        timezone_id: America/Vancouver
         pause_status: UNPAUSED
       parameters:
         - name: budget_n
@@ -26,11 +25,24 @@ resources:
         - name: experiment_path
           default: /Users/${workspace.current_user.userName}/hackcamp-agent
       tasks:
+        - task_key: scrape_github
+          run_job_task:
+            job_id: ${resources.jobs.github_scrape.id}
+            job_parameters:
+              repo_source: "existing"
+              repo_limit: "1000"
+              minimum_repos: "1000"
+              publish: "true"
+              fetch_advisories: "true"
+
         # Pipeline includes gold scoring — no separate score task needed.
         - task_key: refresh_pipeline
+          depends_on:
+            - task_key: scrape_github
           pipeline_task:
             pipeline_id: ${resources.pipelines.repo_health.id}
-            full_refresh: false
+            # Each scrape replaces stable filenames; reread the entire new snapshot.
+            full_refresh: true
 
         - task_key: run_agent
           depends_on:

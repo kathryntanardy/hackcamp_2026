@@ -79,6 +79,8 @@ the Jobs UI if you need to stop overnight runs.
 databricks bundle run scheduled_autonomy -t dev --profile school --params budget_n=2,max_tool_calls=4
 ```
 
+Proof run: [`.docs/TICKET15_RUN.md`](.docs/TICKET15_RUN.md).
+
 ## Unity Catalog lineage (ticket #16)
 
 Pipeline lineage is bronze → silver → gold. Agent findings are joined to gold so

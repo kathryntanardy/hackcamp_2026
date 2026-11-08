@@ -83,8 +83,9 @@ def build_query(repo_ids):
         owner, name = repo.split("/", 1)
         fields.append(
             f"r{i}: repository(owner: {json.dumps(owner)}, name: {json.dumps(name)}) {{"
-            " nameWithOwner name owner { login } primaryLanguage { name }"
+            " nameWithOwner name owner { login } description primaryLanguage { name }"
             " stargazerCount isArchived pushedAt latestRelease { publishedAt }"
+            " repositoryTopics(first: 20) { nodes { topic { name } } }"
             " issues(states: OPEN) { totalCount }"
             " pullRequests(states: OPEN) { totalCount }"
             " defaultBranchRef { target { ... on Commit {"
@@ -164,6 +165,117 @@ def fetch_batch(repo_ids, token, as_of, *, opener=urllib.request.urlopen, sleep=
         "since90": iso_utc(as_of - timedelta(days=90)),
         "since180": iso_utc(as_of - timedelta(days=180)), "asOf": iso_utc(as_of),
     }, token, opener=opener, sleep=sleep)
+
+
+def rest_request(url, token, *, opener=urllib.request.urlopen, sleep=time.sleep):
+    """GET with the same bounded retry policy as GraphQL (max 3 attempts)."""
+    for attempt in range(3):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "hackcamp-corpus-explorer",
+            },
+            method="GET",
+        )
+        headers = {}
+        try:
+            with opener(request, timeout=30) as response:
+                headers = response.headers
+                return json.load(response), int(getattr(response, "status", 200) or 200)
+        except urllib.error.HTTPError as exc:
+            headers = exc.headers
+            status = exc.code
+            try:
+                exc.close()
+            except Exception:
+                pass
+            if status == 401:
+                raise AuthenticationError("GitHub authentication failed; replace hackcamp/github_token.") from None
+            if status == 404:
+                return [], 404
+            if status == 403 and not (
+                headers.get("Retry-After") or headers.get("X-RateLimit-Remaining") == "0"
+            ):
+                # Permission / feature unavailable — caller marks fetch failed, not empty.
+                return {"error": "forbidden"}, 403
+            if status not in (403, 429, 500, 502, 503, 504):
+                raise CollectionError(f"GitHub request failed with HTTP {status}.") from None
+        except (urllib.error.URLError, TimeoutError, socket.timeout):
+            pass
+        except (ValueError, TypeError):
+            raise CollectionError("GitHub returned an invalid JSON response.") from None
+        if attempt < 2:
+            sleep(retry_delay(headers, attempt))
+    raise CollectionError("GitHub request failed after 3 attempts.")
+
+
+def normalize_advisory(raw):
+    """Keep only the advisory fields needed for F15 CWE buckets."""
+    if not isinstance(raw, dict):
+        return None
+    ghsa = raw.get("ghsa_id")
+    if not ghsa:
+        return None
+    cvss = raw.get("cvss") or {}
+    score = cvss.get("score")
+    if score is None:
+        score = (raw.get("cvss_severities") or {}).get("cvss_v3", {}).get("score")
+    cwes = []
+    for item in raw.get("cwes") or []:
+        if isinstance(item, dict) and item.get("cwe_id"):
+            cwes.append(item["cwe_id"])
+        elif isinstance(item, str):
+            cwes.append(item)
+    for cwe_id in raw.get("cwe_ids") or []:
+        if cwe_id and cwe_id not in cwes:
+            cwes.append(cwe_id)
+    return {
+        "ghsa_id": ghsa,
+        "cve_id": raw.get("cve_id"),
+        "severity": raw.get("severity"),
+        "cvss_score": float(score) if score is not None else None,
+        "cwes": cwes,
+        "summary": raw.get("summary"),
+        "published_at": raw.get("published_at"),
+    }
+
+
+def fetch_repo_advisories(repo_id, token, *, opener=urllib.request.urlopen, sleep=time.sleep):
+    """One REST call per repo. Returns (advisories, status) with status ok|failed."""
+    owner, name = repo_id.split("/", 1)
+    url = f"https://api.github.com/repos/{owner}/{name}/security-advisories?per_page=100"
+    try:
+        payload, status = rest_request(url, token, opener=opener, sleep=sleep)
+    except CollectionError:
+        return [], "failed"
+    if status == 403:
+        return [], "failed"
+    if status == 404:
+        return [], "failed"
+    if not isinstance(payload, list):
+        return [], "failed"
+    advisories = []
+    for item in payload:
+        normalized = normalize_advisory(item)
+        if normalized:
+            advisories.append(normalized)
+    return advisories, "ok"
+
+
+def enrich_advisories(records, token, *, opener=urllib.request.urlopen, sleep=time.sleep, pause_sec=0.2):
+    """Separate pass: never leave advisory_fetch_status as implying 'no advisories' on failure."""
+    for i, record in enumerate(records):
+        if i and pause_sec:
+            sleep(pause_sec)
+        advisories, status = fetch_repo_advisories(
+            record["repo_id"], token, opener=opener, sleep=sleep
+        )
+        record["payload"]["advisories"] = advisories
+        record["payload"]["advisory_fetch_status"] = status
+    return records
 
 
 def search_page(language, token, cursor=None):
@@ -250,11 +362,19 @@ def normalize_repo(repo, pulled_at):
     previous = total - recent if recent is not None and total is not None else None
     if previous is not None and previous < 0:
         raise CollectionError("Inconsistent GitHub commit totals.")
+    topics = []
+    for node in ((repo.get("repositoryTopics") or {}).get("nodes") or []):
+        topic = (node or {}).get("topic") or {}
+        name = topic.get("name")
+        if name and name not in topics:
+            topics.append(name)
     return {
         "repo_id": repo["nameWithOwner"], "pulled_at": pulled_at,
         "payload": {
             "name": repo["name"], "owner": repo["owner"]["login"],
             "language": (repo.get("primaryLanguage") or {}).get("name"),
+            "description": repo.get("description"),
+            "topics": topics,
             "stars": repo["stargazerCount"], "is_archived": repo["isArchived"],
             "pushed_at": repo.get("pushedAt"),
             "last_release_at": (repo.get("latestRelease") or {}).get("publishedAt"),
@@ -263,6 +383,8 @@ def normalize_repo(repo, pulled_at):
             "open_prs": repo["pullRequests"]["totalCount"],
             "contributors": None, "dependents": None,
             "maintainer_reply_rate": None, "top_contributor_share": None,
+            "advisories": [],
+            "advisory_fetch_status": "not_fetched",
             "source": "github_graphql",
         },
     }
@@ -342,7 +464,8 @@ def publish_snapshot(fs, root, snapshot, expected_count):
 
 def run_notebook(dbutils):
     defaults = {"volume_path": "/Volumes/hackcamp/raw/github", "repo_limit": "1000",
-                "minimum_repos": "1000", "batch_size": "10", "publish": "true"}
+                "minimum_repos": "1000", "batch_size": "10", "publish": "true",
+                "fetch_advisories": "true"}
     for name, default in defaults.items():
         dbutils.widgets.text(name, default)
     root = dbutils.widgets.get("volume_path").rstrip("/")
@@ -350,13 +473,17 @@ def run_notebook(dbutils):
     minimum = int(dbutils.widgets.get("minimum_repos"))
     batch_size = int(dbutils.widgets.get("batch_size"))
     publish_value = dbutils.widgets.get("publish").lower()
+    advisories_value = dbutils.widgets.get("fetch_advisories").lower()
     if not root.startswith("/Volumes/") or len(root.split("/")) < 5:
         raise ValueError("volume_path must be a Unity Catalog Volume path.")
     if not 1 <= minimum <= limit <= 1000 or not 1 <= batch_size <= 10:
         raise ValueError("Require 1 <= minimum_repos <= repo_limit <= 1000 and batch_size <= 10.")
     if publish_value not in ("true", "false"):
         raise ValueError("publish must be true or false.")
+    if advisories_value not in ("true", "false"):
+        raise ValueError("fetch_advisories must be true or false.")
     publish = publish_value == "true"
+    fetch_advisories = advisories_value == "true"
     publication_gate = limit if limit > 100 else 50
     if publish and minimum < publication_gate:
         raise ValueError(f"Smoke runs must use publish=false; publishing requires minimum_repos >= {publication_gate}.")
@@ -393,10 +520,26 @@ def run_notebook(dbutils):
         records, failures, fatal = collect_repos(
             requested, token, as_of, batch_size, target_count=limit, attempted_repo_ids=attempted
         )
+        if fetch_advisories and records:
+            enrich_advisories(records, token)
+        elif records:
+            for record in records:
+                record["payload"].setdefault("advisories", [])
+                record["payload"]["advisory_fetch_status"] = "not_fetched"
         files = write_snapshot(dbutils.fs, snapshot, records)
-        summary.update(files=files, file_count=len(files))
         languages = sorted({r["payload"]["language"] for r in records if r["payload"]["language"]})
-        summary["languages"] = languages
+        advisory_ok = sum(1 for r in records if r["payload"].get("advisory_fetch_status") == "ok")
+        advisory_failed = sum(1 for r in records if r["payload"].get("advisory_fetch_status") == "failed")
+        advisory_rows = sum(len(r["payload"].get("advisories") or []) for r in records)
+        summary.update(
+            files=files,
+            file_count=len(files),
+            fetch_advisories=fetch_advisories,
+            languages=languages,
+            advisory_fetch_ok=advisory_ok,
+            advisory_fetch_failed=advisory_failed,
+            advisory_rows=advisory_rows,
+        )
         auth_failed = fatal and fatal["authentication_failed"]
         if auth_failed or len(records) < minimum:
             raise CollectionError(f"Collected {len(records)}/{limit} repos; minimum is {minimum}. " + (fatal["reason"] if fatal else "See failures."))

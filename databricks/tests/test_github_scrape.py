@@ -25,9 +25,11 @@ def repo_payload(repo_id="psf/requests", language="Python"):
     owner, name = repo_id.split("/")
     return {
         "nameWithOwner": repo_id, "name": name, "owner": {"login": owner},
+        "description": f"{name} is a popular open-source project",
         "primaryLanguage": {"name": language}, "stargazerCount": 1000,
         "isArchived": False, "pushedAt": "2026-11-06T00:00:00Z",
         "latestRelease": {"publishedAt": "2026-10-01T00:00:00Z"},
+        "repositoryTopics": {"nodes": [{"topic": {"name": "http"}}, {"topic": {"name": language.lower()}}]},
         "issues": {"totalCount": 7}, "pullRequests": {"totalCount": 3},
         "defaultBranchRef": {"target": {"recent": {"totalCount": 12}, "total": {"totalCount": 32}}},
     }
@@ -96,10 +98,16 @@ class NotebookTests(unittest.TestCase):
         self.fs = LocalFS(self.temp.name)
         self.root = "/Volumes/hackcamp/raw/github"
         self.fs.put(self.root + "/repos/old_seed.json", '{"mock": true}')
+        # Offline notebook tests do not hit the advisories REST pass.
+        self.enrich_patch = patch.object(
+            scrape, "enrich_advisories", side_effect=lambda records, *a, **k: records
+        )
+        self.enrich_patch.start()
+        self.addCleanup(self.enrich_patch.stop)
 
     def dbutils(self, **overrides):
         # Existing small-corpus modes remain supported explicitly.
-        values = {"repo_limit": "100", "minimum_repos": "50", **overrides}
+        values = {"repo_limit": "100", "minimum_repos": "50", "fetch_advisories": "false", **overrides}
 
         def text(name, default):
             values.setdefault(name, default)
@@ -276,6 +284,10 @@ class CollectionTests(unittest.TestCase):
         record = scrape.normalize_repo(repo_payload(), scrape.iso_utc(AS_OF))
         self.assertEqual(record["payload"]["commits_prev_90d"], 20)
         self.assertEqual(record["payload"]["open_issues"], 7)
+        self.assertEqual(record["payload"]["description"], "requests is a popular open-source project")
+        self.assertEqual(record["payload"]["topics"], ["http", "python"])
+        self.assertEqual(record["payload"]["advisory_fetch_status"], "not_fetched")
+        self.assertEqual(record["payload"]["advisories"], [])
         for key in ("contributors", "dependents", "maintainer_reply_rate", "top_contributor_share"):
             self.assertIsNone(record["payload"][key])
         repo = repo_payload()
@@ -283,6 +295,41 @@ class CollectionTests(unittest.TestCase):
         missing = scrape.normalize_repo(repo, scrape.iso_utc(AS_OF))["payload"]
         self.assertIsNone(missing["commits_90d"])
         self.assertIsNone(missing["last_release_at"])
+
+    def test_advisory_pass_keeps_ghsa_fields_and_marks_failures(self):
+        advisory = {
+            "ghsa_id": "GHSA-xxxx-yyyy-zzzz",
+            "cve_id": "CVE-2021-23337",
+            "severity": "high",
+            "cvss": {"score": 7.2},
+            "cwes": [{"cwe_id": "CWE-94"}, {"cwe_id": "CWE-1321"}],
+            "summary": "Command injection in lodash template",
+            "published_at": "2021-02-15T00:00:00Z",
+        }
+        calls = []
+
+        def opener(request, timeout):
+            calls.append(request.full_url)
+            if "lodash" in request.full_url:
+                return Response([advisory])
+            raise urllib.error.HTTPError(request.full_url, 403, "forbidden", {}, None)
+
+        records = [
+            scrape.normalize_repo(repo_payload("lodash/lodash", "JavaScript"), scrape.iso_utc(AS_OF)),
+            scrape.normalize_repo(repo_payload("psf/requests", "Python"), scrape.iso_utc(AS_OF)),
+        ]
+        scrape.enrich_advisories(records, "token", opener=opener, sleep=lambda _: None, pause_sec=0)
+        self.assertEqual(records[0]["payload"]["advisory_fetch_status"], "ok")
+        self.assertEqual(records[0]["payload"]["advisories"][0]["cwes"], ["CWE-94", "CWE-1321"])
+        self.assertEqual(records[0]["payload"]["advisories"][0]["cvss_score"], 7.2)
+        self.assertEqual(records[1]["payload"]["advisory_fetch_status"], "failed")
+        self.assertEqual(records[1]["payload"]["advisories"], [])
+        self.assertTrue(all("/security-advisories" in url for url in calls))
+
+    def test_graphql_query_requests_description_and_topics(self):
+        query = scrape.build_query(["psf/requests"])
+        self.assertIn("description", query)
+        self.assertIn("repositoryTopics", query)
 
     def test_partial_graphql_error_does_not_discard_good_siblings_or_accept_incomplete_repo(self):
         def fetch(*args):

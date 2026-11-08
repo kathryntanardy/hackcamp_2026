@@ -80,7 +80,6 @@ export type RepoSidebarProps = {
   maxCvss?: number | null
   onBack?: () => void
   backLabel?: string
-  onViewSaved?: () => void
   favouriteLists?: FavouriteList[]
   isFavourite?: boolean
   favouriteListsForRepo?: FavouriteList[]
@@ -119,7 +118,7 @@ export function RepoSidebar({
   topics = [],
   vulnBuckets = [],
   description = 'Loading repository…',
-  summary = null,
+  summary: _summary = null,
   lastPush = '—',
   lastRelease = '—',
   lastReleaseDate = '—',
@@ -146,7 +145,6 @@ export function RepoSidebar({
   maxCvss = null,
   onBack,
   backLabel = '← Repositories',
-  onViewSaved,
   favouriteLists = [],
   isFavourite = false,
   favouriteListsForRepo = [],
@@ -210,54 +208,60 @@ export function RepoSidebar({
             </>
           ) : null}
         </div>
-        <button type="button" className="repo-sidebar__saved" onClick={onViewSaved}>
-          <img src={starOutlineIcon} alt="" width={15} height={14} />
-          View Saved
-        </button>
       </header>
 
       <div className="repo-sidebar__title-block">
         <div className="repo-sidebar__title-row">
-          <div className="repo-sidebar__title-left">
-            {repoId && repoId !== '—' && onToggleFavourite && onToggleInList && onCreateFavouriteList ? (
-              <FavouriteStarButton
-                repoId={repoId}
-                saved={isFavourite}
-                lists={favouriteLists}
-                listsForRepo={favouriteListsForRepo}
-                onToggleFavourite={onToggleFavourite}
-                onToggleInList={onToggleInList}
-                onCreateList={onCreateFavouriteList}
-              />
-            ) : (
-              <span className="repo-sidebar__star-btn" aria-hidden="true">
-                <img src={starOutlineIcon} alt="" width={15} height={14} />
-              </span>
-            )}
-            <div className="repo-sidebar__name-wrap">
-              <h1 className="repo-sidebar__name">{name}</h1>
-              <a className="repo-sidebar__ext-link" href={githubUrl} target="_blank" rel="noreferrer" aria-label="Open on GitHub">
-                <img src={arrowUpRightIcon} alt="" width={29} height={29} />
-              </a>
+          {repoId && repoId !== '—' && onToggleFavourite && onToggleInList && onCreateFavouriteList ? (
+            <FavouriteStarButton
+              repoId={repoId}
+              saved={isFavourite}
+              lists={favouriteLists}
+              listsForRepo={favouriteListsForRepo}
+              onToggleFavourite={onToggleFavourite}
+              onToggleInList={onToggleInList}
+              onCreateList={onCreateFavouriteList}
+            />
+          ) : (
+            <span className="repo-sidebar__star-btn" aria-hidden="true">
+              <img src={starOutlineIcon} alt="" width={15} height={14} />
+            </span>
+          )}
+          <div className="repo-sidebar__title-main">
+            <div className="repo-sidebar__name-row">
+              <div className="repo-sidebar__name-wrap">
+                <h1 className="repo-sidebar__name">{name}</h1>
+                <a
+                  className="repo-sidebar__ext-link"
+                  href={githubUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label="Open on GitHub"
+                >
+                  <img src={arrowUpRightIcon} alt="" width={29} height={29} />
+                </a>
+              </div>
+              <p className="repo-sidebar__repo-id">{repoId}</p>
             </div>
+            <div className="repo-sidebar__owner-row">
+              <p className="repo-sidebar__owner">{owner}</p>
+              <div className="chip-row">
+                <span className={`status-chip ${statusClass(status)}`}>
+                  {status.replaceAll('_', ' ')}
+                </span>
+                {isArchived ? <span className="status-chip is-ignored">archived</span> : null}
+                {category ? <span className="chip">{category}</span> : null}
+              </div>
+            </div>
+            {topics.length > 0 ? (
+              <div className="chip-row chip-row--wrap">
+                {topics.slice(0, 8).map((t) => (
+                  <span className="chip chip--quiet" key={t}>{t}</span>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <p className="repo-sidebar__repo-id">{repoId}</p>
         </div>
-        <div className="repo-sidebar__owner-row">
-          <p className="repo-sidebar__owner">{owner}</p>
-          <div className="chip-row">
-            <span className={`status-chip ${statusClass(status)}`}>{status.replaceAll('_', ' ')}</span>
-            {isArchived ? <span className="status-chip is-ignored">archived</span> : null}
-            {category ? <span className="chip">{category}</span> : null}
-          </div>
-        </div>
-        {topics.length > 0 ? (
-          <div className="chip-row chip-row--wrap">
-            {topics.slice(0, 8).map((t) => (
-              <span className="chip chip--quiet" key={t}>{t}</span>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       <nav className="repo-sidebar__tabs" aria-label="Repository sections">
@@ -283,7 +287,6 @@ export function RepoSidebar({
         {tab === 'overview' ? (
           <>
             <p className="repo-sidebar__description">{description}</p>
-            {summary ? <p className="repo-sidebar__summary">{summary}</p> : null}
 
             <section className="section" aria-labelledby="key-signals-heading">
               <h2 id="key-signals-heading" className="section-heading">Key Signals</h2>

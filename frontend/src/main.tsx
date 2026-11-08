@@ -1,7 +1,6 @@
 import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { fetchFindings } from './api/findings'
-import { mapFindingToListItem } from './api/mapFindingToListItem'
 import { mapRepoToListItem } from './api/mapRepoToListItem'
 import { mapRepoToMapPoint } from './api/mapRepoToMapPoint'
 import { mapRepoToSidebar } from './api/mapRepoToSidebar'
@@ -22,6 +21,7 @@ import {
   type RepoListItem,
 } from './components/RepoListSidebar'
 import { RepoSidebar, type RepoSidebarProps } from './components/RepoSidebar'
+import { RepoSidebarSkeleton } from './components/RepoSidebarSkeleton'
 import { SidebarPanel } from './components/SidebarPanel'
 import { TopNavbar, type TopNavbarTab } from './components/TopNavbar'
 import { useFavourites } from './favourites/useFavourites'
@@ -34,6 +34,8 @@ import type { MapRepo } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
 import './styles.css'
 
+const FINDINGS_PAGE_SIZE = 50
+
 function App() {
   const [repos, setRepos] = useState<RepoListItem[]>([])
   const [rawMapRepos, setRawMapRepos] = useState<MapRepo[]>([])
@@ -42,6 +44,8 @@ function App() {
   const mapCamera = useMapCamera()
 
   const [findings, setFindings] = useState<FindingListEntry[]>([])
+  const [findingsTotal, setFindingsTotal] = useState(0)
+  const [findingsPage, setFindingsPage] = useState(1)
   const [findingsError, setFindingsError] = useState<string | null>(null)
   const [findingsLoading, setFindingsLoading] = useState(false)
   const [riskFilter, setRiskFilter] = useState<FindingsRiskFilter>('all')
@@ -58,6 +62,8 @@ function App() {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [listMode, setListMode] = useState<'browse' | 'saved'>('browse')
+  /** True when detail was opened from a list (show back); false for direct map/search picks. */
+  const [detailFromList, setDetailFromList] = useState(false)
   const [severityFocus, setSeverityFocus] = useState<SeverityFocus | null>(null)
   const favourites = useFavourites()
 
@@ -90,11 +96,16 @@ function App() {
     setFindingsLoading(true)
     setFindingsError(null)
     fetchFindings(
-      riskFilter === 'all' ? {} : { risk: riskFilter },
+      {
+        ...(riskFilter === 'all' ? {} : { risk: riskFilter }),
+        limit: FINDINGS_PAGE_SIZE,
+        offset: (findingsPage - 1) * FINDINGS_PAGE_SIZE,
+      },
       controller.signal,
     )
-      .then((rows) => {
-        setFindings(rows)
+      .then((page) => {
+        setFindings(page.items)
+        setFindingsTotal(page.total)
         setFindingsLoading(false)
       })
       .catch((err: unknown) => {
@@ -104,7 +115,7 @@ function App() {
         setFindingsLoading(false)
       })
     return () => controller.abort()
-  }, [tab, riskFilter])
+  }, [tab, riskFilter, findingsPage])
 
   useEffect(() => {
     if (!selectedId) {
@@ -133,11 +144,6 @@ function App() {
       })
     return () => controller.abort()
   }, [selectedId])
-
-  const findingListItems = useMemo(
-    () => findings.map(mapFindingToListItem),
-    [findings],
-  )
 
   const filteredMapRepos = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
@@ -255,9 +261,12 @@ function App() {
     setSelectedId(null)
     setSeverityFocus(null)
     setListMode('browse')
+    setDetailFromList(false)
+    setTab('map')
     setView('list')
   }, [])
 
+  const showDetailBack = detailFromList
   const backLabel =
     listMode === 'saved'
       ? '← Favourites'
@@ -268,84 +277,135 @@ function App() {
           : '← Repositories'
 
   function handleBack() {
-    if (selectedId && severityFocus) {
+    if (selectedId && detailFromList) {
       setSelectedId(null)
+      setDetailFromList(false)
       setView('list')
       return
     }
     if (severityFocus) {
       setSeverityFocus(null)
       setSelectedId(null)
+      setDetailFromList(false)
       setSidebarOpen(false)
       return
     }
     if (selectedId) {
       setSelectedId(null)
-      setSidebarOpen(false)
+      setDetailFromList(false)
+      setView('list')
+      if (tab !== 'findings') setSidebarOpen(false)
       return
     }
     setSidebarOpen(false)
   }
 
   function handleViewSaved() {
+    // Toggle Saved closed when already open.
+    if (listMode === 'saved' && sidebarOpen) {
+      setSelectedId(null)
+      setSeverityFocus(null)
+      setDetailFromList(false)
+      setListMode('browse')
+      setTab('map')
+      setView('list')
+      setSidebarOpen(false)
+      return
+    }
     setSelectedId(null)
     setSeverityFocus(null)
+    setDetailFromList(false)
     setListMode('saved')
+    setTab('map')
     setView('list')
     setSidebarOpen(true)
   }
 
-  function handleSelectRepo(id: string) {
+  function handleSelectRepo(id: string, fromList = false) {
     const insets = sidebarFocusInsets()
     setSelectedId(id)
     setSidebarOpen(true)
+    setDetailFromList(fromList)
+    if (!fromList) {
+      setSeverityFocus(null)
+      if (listMode === 'saved') setListMode('browse')
+    }
     const point = flowerLayout.repos.find((repo) => repo.id === id)
       ?? filteredMapRepos.find((repo) => repo.id === id)
       ?? rawMapRepos.find((repo) => repo.id === id)
     if (point) {
-      if (tab !== 'map') setTab('map')
       focusOnPoint({ x: point.x, y: point.y }, point.importance, insets)
     }
   }
 
   function handleTabChange(next: TopNavbarTab) {
+    // Toggle Findings closed when already open.
+    if (
+      next === 'findings' &&
+      tab === 'findings' &&
+      sidebarOpen &&
+      listMode !== 'saved'
+    ) {
+      setTab('map')
+      setSelectedId(null)
+      setSeverityFocus(null)
+      setDetailFromList(false)
+      setListMode('browse')
+      setSidebarOpen(false)
+      setView('list')
+      return
+    }
     setTab(next)
     setSelectedId(null)
     setSeverityFocus(null)
+    setDetailFromList(false)
     setListMode('browse')
-    // Map starts closed; Findings opens the list sidebar.
+    // Map stays visible; Findings opens the findings drawer.
     setSidebarOpen(next === 'findings')
     setView('list')
   }
+
+  const findingsActive =
+    tab === 'findings' && sidebarOpen && listMode !== 'saved'
+  const savedActive = listMode === 'saved' && sidebarOpen
+
+  const selectedMapRepo =
+    selectedId == null
+      ? null
+      : flowerLayout.repos.find((repo) => repo.id === selectedId)
+        ?? filteredMapRepos.find((repo) => repo.id === selectedId)
+        ?? rawMapRepos.find((repo) => repo.id === selectedId)
+        ?? null
 
   let detailPane = null
   if (selectedId) {
     if (detailLoading) {
       detailPane = (
-        <aside className="repo-sidebar repo-sidebar--status" aria-busy="true">
-          <p>Loading {selectedId}…</p>
-          <button type="button" className="repo-sidebar__back" onClick={handleBack}>
-            {backLabel}
-          </button>
-        </aside>
+        <RepoSidebarSkeleton
+          repoId={selectedId}
+          language={selectedMapRepo?.language}
+          onBack={showDetailBack ? handleBack : undefined}
+          backLabel={backLabel}
+        />
       )
     } else if (detailError) {
       detailPane = (
         <aside className="repo-sidebar repo-sidebar--status" role="alert">
           <p>Could not load {selectedId}.</p>
           <p className="repo-sidebar__error-detail">{detailError}</p>
-          <button type="button" className="repo-sidebar__back" onClick={handleBack}>
-            {backLabel}
-          </button>
+          {showDetailBack ? (
+            <button type="button" className="repo-sidebar__back" onClick={handleBack}>
+              {backLabel}
+            </button>
+          ) : null}
         </aside>
       )
     } else if (detail) {
       detailPane = (
         <RepoSidebar
           {...detail}
-          onBack={handleBack}
+          onBack={showDetailBack ? handleBack : undefined}
           backLabel={backLabel}
-          onViewSaved={handleViewSaved}
           favouriteLists={favourites.lists}
           isFavourite={favourites.isFavourite(detail.repoId ?? '')}
           favouriteListsForRepo={favourites.listsForRepo(detail.repoId ?? '')}
@@ -363,31 +423,28 @@ function App() {
         lists={favourites.lists}
         repos={repos}
         selectedId={selectedId}
-        onBack={() => setListMode('browse')}
-        onSelectRepo={handleSelectRepo}
+        onSelectRepo={(id) => handleSelectRepo(id, true)}
         onCreateList={favourites.createList}
         onRenameList={favourites.renameList}
         onDeleteList={favourites.deleteList}
         onRemoveFromList={favourites.removeFromList}
       />
     ) : tab === 'findings' ? (
-      <RepoListSidebar
-        title="Agent Findings"
-        metaLabel="Investigation findings"
-        scoreLabel="Confidence:"
-        categoryLabel="Category:"
-        emptyLabel="No headline."
-        countLabel={
-          findingsLoading
-            ? undefined
-            : `${findingListItems.length} ${findingListItems.length === 1 ? 'finding' : 'findings'}`
-        }
-        repos={findingListItems}
+      <FindingsView
+        findings={findings}
+        total={findingsTotal}
+        page={findingsPage}
+        pageSize={FINDINGS_PAGE_SIZE}
         loading={findingsLoading}
         error={findingsError}
         selectedId={selectedId}
-        onViewSaved={handleViewSaved}
-        onSelectRepo={handleSelectRepo}
+        riskFilter={riskFilter}
+        onRiskFilterChange={(next) => {
+          setRiskFilter(next)
+          setFindingsPage(1)
+        }}
+        onPageChange={setFindingsPage}
+        onSelectFinding={(id) => handleSelectRepo(id, true)}
       />
     ) : (
       <RepoListSidebar
@@ -401,8 +458,7 @@ function App() {
         loading={loading}
         error={error}
         selectedId={selectedId}
-        onViewSaved={handleViewSaved}
-        onSelectRepo={handleSelectRepo}
+        onSelectRepo={(id) => handleSelectRepo(id, true)}
         countLabel={
           severityFocus || searchQuery.trim()
             ? `${filteredRepos.length} ${filteredRepos.length === 1 ? 'repository' : 'repositories'} found`
@@ -414,45 +470,39 @@ function App() {
   return (
     <div className="app-shell">
       <div className="app-shell__main">
-        <TopNavbar activeTab={tab} onTabChange={handleTabChange} />
-        {tab === 'findings' ? (
-          <FindingsView
-            findings={findings}
-            loading={findingsLoading}
-            error={findingsError}
+        <TopNavbar
+          activeTab={tab}
+          onTabChange={handleTabChange}
+          onViewSaved={handleViewSaved}
+          findingsActive={findingsActive}
+          savedActive={savedActive}
+        />
+        <main className="app-shell__map" aria-label="Repository galaxy map">
+          <GalaxyMap
+            repos={flowerLayout.repos}
+            flowers={flowerLayout.flowers}
+            camera={camera}
             selectedId={selectedId}
-            riskFilter={riskFilter}
-            onRiskFilterChange={setRiskFilter}
-            onSelectFinding={handleSelectRepo}
+            pinnedSeverity={severityFocus}
+            onSelectRepo={handleSelectRepo}
+            onPinnedSeverityChange={handlePinnedSeverityChange}
+            onBackgroundClick={handleBackgroundClick}
+            onViewportChange={handleViewportChange}
+            onPan={pan}
+            onZoomByFactor={zoomByFactor}
+            onZoomToFlower={handleZoomToFlower}
           />
-        ) : (
-          <main className="app-shell__map" aria-label="Repository galaxy map">
-            <GalaxyMap
-              repos={flowerLayout.repos}
-              flowers={flowerLayout.flowers}
-              camera={camera}
-              selectedId={selectedId}
-              pinnedSeverity={severityFocus}
-              onSelectRepo={handleSelectRepo}
-              onPinnedSeverityChange={handlePinnedSeverityChange}
-              onBackgroundClick={handleBackgroundClick}
-              onViewportChange={handleViewportChange}
-              onPan={pan}
-              onZoomByFactor={zoomByFactor}
-              onZoomToFlower={handleZoomToFlower}
-            />
-            <MapSearchBar
-              query={searchQuery}
-              scope={searchScope}
-              results={filteredRepos}
-              onQueryChange={setSearchQuery}
-              onScopeChange={setSearchScope}
-              onSelectResult={handleSelectRepo}
-              onZoomIn={() => zoomIn()}
-              onZoomOut={() => zoomOut()}
-            />
-          </main>
-        )}
+          <MapSearchBar
+            query={searchQuery}
+            scope={searchScope}
+            results={filteredRepos}
+            onQueryChange={setSearchQuery}
+            onScopeChange={setSearchScope}
+            onSelectResult={handleSelectRepo}
+            onZoomIn={() => zoomIn()}
+            onZoomOut={() => zoomOut()}
+          />
+        </main>
       </div>
       <SidebarPanel
         open={sidebarOpen}

@@ -21,7 +21,7 @@ The question: **which open-source packages that many people depend on are losing
 | Who | What they want | What we show them |
 | --- | --- | --- |
 | Engineering lead picking dependencies | "Is this library safe to bet on?" | The repo's health, the agent's verdict, a healthier alternative |
-| Open-source program office or security team | A watchlist of risky dependencies | The Findings page, sorted by severity, with what changed since the last run |
+| Open-source program office or security team | A watchlist of risky dependencies | The Findings drawer, sorted by severity, with what changed since the last run |
 | Funders and maintainers | Which important projects need help | Critical, at-risk stars on the map |
 | **Hackathon judges (Best Use of Databricks)** | Deep, essential use of the platform | Live traces, Unity Catalog lineage, the eval score, the scheduled job |
 
@@ -36,7 +36,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 - A tool-calling agent that triages and investigates flagged repos and writes structured verdicts
 - Agent tools registered as Unity Catalog functions
 - MLflow traces for every investigation, viewable from the app
-- A galaxy map, a findings page and a repo drawer, hosted on Databricks Apps
+- A galaxy map with a Findings drawer and a repo drawer, hosted on Databricks Apps
 - An eval run on a labelled set with a reported score
 
 **Should-have (P1, once the must-haves work)**
@@ -71,7 +71,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | F5 | Structured verdict | P0 must | Each investigation writes one `findings` row matching the schema in Agent design, with every evidence item pointing to a tool result |
 | F6 | Reasoning trace | P0 must | Every investigation has an MLflow trace, and the repo drawer shows its tool calls and results in order |
 | F7 | Galaxy map | P0 must | Renders eligible repos as nodes in vulnerability-bucket flowers, sized by importance; each flower label shows High / Med / Low counts from maintainer health status (`at_risk` / `watchlist` / `healthy`), not advisory severity—High means most vulnerable; hover a level highlights matching nodes, click zooms to fit that flower centered in the visible map (sidebar-aware); the repo drawer starts closed—click a node to open that repo, click a flower category or High/Med/Low chip to open a filtered list for that bucket/band, click empty map (not a drag) to close; deprecated repos have no node; 1,000 nodes render smoothly |
-| F8 | Findings page | P0 must | Lists findings sorted by severity, then importance; filters by language and risk; deprecated repos and historical findings for them are excluded; a row click opens that repo on the map |
+| F8 | Findings drawer | P0 must | The Findings tab opens a slide-out drawer over the map listing findings sorted by severity, then importance; filters by language and risk; the list is server-paginated at 50 rows per page (`limit`/`offset` on `/api/findings`); deprecated repos and historical findings for them are excluded; a row click selects that repo on the map and opens its detail in the drawer |
 | F9 | Evaluation | P1 should | The agent runs on 30–50 labelled repos; accuracy and false-positive rate are logged in MLflow and shown in the pitch |
 | F10 | Scheduled autonomy | P2 stretch | The `scheduled_autonomy` Lakeflow Job runs daily at 10:00 Pacific: the `repo_health` pipeline refresh, then the agent run, on the frozen snapshot. Scraping stays a separate on-demand job; recurring scraping is not required within the 20-hour build |
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
@@ -82,7 +82,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 
 ## Pages and UX
 
-Two pages plus a slide-out drawer. Built in React with a canvas map.
+One map screen plus slide-out drawers. Built in React with a canvas map.
 
 **Galaxy Map (`/`)**: the hero screen
 
@@ -90,19 +90,21 @@ Two pages plus a slide-out drawer. Built in React with a canvas map.
 - Node size = importance, the log of dependents (or stars if dependents are missing). A pulsing ring marks eligible repos the agent investigated in the latest run. Deprecated repos are absent, including when historical rows still exist.
 - Each flower label lists **High / Med / Low** counts from **maintainer health status**, not GitHub advisory severity: High = `at_risk`, Med = `watchlist`, Low = `healthy`. Hovering a level highlights matching nodes on that flower; clicking a level zooms so the whole flower fits the viewport and opens the drawer filtered to that band. Clicking the category name opens the drawer filtered to the whole flower. Users looking for vulnerable packages use High.
 - Advisory severity and CVSS stay on the repo drawer and Findings sorts; they do not drive the map High / Med / Low chips.
-- The drawer starts closed. Click a node to slide it open on that repo and center the star in the remaining map (not under the drawer); click a flower to open a filtered list and frame that flower the same way. Click empty map whitespace to close it (a pan/drag does not close). Findings tab still opens the list drawer by default.
+- The drawer starts closed. Click a node to slide it open on that repo and center the star in the remaining map (not under the drawer); click a flower to open a filtered list and frame that flower the same way. Click empty map whitespace to close it (a pan/drag does not close). The Findings tab keeps the map visible and opens the Findings drawer by default.
 - No map chrome for corpus totals or facet filters; the navbar is brand and page tabs only. Deprecated repos stay out of the map and list by serving rules, with no Ignored tab, chip or opt-in display.
 - Search box (F14): a natural-language query zooms to the repos Vector Search matches (one star: zoom and open the drawer; several: zoom to fit, dim the rest). It is a search, not a chatbot.
 - Hover shows a tooltip with the name, score and status. Click opens that repo in the drawer.
 
-**Findings (`/findings`)**: the agent's output
+**Findings drawer**: the agent's output over the map
 
+- Opened by the Findings tab; the galaxy map stays underneath.
 - One row per finding: repo, risk level, confidence, a one-line headline, investigated time, a "new" badge.
+- Server-paginated: the API returns 50 findings per page with a total count; changing page or risk filter fetches that slice only.
 - Sorted by severity, then importance by default; other sorts: health score, importance, days since release, advisory count / max severity / max CVSS, programming language. Filters for language, category, vulnerability bucket and risk. Only eligible repos appear; deprecated repos cannot be restored through a filter, search result or historical finding.
-- Clicking a row jumps to the map with that star selected and the drawer open.
+- Clicking a row selects that star on the map and opens its detail in the same drawer stack; back returns to the findings list.
 - Header strip: latest run stats, i.e. eligible repos triaged, investigated and tool calls made. Exclusion counts remain in operational logs rather than product risk totals.
 
-**Repo drawer**: opens from either page
+**Repo drawer**: opens from the map or from a Findings row
 
 - Header: name, GitHub link, language, stars, dependents.
 - Health gauge plus the collected metrics: days since last release, commits in the last 90 days vs the previous 90, and open issues/PR counts. Unanswered PRs, maintainer-response and contributor-share metrics show as unavailable until collected; missing data is not evidence of abandonment.

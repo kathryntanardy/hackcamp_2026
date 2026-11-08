@@ -8,7 +8,6 @@ export type FavouritesSidebarProps = {
   lists: FavouriteList[]
   repos: RepoListItem[]
   selectedId?: string | null
-  onBack: () => void
   onSelectRepo: (id: string) => void
   onCreateList: (name: string) => string
   onRenameList: (listId: string, name: string) => void
@@ -20,7 +19,6 @@ export function FavouritesSidebar({
   lists,
   repos,
   selectedId = null,
-  onBack,
   onSelectRepo,
   onCreateList,
   onRenameList,
@@ -89,9 +87,6 @@ export function FavouritesSidebar({
   return (
     <aside className="favourites-sidebar" aria-label="Saved repositories">
       <header className="favourites-sidebar__top">
-        <button type="button" className="favourites-sidebar__back" onClick={onBack}>
-          ← Back
-        </button>
         <div className="favourites-sidebar__saved-badge">
           <img src={starViewSavedIcon} alt="" width={15} height={14} />
           Saved

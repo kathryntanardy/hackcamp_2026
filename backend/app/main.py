@@ -177,23 +177,36 @@ ORDER BY published_at DESC NULLS LAST""", {"repo_id": repo_id})
 
 
 @app.get("/api/findings")
-def list_findings(language: str | None = None, risk: str | None = None) -> list[dict]:
+def list_findings(
+    language: str | None = None,
+    risk: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """Paginated findings list. limit/offset are clamped server-side."""
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    # LIMIT/OFFSET as literals — warehouse drivers often reject bound values here.
     rows = query(f"""
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
 SELECT f.repo_id, g.name, g.language, g.importance, g.health_score,
   g.category, to_json(g.vuln_buckets) AS vuln_buckets, {FINDING_COLS},
-  f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run
+  f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run,
+  COUNT(*) OVER() AS total_count
 FROM latest_finding f LEFT JOIN gold g ON g.repo_id = f.repo_id
 WHERE coalesce(f.risk_level, '') <> 'ignored'
   AND (:language IS NULL OR g.language = :language)
   AND (:risk IS NULL OR f.risk_level = :risk)
-ORDER BY {SEVERITY}, g.importance DESC""", {"language": language, "risk": risk})
+ORDER BY {SEVERITY}, g.importance DESC
+LIMIT {limit} OFFSET {offset}""", {"language": language, "risk": risk})
     out = []
     for r in rows:
         row = _finding(r)
+        row.pop("total_count", None)
         row["vuln_buckets"] = _as_str_list(row.get("vuln_buckets"))
         out.append(row)
-    return out
+    total = int(rows[0]["total_count"]) if rows else 0
+    return {"items": out, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/findings/{repo_id:path}/trace")

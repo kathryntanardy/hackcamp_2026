@@ -273,6 +273,9 @@ export function GalaxyMap({
           if (!drag.current) clearHover()
         }}
         onWheel={onWheel}
+        onContextMenu={(event) => event.preventDefault()}
+        onDragStart={(event) => event.preventDefault()}
+        draggable={false}
       />
       {flowers.map((flower) => {
         const screen = worldToScreen(flower.center, camera)

@@ -58,7 +58,7 @@ function blockFlowerInteract(event: MouseEvent) {
   event.preventDefault()
 }
 
-function AsciiBloomDescription() {
+export function AsciiBloomDescription({ label = 'Loading repository' }: { label?: string }) {
   const [frame, setFrame] = useState(0)
   const [animate, setAnimate] = useState(true)
 
@@ -87,7 +87,7 @@ function AsciiBloomDescription() {
       onContextMenu={blockFlowerInteract}
       onDragStart={blockFlowerInteract}
     >
-      <span className="visually-hidden">Loading repository</span>
+      <span className="visually-hidden">{label}</span>
       <pre
         className="ascii-loader__art"
         aria-hidden="true"

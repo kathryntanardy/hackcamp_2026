@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { loadOrRunScan, type ScanFinding, type SecurityScan } from '../api/scans'
+import { AsciiBloomDescription } from './RepoSidebarSkeleton'
 
 function severityClass(severity: string | null | undefined): string {
   const s = (severity || '').toLowerCase()
@@ -139,9 +140,22 @@ export function SecurityScanPanel({ repoId }: { repoId: string }) {
       </div>
 
       {loading ? (
-        <p className="empty-note">
-          Gemini is checking this repo's GitHub advisories and source code… this takes 30–60 seconds.
-        </p>
+        <>
+          <AsciiBloomDescription label="Running security scan" />
+          <p className="empty-note">
+            Gemini is checking this repo's GitHub advisories and source code… this takes 30–60 seconds.
+          </p>
+          <ul className="advisory-list" aria-hidden="true">
+            {Array.from({ length: 3 }, (_, i) => (
+              <li className="advisory-card skeleton-card" key={i}>
+                <span className="skeleton-bar skeleton-bar--chip" />
+                <span className="skeleton-bar skeleton-bar--line-short" />
+                <span className="skeleton-bar skeleton-bar--line" />
+                <span className="skeleton-bar skeleton-bar--line" />
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
       {error ? <p className="empty-note">Scan failed: {error}</p> : null}
 

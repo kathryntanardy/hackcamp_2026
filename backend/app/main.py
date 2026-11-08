@@ -333,6 +333,8 @@ def run_scan(repo_id: str) -> dict:
     try:
         result = scan.scan_repo(repo_id)
     except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429 and "generativelanguage" in e.request.url.host:
+            raise HTTPException(429, scan.quota_message(e.response))
         raise HTTPException(502, f"upstream error {e.response.status_code} from {e.request.url.host}: "
                                  f"{e.response.text[:300]}")
     except (httpx.HTTPError, RuntimeError, KeyError, ValueError) as e:

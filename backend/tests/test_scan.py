@@ -341,3 +341,58 @@ def test_report_url_prefers_private_reporting():
     assert scan.report_url("a/b", client(200, {"enabled": True})) == "https://github.com/a/b/security/advisories/new"
     assert scan.report_url("a/b", client(200, {"enabled": False})) == "https://github.com/a/b/security/policy"
     assert scan.report_url("a/b", client(404, {})) == "https://github.com/a/b/security/policy"
+
+
+def _adv(ghsa, summary, patched=None, description="", functions=()):
+    return scan.normalize_advisory({"ghsa_id": ghsa, "summary": summary, "description": description,
+                                    "vulnerabilities": [{"package": {"name": "p"}, "patched_versions": patched,
+                                                         "vulnerable_functions": list(functions)}]})
+
+
+def test_advisory_identifiers_from_unpatched_only():
+    advs = [_adv("G1", "safe_join can produce unsafe paths", description="Uses `os.path.isabs` and `pattern`."),
+            _adv("G2", "AiragMcpController saveAndSync command injection in mcp.go"),
+            _adv("G3", "fixed_already in parse_x", patched="1.2"),
+            _adv("G4", "OpenAI token eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9xxxxxxxx leak", functions=["pkg.LoadModel"])]
+    assert scan.advisory_identifiers(advs, limit=10) == [
+        "LoadModel", "safe_join", "AiragMcpController", "saveAndSync", "mcp.go"]  # plain `isabs`/`pattern` skipped
+    assert len(scan.advisory_identifiers(advs)) == scan.MAX_CODE_SEARCHES
+
+
+def test_locate_files_uses_code_search_and_stops_on_rate_limit():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.params["q"])
+        if len(calls) == 1:
+            return httpx.Response(200, json={"items": [{"path": "src/security.py"}, {"path": "src/utils.py"}]})
+        return httpx.Response(403)
+    c = httpx.Client(transport=httpx.MockTransport(handler))
+    assert scan.locate_files("a/b", ["safe_join", "other", "third"], c) == ["src/security.py", "src/utils.py"]
+    assert calls == ['"safe_join" repo:a/b', '"other" repo:a/b']  # stopped after the 403
+
+
+def test_pick_files_puts_located_files_first():
+    tree = [{"type": "blob", "path": "src/auth/jwt.py", "size": 5000},
+            {"type": "blob", "path": "src/werkzeug/security.py", "size": 5000},
+            {"type": "blob", "path": "CHANGES.rst", "size": 5000}]
+    picked = scan.pick_files(tree, limit=2, priority=["CHANGES.rst", "src/werkzeug/security.py"])
+    assert picked == ["src/werkzeug/security.py", "src/auth/jwt.py"]  # non-source priority path ignored
+
+
+def test_fetch_advisories_keeps_unpatched_within_cap(monkeypatch):
+    monkeypatch.setattr(scan, "MAX_ADVISORIES", 2)
+    raw = [{**ADVISORY, "ghsa_id": f"P{i}"} for i in range(3)]
+    raw.append({**ADVISORY, "ghsa_id": "U1", "vulnerabilities": [{"package": {"name": "b"}, "patched_versions": None}]})
+    c = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json=raw)))
+    assert [a["ghsa_id"] for a in scan.fetch_advisories("a/b", c)] == ["U1", "P0"]
+
+
+def test_quota_message():
+    body = {"error": {"code": 429, "message": "You exceeded your current quota...", "details": [
+        {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [
+            {"quotaId": "GenerateContentInputTokensPerModelPerMinute-FreeTier"}]},
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "41s"}]}}
+    assert scan.quota_message(httpx.Response(429, json=body)) == (
+        "Gemini quota exceeded (GenerateContentInputTokensPerModelPerMinute-FreeTier). Retry in about 41s.")
+    assert scan.quota_message(httpx.Response(429, text="nope")) == "Gemini quota exceeded. Try again later."

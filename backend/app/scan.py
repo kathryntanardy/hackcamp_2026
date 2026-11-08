@@ -21,6 +21,7 @@ DEFAULT_MODEL = "gemini-3.6-flash"
 
 MAX_FILES = 40  # code review
 MAX_ADVISORY_FILES = 15  # advisory call: the advisory-hinted files rank first
+MAX_CODE_SEARCHES = 4  # GitHub code search allows 10 requests/minute per token
 MAX_ADVISORIES = 10
 MAX_ADVISORY_DESC = 3000
 MAX_OUTPUT_TOKENS = 16384
@@ -224,16 +225,21 @@ def score_path(path: str, size: int, hints: tuple[str, ...] = ()) -> float:
     return score + 0.5 if score else 0.1  # plain source files only fill leftover slots
 
 
-def pick_files(tree: list[dict], limit: int = MAX_FILES, hints: tuple[str, ...] = ()) -> list[str]:
+def pick_files(tree: list[dict], limit: int = MAX_FILES, hints: tuple[str, ...] = (),
+               priority: list[str] = ()) -> list[str]:
+    """Priority paths (code-search hits for advisory identifiers) first, then by path score."""
     scored = [(score_path(t["path"], t.get("size", 0), hints), t["path"])
               for t in tree if t.get("type") == "blob"]
     scored = [s for s in scored if s[0] > 0]
+    eligible = {p for _, p in scored}
+    first = [p for p in dict.fromkeys(priority) if p in eligible]
     scored.sort(key=lambda s: (-s[0], len(s[1])))
-    return [p for _, p in scored[:limit]]
+    rest = [p for _, p in scored if p not in first]
+    return (first + rest)[:limit]
 
 
-def fetch_files(repo_id: str, client: httpx.Client,
-                hints: tuple[str, ...] = ()) -> tuple[str, dict[str, str]]:
+def fetch_files(repo_id: str, client: httpx.Client, hints: tuple[str, ...] = (),
+                priority: list[str] = ()) -> tuple[str, dict[str, str]]:
     """Return (commit_sha, {path: content}) for the chosen files on the default branch."""
     repo = client.get(f"{GITHUB_API}/repos/{repo_id}")
     repo.raise_for_status()
@@ -242,7 +248,7 @@ def fetch_files(repo_id: str, client: httpx.Client,
     tree.raise_for_status()
     body = tree.json()
     files, total = {}, 0
-    for path in pick_files(body["tree"], hints=hints):
+    for path in pick_files(body["tree"], hints=hints, priority=priority):
         raw = client.get(f"https://raw.githubusercontent.com/{repo_id}/{body['sha']}/{path}")
         if raw.status_code != 200:
             continue
@@ -279,7 +285,10 @@ def fetch_advisories(repo_id: str, client: httpx.Client) -> list[dict]:
         return []
     resp.raise_for_status()
     items = [a for a in resp.json() if a.get("ghsa_id") and a.get("state", "published") == "published"]
-    return [normalize_advisory(a) for a in items[:MAX_ADVISORIES]]
+    advisories = [normalize_advisory(a) for a in items]
+    # Unpatched first: they're the ones a code fix can help with, so they must survive the cap.
+    advisories.sort(key=lambda a: not is_unpatched(a))
+    return advisories[:MAX_ADVISORIES]
 
 
 def report_url(repo_id: str, client: httpx.Client) -> str:
@@ -302,6 +311,56 @@ def advisory_hints(advisories: list[dict]) -> tuple[str, ...]:
             for fn in pkg["vulnerable_functions"]:
                 hints.update(w.lower() for w in re.split(r"[^A-Za-z0-9]+", fn) if len(w) >= 4)
     return tuple(sorted(hints))
+
+
+_NOT_IDENTS = re.compile(r"^(GHSA|CVE|CWE)\b|^v?\d", re.IGNORECASE)
+_BRANDS = {"github", "gitlab", "javascript", "typescript", "openai", "postgresql", "mysql", "mongodb",
+           "graphql", "fastapi", "nodejs", "macos", "iphone", "ipados", "youtube", "webassembly"}
+_IDENT = re.compile(
+    r"\b([A-Za-z]\w*_\w+)\b"                          # snake_case
+    r"|\b([a-z]+[A-Z]\w*|[A-Z][a-z0-9]+[A-Z][a-z]\w*)\b"  # camelCase / CamelCase
+    r"|\b([\w-]+\.(?:py|go|js|ts|tsx|jsx|java|kt|rs|rb|php|c|cc|cpp|h|cs|swift))\b")  # file.ext
+
+
+def is_unpatched(advisory: dict) -> bool:
+    return not any(p["patched_versions"] for p in advisory["packages"])
+
+
+def advisory_identifiers(advisories: list[dict], limit: int = MAX_CODE_SEARCHES) -> list[str]:
+    """Code names to search for, from unpatched advisories only (they're the ones that get a
+    code fix): vulnerable functions first, then names mentioned in the summary/description."""
+    found = []
+    for a in filter(is_unpatched, advisories):
+        found += [fn for p in a["packages"] for fn in p["vulnerable_functions"]]
+    for field in ("summary", "description"):
+        for a in filter(is_unpatched, advisories):
+            # Backticked text only counts if it is itself an identifier (not `pattern`, `--pre=x`).
+            text = re.sub(r"`([^`]*)`", r" \1 ", a[field] or "")
+            for m in _IDENT.finditer(text):
+                found.append(next(g for g in m.groups() if g))
+    out = []
+    for name in found:
+        name = re.split(r"\.|::|#", name.strip("()"))[-1] if not re.search(r"\.\w{1,4}$", name) else name
+        name = name.strip("()")
+        if (4 <= len(name) <= 40 and not _NOT_IDENTS.search(name) and name.lower() not in _BRANDS
+                and name not in out):
+            out.append(name)
+    return out[:limit]
+
+
+def locate_files(repo_id: str, identifiers: list[str], client: httpx.Client) -> list[str]:
+    """Paths whose code mentions the identifiers, via GitHub code search (needs a token).
+    Best effort: stops quietly on auth or rate-limit errors."""
+    paths = []
+    for ident in identifiers:
+        try:
+            resp = client.get(f"{GITHUB_API}/search/code", params={"q": f'"{ident}" repo:{repo_id}'})
+        except httpx.HTTPError:
+            break
+        if resp.status_code != 200:
+            break
+        paths += [item["path"] for item in resp.json().get("items", [])[:3]]
+    return list(dict.fromkeys(paths))
 
 
 def _file_blocks(files: dict[str, str]) -> str:
@@ -350,6 +409,18 @@ def ask_gemini(prompt: str, client: httpx.Client, model: str, schema: dict = RES
     result = json.loads(text)
     result["findings"] = [{k: _strip_echo(v) for k, v in f.items()} for f in result.get("findings", [])]
     return result
+
+
+def quota_message(resp: httpx.Response) -> str:
+    """Short, readable reason for a Gemini 429: which quota ran out and when to retry."""
+    try:
+        details = resp.json()["error"].get("details", [])
+    except (ValueError, KeyError, AttributeError):
+        details = []
+    quotas = [v.get("quotaId") for d in details for v in d.get("violations", []) if v.get("quotaId")]
+    retry = next((d.get("retryDelay") for d in details if d.get("retryDelay")), None)
+    msg = "Gemini quota exceeded" + (f" ({', '.join(dict.fromkeys(quotas))})" if quotas else "")
+    return msg + (f". Retry in about {retry}." if retry else ". Try again later.")
 
 
 def _strip_echo(value):
@@ -406,7 +477,8 @@ def scan_repo(repo_id: str) -> dict:
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
     with httpx.Client(headers=_github_headers(), timeout=30, follow_redirects=True) as gh:
         advisories = fetch_advisories(repo_id, gh)
-        sha, files = fetch_files(repo_id, gh, advisory_hints(advisories))
+        located = locate_files(repo_id, advisory_identifiers(advisories), gh)
+        sha, files = fetch_files(repo_id, gh, advisory_hints(advisories), located)
         report = report_url(repo_id, gh)
     base = {"repo_id": repo_id, "commit_sha": sha, "model": model, "files": list(files),
             "mode": "advisories+code" if advisories else "code",

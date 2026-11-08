@@ -54,3 +54,14 @@ CREATE TABLE IF NOT EXISTS hackcamp.agent.eval_labels (
   notes STRING
 ) USING DELTA
 COMMENT 'Ground-truth labels for agent evaluation';
+
+-- On-demand Gemini code scans from the app (POST /api/scans/{repo_id}); files/findings are JSON.
+CREATE TABLE IF NOT EXISTS hackcamp.agent.code_scans (
+  repo_id STRING NOT NULL,
+  commit_sha STRING,
+  model STRING,
+  files STRING,
+  summary STRING,
+  findings STRING,
+  scanned_at TIMESTAMP
+);

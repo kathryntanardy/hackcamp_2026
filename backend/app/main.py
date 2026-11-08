@@ -2,10 +2,16 @@
 
 import json
 
+import httpx
+from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from app import scan
 from app.db import query
+
+# Nearest .env walking up from backend/app (backend/.env, then repo root). Real env vars win.
+load_dotenv(find_dotenv())
 
 app = FastAPI(title="Open-Source Corpus Explorer API", version="0.1.0")
 
@@ -149,3 +155,46 @@ FROM hackcamp.agent.runs ORDER BY started_at DESC LIMIT 1""")
     if not rows:
         raise HTTPException(404, "no agent runs yet")
     return rows[0]
+
+
+SCANS_DDL = """CREATE TABLE IF NOT EXISTS hackcamp.agent.code_scans (
+  repo_id STRING NOT NULL, commit_sha STRING, model STRING, files STRING,
+  summary STRING, findings STRING, scanned_at TIMESTAMP)"""
+
+
+def _scan_row(r: dict) -> dict:
+    return {**r, "files": json.loads(r["files"] or "[]"),
+            "findings": scan.enrich(json.loads(r["findings"] or "[]"), r["repo_id"], r["commit_sha"])}
+
+
+@app.get("/api/scans/{repo_id:path}")
+def get_scan(repo_id: str) -> dict:
+    """Latest stored Gemini code scan for a repo."""
+    rows = query("""
+SELECT repo_id, commit_sha, model, files, summary, findings, scanned_at
+FROM hackcamp.agent.code_scans WHERE repo_id = :repo_id
+ORDER BY scanned_at DESC LIMIT 1""", {"repo_id": repo_id})
+    if not rows:
+        raise HTTPException(404, f"no scan for {repo_id}")
+    return _scan_row(rows[0])
+
+
+@app.post("/api/scans/{repo_id:path}")
+def run_scan(repo_id: str) -> dict:
+    """Run a fresh Gemini scan of the repo's riskiest files and store it."""
+    if not query(f"WITH {GOLD} SELECT repo_id FROM gold WHERE repo_id = :repo_id", {"repo_id": repo_id}):
+        raise HTTPException(404, f"repo {repo_id} not found")
+    try:
+        result = scan.scan_repo(repo_id)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(502, f"upstream error {e.response.status_code} from {e.request.url.host}: "
+                                 f"{e.response.text[:300]}")
+    except (httpx.HTTPError, RuntimeError, KeyError, ValueError) as e:
+        raise HTTPException(502, f"scan failed: {e}")
+    query(SCANS_DDL)
+    row = {"repo_id": repo_id, "commit_sha": result["commit_sha"], "model": result["model"],
+           "files": json.dumps(result["files"]), "summary": result["summary"],
+           "findings": json.dumps(result["findings"])}
+    query("""INSERT INTO hackcamp.agent.code_scans
+VALUES (:repo_id, :commit_sha, :model, :files, :summary, :findings, current_timestamp())""", row)
+    return get_scan(repo_id)

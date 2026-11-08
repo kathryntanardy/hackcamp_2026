@@ -1,0 +1,7 @@
+> Source table built: 970 eligible repos. Now the endpoint + index script.
+
+why only 970?
+
+---
+
+assign the ticket to me please

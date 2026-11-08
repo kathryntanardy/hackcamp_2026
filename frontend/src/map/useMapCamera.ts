@@ -9,6 +9,8 @@ import {
   focusOn,
   lerpCamera,
   maxScaleForViewport,
+  minScaleForViewport,
+  zoomForViewport,
   panBy,
   zoomAt,
   type ViewInsets,
@@ -51,7 +53,7 @@ export function useMapCamera() {
   useEffect(() => {
     const { width, height } = viewport.current
     if (width > 1 && height > 1) {
-      setCamera((prev) => zoomAt(prev, contentCenter(width, height), prev.scale, maxScaleForViewport(width, height)))
+      setCamera((prev) => zoomAt(prev, contentCenter(width, height), prev.scale, maxScaleForViewport(width, height), minScaleForViewport(width, height)))
     }
   }, [])
 
@@ -63,12 +65,12 @@ export function useMapCamera() {
       const { width, height } = viewport.current
       const ceiling = maxScaleForViewport(width, height)
       if (t >= 1) {
-        setCamera(zoomAt(current.to, contentCenter(width, height), current.to.scale, ceiling))
+        setCamera(zoomAt(current.to, contentCenter(width, height), current.to.scale, ceiling, minScaleForViewport(width, height)))
         anim.current = null
         raf.current = 0
         return
       }
-      setCamera(lerpCamera(current.from, current.to, t, ceiling))
+      setCamera(lerpCamera(current.from, current.to, t, ceiling, minScaleForViewport(width, height)))
       raf.current = requestAnimationFrame(step)
     }
     if (raf.current) cancelAnimationFrame(raf.current)
@@ -79,7 +81,7 @@ export function useMapCamera() {
     (to: MapCamera, duration = FOCUS_DURATION_MS) => {
       anim.current = {
         from: { ...cameraRef.current },
-        to: { ...to, scale: clampScale(to.scale, maxScaleForViewport(viewport.current.width, viewport.current.height)) },
+        to: { ...to, scale: clampScale(to.scale, maxScaleForViewport(viewport.current.width, viewport.current.height), minScaleForViewport(viewport.current.width, viewport.current.height)) },
         start: performance.now(),
         duration,
       }
@@ -100,12 +102,12 @@ export function useMapCamera() {
         const target = fitBounds(frame.bounds, width, height, frame.padding)
         if (anim.current) {
           anim.current.to = target
-          return zoomAt(prev, contentCenter(width, height), prev.scale, ceiling)
+          return zoomAt(prev, contentCenter(width, height), prev.scale, ceiling, minScaleForViewport(width, height))
         }
         return target
       }
       const center = contentCenter(previous.width, previous.height)
-      const resized = zoomAt(prev, center, prev.scale, ceiling)
+      const resized = zoomAt(prev, center, prev.scale, ceiling, minScaleForViewport(width, height))
       return panBy(resized, (width - previous.width) / 2, (height - previous.height) / 2)
     })
   }, [])
@@ -135,7 +137,7 @@ export function useMapCamera() {
       setCamera((prev) => {
         const { width, height } = viewport.current
         const screen = anchor ?? contentCenter(width, height)
-        return zoomAt(prev, screen, prev.scale * ZOOM_STEP, maxScaleForViewport(width, height))
+        return zoomForViewport(prev, screen, prev.scale * ZOOM_STEP, width, height)
       })
     },
     [stopAnim],
@@ -148,7 +150,7 @@ export function useMapCamera() {
       setCamera((prev) => {
         const { width, height } = viewport.current
         const screen = anchor ?? contentCenter(width, height)
-        return zoomAt(prev, screen, prev.scale / ZOOM_STEP, maxScaleForViewport(width, height))
+        return zoomForViewport(prev, screen, prev.scale / ZOOM_STEP, width, height)
       })
     },
     [stopAnim],
@@ -158,8 +160,8 @@ export function useMapCamera() {
     (factor: number, anchor: Point) => {
       stopAnim()
       framing.current = null
-      setCamera((prev) => zoomAt(prev, anchor, prev.scale * factor,
-        maxScaleForViewport(viewport.current.width, viewport.current.height)))
+      setCamera((prev) => zoomForViewport(prev, anchor, prev.scale * factor,
+        viewport.current.width, viewport.current.height))
     },
     [stopAnim],
   )
@@ -206,6 +208,7 @@ export function useMapCamera() {
     () => ({
       camera,
       maxScale: maxScaleForViewport(viewportSize.width, viewportSize.height),
+      minScale: minScaleForViewport(viewportSize.width, viewportSize.height),
       setCamera,
       setViewportSize,
       fitToRepos,

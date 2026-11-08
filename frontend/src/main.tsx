@@ -696,6 +696,7 @@ function App() {
             onSelectResult={handleSelectRepo}
             onZoomIn={() => zoomIn()}
             onZoomOut={() => zoomOut()}
+            zoomOutDisabled={camera.scale <= mapCamera.minScale + 0.000001}
           />
         </main>
       </div>

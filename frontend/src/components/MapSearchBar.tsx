@@ -18,6 +18,7 @@ export type MapSearchBarProps = {
   onSelectResult?: (repoId: string) => void
   onZoomIn?: () => void
   onZoomOut?: () => void
+  zoomOutDisabled?: boolean
 }
 
 const SCOPE_OPTIONS: { id: MapSearchScope; label: string }[] = [
@@ -39,6 +40,7 @@ export function MapSearchBar({
   onSelectResult,
   onZoomIn,
   onZoomOut,
+  zoomOutDisabled = false,
 }: MapSearchBarProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [resultsOpen, setResultsOpen] = useState(false)
@@ -90,7 +92,7 @@ export function MapSearchBar({
           <img src={plusIcon} alt="" width={24} height={24} />
         </button>
         <span className="map-zoom__divider" aria-hidden="true" />
-        <button type="button" className="map-zoom__btn" aria-label="Zoom out" onClick={onZoomOut}>
+        <button type="button" className="map-zoom__btn" aria-label="Zoom out" disabled={zoomOutDisabled} onClick={onZoomOut}>
           <img src={minusIcon} alt="" width={24} height={24} />
         </button>
       </div>

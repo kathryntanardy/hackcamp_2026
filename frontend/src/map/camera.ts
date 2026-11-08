@@ -64,6 +64,14 @@ function resolveInsets(insets?: ViewInsets) {
   }
 }
 
+/** The full branch design is the furthest-out view available. */
+export function minScaleForViewport(width: number, height: number, insets?: ViewInsets): number {
+  const i = resolveInsets(insets)
+  return Math.min(maxScaleForViewport(width, height, insets), Math.max(MIN_SCALE,
+    Math.min(Math.max(1, width - i.left - i.right) / FLOWER_SCENE.width,
+      Math.max(1, height - i.top - i.bottom) / FLOWER_SCENE.height)))
+}
+
 /** Preserve the reference's framing in smaller windows and beside the drawer. */
 export function maxScaleForViewport(width: number, height: number, insets?: ViewInsets): number {
   const i = resolveInsets(insets)
@@ -99,7 +107,7 @@ export function fitBounds(
   const worldH = bounds.maxY - bounds.minY
   const availW = Math.max(1, width - i.left - i.right - padding * 2)
   const availH = Math.max(1, height - i.top - i.bottom - padding * 2)
-  const scale = clampScale(Math.min(availW / worldW, availH / worldH), maxScaleForViewport(width, height, insets))
+  const scale = clampScale(Math.min(availW / worldW, availH / worldH), maxScaleForViewport(width, height, insets), minScaleForViewport(width, height, insets))
   const cx = (bounds.minX + bounds.maxX) / 2
   const cy = (bounds.minY + bounds.maxY) / 2
   const screen = contentCenter(width, height, i)
@@ -110,8 +118,8 @@ export function fitBounds(
   }
 }
 
-export function clampScale(scale: number, ceiling = MAX_SCALE): number {
-  return Math.min(ceiling, Math.max(MIN_SCALE, scale))
+export function clampScale(scale: number, ceiling = MAX_SCALE, floor = MIN_SCALE): number {
+  return Math.min(ceiling, Math.max(floor, scale))
 }
 
 /** Zoom keeping the given screen point fixed in world space. */
@@ -120,8 +128,9 @@ export function zoomAt(
   screen: Point,
   nextScale: number,
   ceiling = MAX_SCALE,
+  floor = MIN_SCALE,
 ): MapCamera {
-  const scale = clampScale(nextScale, ceiling)
+  const scale = clampScale(nextScale, ceiling, floor)
   if (scale === camera.scale) return camera
   const world = screenToWorld(screen, camera)
   return {
@@ -129,6 +138,15 @@ export function zoomAt(
     offsetX: screen.x - world.x * scale,
     offsetY: screen.y - world.y * scale,
   }
+}
+
+/** Apply both zoom limits, returning to the original framing at the lower limit. */
+export function zoomForViewport(camera: MapCamera, screen: Point, nextScale: number, width: number, height: number): MapCamera {
+  const floor = minScaleForViewport(width, height)
+  if (nextScale < camera.scale && nextScale <= floor) {
+    return fitBounds({ minX: 0, minY: 0, maxX: FLOWER_SCENE.width, maxY: FLOWER_SCENE.height }, width, height, 0)
+  }
+  return zoomAt(camera, screen, nextScale, maxScaleForViewport(width, height), floor)
 }
 
 export function panBy(camera: MapCamera, dx: number, dy: number): MapCamera {
@@ -147,7 +165,7 @@ export function focusOn(
   scale: number,
   insets?: ViewInsets,
 ): MapCamera {
-  const s = clampScale(scale, maxScaleForViewport(width, height, insets))
+  const s = clampScale(scale, maxScaleForViewport(width, height, insets), minScaleForViewport(width, height, insets))
   const screen = contentCenter(width, height, insets)
   return {
     scale: s,
@@ -156,12 +174,12 @@ export function focusOn(
   }
 }
 
-export function lerpCamera(from: MapCamera, to: MapCamera, t: number, ceiling = MAX_SCALE): MapCamera {
+export function lerpCamera(from: MapCamera, to: MapCamera, t: number, ceiling = MAX_SCALE, floor = MIN_SCALE): MapCamera {
   const u = Math.min(1, Math.max(0, t))
   // Ease-out cubic.
   const e = 1 - (1 - u) ** 3
   return {
-    scale: clampScale(from.scale + (to.scale - from.scale) * e, ceiling),
+    scale: clampScale(from.scale + (to.scale - from.scale) * e, ceiling, floor),
     offsetX: from.offsetX + (to.offsetX - from.offsetX) * e,
     offsetY: from.offsetY + (to.offsetY - from.offsetY) * e,
   }

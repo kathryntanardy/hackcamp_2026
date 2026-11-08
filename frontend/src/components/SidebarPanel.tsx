@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -34,6 +35,13 @@ export function SidebarPanel({
   const [dragging, setDragging] = useState(false)
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(width)
+  const lastOpenChildren = useRef(children)
+
+  // Keep the current pane visible while the drawer clips shut. Clearing the
+  // selection must not briefly replace repository details with the list.
+  useLayoutEffect(() => {
+    if (open) lastOpenChildren.current = children
+  }, [open, children])
 
   const setWidth = useCallback(
     (next: number) => {
@@ -124,7 +132,7 @@ export function SidebarPanel({
           }}
         />
       ) : null}
-      <div className="sidebar-panel__inner">{children}</div>
+      <div className="sidebar-panel__inner">{open ? children : lastOpenChildren.current}</div>
     </aside>
   )
 }

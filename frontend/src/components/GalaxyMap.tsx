@@ -118,18 +118,6 @@ export function GalaxyMap({
       const height = Math.max(1, Math.floor(rect.height))
       sizeRef.current = { width, height }
       onViewportChange?.(width, height)
-
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const dpr = window.devicePixelRatio || 1
-      const nextW = Math.floor(width * dpr)
-      const nextH = Math.floor(height * dpr)
-      if (canvas.width !== nextW || canvas.height !== nextH) {
-        canvas.width = nextW
-        canvas.height = nextH
-        canvas.style.width = `${width}px`
-        canvas.style.height = `${height}px`
-      }
     }
 
     syncSize()
@@ -165,10 +153,24 @@ export function GalaxyMap({
 
       const canvas = canvasRef.current
       if (canvas) {
+        // Keep a full-window drawing surface behind the clipped map pane.
+        // Resizing it with every step of the drawer animation invalidates its
+        // bitmap and stretches the previous frame, making the flowers flash.
+        // The map camera still uses the visible pane's size from ResizeObserver.
+        const width = Math.max(1, window.innerWidth)
+        const height = Math.max(1, window.innerHeight)
+        const dpr = window.devicePixelRatio || 1
+        const nextW = Math.floor(width * dpr)
+        const nextH = Math.floor(height * dpr)
+        // Only a browser resize or pixel-density change resizes the bitmap.
+        if (canvas.width !== nextW || canvas.height !== nextH) {
+          canvas.width = nextW
+          canvas.height = nextH
+          canvas.style.width = `${width}px`
+          canvas.style.height = `${height}px`
+        }
         const ctx = canvas.getContext('2d')
         if (ctx) {
-          const { width, height } = sizeRef.current
-          const dpr = window.devicePixelRatio || 1
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
           drawMap(
             ctx,

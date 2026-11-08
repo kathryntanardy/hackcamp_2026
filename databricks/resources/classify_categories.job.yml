@@ -1,0 +1,16 @@
+resources:
+  jobs:
+    classify_categories:
+      name: hackcamp-classify-categories
+      description: >
+        One-shot ai_query classification of silver.repos into F15 categories
+        (Front-end … other). Writes hackcamp.silver.repo_categories for gold (#32).
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: classify
+          sql_task:
+            file:
+              path: ../src/setup/classify_repo_categories.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+          timeout_seconds: 7200

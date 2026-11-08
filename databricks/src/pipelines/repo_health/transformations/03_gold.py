@@ -1,9 +1,10 @@
-"""Gold: baseline health score, status, importance, and map coordinates."""
+"""Gold: baseline health score, status, importance, F15 category/buckets, map coords."""
 
 from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 
 from deprecated_repos import KNOWN_DEPRECATED_REPOS
+from vuln_buckets import BUCKET_NONE, BUCKET_OTHER, SEVERITY_RANK
 
 
 def _clamp01_or_null(raw, value):
@@ -41,10 +42,104 @@ def _renormalized_score(subscores):
     return F.when(den > 0, F.lit(100.0) * num / den)
 
 
+def _severity_rank_col(col):
+    expr = F.lit(0)
+    for label, rank in SEVERITY_RANK.items():
+        expr = F.when(F.lower(col) == label, F.lit(rank)).otherwise(expr)
+    return expr
+
+
+def _heuristic_category_col():
+    """Keyword fallback when ai_query has not classified the repo yet."""
+    blob = F.lower(
+        F.concat_ws(
+            " ",
+            F.coalesce(F.col("description"), F.lit("")),
+            F.concat_ws(" ", F.coalesce(F.col("topics"), F.array().cast("array<string>"))),
+        )
+    )
+    return (
+        F.when(
+            blob.rlike(
+                r"(react|vue|angular|frontend|front-end|\bcss\b|\bui\b|browser|\bdom\b|webpack|svelte)"
+            ),
+            F.lit("Front-end"),
+        )
+        .when(
+            blob.rlike(
+                r"(machine[- ]learning|deep[- ]learning|neural|pytorch|tensorflow|\bllm\b|\bnlp\b)"
+            ),
+            F.lit("Machine learning"),
+        )
+        .when(
+            blob.rlike(
+                r"(database|\bsql\b|postgres|mysql|mongodb|redis|\borm\b|sqlite|cassandra)"
+            ),
+            F.lit("Database"),
+        )
+        .when(
+            blob.rlike(r"(embedded|firmware|\biot\b|arduino|raspberry|fpga|hardware|\bmcu\b)"),
+            F.lit("Hardware/embedded"),
+        )
+        .when(
+            blob.rlike(
+                r"(kubernetes|docker|devops|terraform|ci/cd|infra|ansible|helm|observability|prometheus)"
+            ),
+            F.lit("DevOps & infra"),
+        )
+        .when(
+            blob.rlike(r"(backend|back-end|\bserver\b|\bapi\b|\bhttp\b|grpc|microservice|framework)"),
+            F.lit("Back-end"),
+        )
+        .otherwise(F.lit("other"))
+    )
+
+
+def _normalize_ai_category(col):
+    return (
+        F.when(F.lower(F.trim(col)).isin("front-end", "frontend", "front end"), F.lit("Front-end"))
+        .when(F.lower(F.trim(col)).isin("back-end", "backend", "back end"), F.lit("Back-end"))
+        .when(
+            F.lower(F.trim(col)).isin("machine learning", "machine-learning", "ml"),
+            F.lit("Machine learning"),
+        )
+        .when(F.lower(F.trim(col)) == "database", F.lit("Database"))
+        .when(
+            F.lower(F.trim(col)).isin("hardware/embedded", "hardware", "embedded"),
+            F.lit("Hardware/embedded"),
+        )
+        .when(
+            F.lower(F.trim(col)).isin("devops & infra", "devops"),
+            F.lit("DevOps & infra"),
+        )
+        .when(F.lower(F.trim(col)) == "other", F.lit("other"))
+        .otherwise(F.lit(None).cast("string"))
+    )
+
+
+def _read_ai_categories():
+    """Table filled by classify_repo_categories (ai_query). Always LEFT JOINed."""
+    return spark.read.table("hackcamp.silver.repo_categories").select(
+        F.col("repo_id"),
+        F.col("category").alias("ai_category"),
+    )
+
+
+def _advisory_aggs():
+    adv = spark.read.table("hackcamp.silver.repo_advisories")
+    return adv.groupBy("repo_id").agg(
+        F.count(F.lit(1)).alias("advisory_count"),
+        F.max("cvss_score").alias("max_cvss"),
+        F.max_by("severity", _severity_rank_col(F.col("severity"))).alias("max_severity"),
+        F.collect_set("vuln_bucket").alias("_adv_buckets"),
+    )
+
+
 @dp.materialized_view(
     name="hackcamp.gold.repo_health",
     comment=(
-        "Baseline maintainer-risk scores and galaxy-map coordinates. "
+        "Baseline maintainer-risk scores, F15 category/vuln_buckets, and galaxy-map "
+        "coordinates (language x/y and category cat_x/cat_y). "
         "status: healthy | watchlist | at_risk | ignored "
         "(ignored = deprecated/archived; excluded from living triage). "
         "importance is ecosystem weight (log stars/dependents), not the same as health_score."
@@ -53,6 +148,8 @@ def _renormalized_score(subscores):
 )
 def repo_health():
     repos = spark.read.table("hackcamp.silver.repos")
+    adv = _advisory_aggs()
+    ai_cats = _read_ai_categories()
 
     scored_at = F.current_timestamp()
     as_of = F.to_date(scored_at)
@@ -126,7 +223,61 @@ def repo_health():
         * F.lit(100.0),
     ).otherwise(F.lit(None).cast("double"))
 
-    return repos.select(
+    joined = (
+        repos.join(adv, on="repo_id", how="left")
+        .join(ai_cats, on="repo_id", how="left")
+        .withColumn("advisory_count", F.coalesce(F.col("advisory_count"), F.lit(0)))
+        .withColumn(
+            "_adv_buckets",
+            F.coalesce(F.col("_adv_buckets"), F.array().cast("array<string>")),
+        )
+    )
+
+    category = F.coalesce(
+        _normalize_ai_category(F.col("ai_category")),
+        _heuristic_category_col(),
+        F.lit("other"),
+    )
+
+    # Distinguish ok+empty advisories from Other / failed fetch.
+    vuln_buckets = (
+        F.when(
+            (F.col("advisory_fetch_status") == "ok") & (F.col("advisory_count") == 0),
+            F.array(F.lit(BUCKET_NONE)),
+        )
+        .when(F.col("advisory_count") == 0, F.array().cast("array<string>"))
+        .when(
+            F.size(F.col("_adv_buckets")) == 0,
+            F.array(F.lit(BUCKET_OTHER)),
+        )
+        .otherwise(F.col("_adv_buckets"))
+    )
+
+    # Category cluster centres (hex-ish layout) + same seeded offset as language.
+    cat_cx = (
+        F.when(category == "Front-end", F.lit(100.0))
+        .when(category == "Back-end", F.lit(-100.0))
+        .when(category == "Machine learning", F.lit(50.0))
+        .when(category == "Database", F.lit(-50.0))
+        .when(category == "Hardware/embedded", F.lit(0.0))
+        .when(category == "DevOps & infra", F.lit(0.0))
+        .otherwise(F.lit(0.0))  # other
+    )
+    cat_cy = (
+        F.when(category == "Front-end", F.lit(0.0))
+        .when(category == "Back-end", F.lit(0.0))
+        .when(category == "Machine learning", F.lit(86.0))
+        .when(category == "Database", F.lit(86.0))
+        .when(category == "Hardware/embedded", F.lit(-100.0))
+        .when(category == "DevOps & infra", F.lit(100.0))
+        .otherwise(F.lit(-50.0))
+    )
+    cat_x = cat_cx + ((seed % F.lit(40)) - F.lit(20)).cast("double")
+    cat_y = cat_cy + (((seed / F.lit(40)).cast("bigint") % F.lit(40)) - F.lit(20)).cast(
+        "double"
+    )
+
+    return joined.select(
         "repo_id",
         F.date_format(scored_at, "yyyyMMddHHmmss").alias("run_id"),
         F.round(health_score, 2).alias("health_score"),
@@ -134,8 +285,15 @@ def repo_health():
         F.round(importance, 4).alias("importance"),
         days_since_release.alias("days_since_release"),
         F.round(commit_trend_pct, 2).alias("commit_trend_pct"),
+        category.alias("category"),
+        vuln_buckets.alias("vuln_buckets"),
+        F.col("advisory_count").cast("long").alias("advisory_count"),
+        F.col("max_severity"),
+        F.round(F.col("max_cvss"), 2).alias("max_cvss"),
         F.round(x, 2).alias("x"),
         F.round(y, 2).alias("y"),
+        F.round(cat_x, 2).alias("cat_x"),
+        F.round(cat_y, 2).alias("cat_y"),
         scored_at.alias("scored_at"),
         "language",
         "stars",

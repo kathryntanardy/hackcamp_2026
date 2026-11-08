@@ -89,11 +89,11 @@ export function MapSearchBar({
     <div className="map-toolbar" ref={rootRef}>
       <div className="map-zoom" role="group" aria-label="Map zoom">
         <button type="button" className="map-zoom__btn" aria-label="Zoom in" onClick={onZoomIn}>
-          <img src={plusIcon} alt="" width={24} height={24} />
+          <img src={plusIcon} alt="" width={22} height={22} />
         </button>
         <span className="map-zoom__divider" aria-hidden="true" />
         <button type="button" className="map-zoom__btn" aria-label="Zoom out" disabled={zoomOutDisabled} onClick={onZoomOut}>
-          <img src={minusIcon} alt="" width={24} height={24} />
+          <img src={minusIcon} alt="" width={22} height={22} />
         </button>
       </div>
 
@@ -121,8 +121,8 @@ export function MapSearchBar({
             <img
               src={chevronDownIcon}
               alt=""
-              width={16}
-              height={16}
+              width={24}
+              height={24}
             />
           </button>
 
@@ -172,7 +172,7 @@ export function MapSearchBar({
               }}
             />
             <button type="submit" className="map-search__submit" aria-label="Search">
-              <img src={searchIcon} alt="" width={15} height={15} />
+              <img src={searchIcon} alt="" width={22} height={22} />
             </button>
           </div>
 

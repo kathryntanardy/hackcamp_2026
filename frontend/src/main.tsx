@@ -1,3 +1,4 @@
+import { maintenanceToneLabel } from './map/health'
 import { FLOWER_SCENE } from './map/flowerScene'
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -254,12 +255,7 @@ function App() {
         ? 'No advisories'
         : flower?.label ?? severityFocus.flowerId
     if (severityFocus.tone == null) return bucket
-    const toneLabel =
-      severityFocus.tone === 'high'
-        ? 'High'
-        : severityFocus.tone === 'medium'
-          ? 'Med'
-          : 'Low'
+    const toneLabel = `${maintenanceToneLabel(severityFocus.tone)} maintenance`
     return `${toneLabel} · ${bucket}`
   }, [severityFocus, flowerLayout.flowers])
 

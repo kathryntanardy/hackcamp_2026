@@ -1,3 +1,4 @@
+import { maintenanceStatusLabel } from '../map/health'
 import type { FindingsSort } from '../api/findings'
 import type { FindingListEntry } from '../api/types'
 import { REPO_CATEGORIES, VULN_BUCKETS } from '../map/taxonomy'
@@ -30,8 +31,8 @@ export type FindingsViewProps = {
 const DEFAULT_PAGE_SIZE = 50
 
 const SORT_OPTIONS: { id: FindingsSort; label: string }[] = [
-  { id: 'severity', label: 'Risk severity' },
-  { id: 'health_score', label: 'Health score' },
+  { id: 'severity', label: 'Maintenance risk' },
+  { id: 'health_score', label: 'Maintenance' },
   { id: 'importance', label: 'Importance' },
   { id: 'days_since_release', label: 'Days since release' },
   { id: 'advisory_count', label: 'Advisory count' },
@@ -49,7 +50,7 @@ function riskClass(risk: string | null | undefined): string {
 }
 
 function formatRisk(risk: string | null | undefined): string {
-  return (risk || 'unknown').replaceAll('_', ' ')
+  return maintenanceStatusLabel(risk)
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -61,9 +62,9 @@ function formatDate(iso: string | null | undefined): string {
 
 const FILTERS: { id: FindingsRiskFilter; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'at_risk', label: 'At risk' },
-  { id: 'watchlist', label: 'Watchlist' },
-  { id: 'healthy', label: 'Healthy' },
+  { id: 'at_risk', label: maintenanceStatusLabel('at_risk') },
+  { id: 'watchlist', label: maintenanceStatusLabel('watchlist') },
+  { id: 'healthy', label: maintenanceStatusLabel('healthy') },
   { id: 'inconclusive', label: 'Inconclusive' },
 ]
 
@@ -108,7 +109,7 @@ export function FindingsView({
         <p className="findings-view__subtitle">
           Sorted by {sortLabel.toLowerCase()}. Open a row to inspect that repo on the map.
         </p>
-        <div className="findings-view__filters" role="toolbar" aria-label="Risk filter">
+        <div className="findings-view__filters" role="toolbar" aria-label="Maintenance filter">
           {FILTERS.map((filter) => (
             <button
               key={filter.id}

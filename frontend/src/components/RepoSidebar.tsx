@@ -1,3 +1,4 @@
+import { maintenanceStatusLabel, MAINTENANCE_HEALTH_DESCRIPTION } from '../map/health'
 import { useEffect, useState } from 'react'
 import languageIcon from '../assets/icons/language.svg'
 import starIcon from '../assets/icons/star.svg'
@@ -278,7 +279,7 @@ export function RepoSidebar({
               <p className="repo-sidebar__owner">{owner}</p>
               <div className="chip-row">
                 <span className={`status-chip ${statusClass(status)}`}>
-                  {status.replaceAll('_', ' ')}
+                  {maintenanceStatusLabel(status)}
                 </span>
                 {isArchived ? <span className="status-chip is-ignored">archived</span> : null}
                 {category ? <span className="chip">{category}</span> : null}
@@ -401,14 +402,15 @@ export function RepoSidebar({
             </section>
 
             <section className="section" aria-labelledby="health-heading">
-              <h2 id="health-heading" className="section-heading">Health</h2>
+              <h2 id="health-heading" className="section-heading">Maintenance</h2>
+              <p className="empty-note">{MAINTENANCE_HEALTH_DESCRIPTION}</p>
               <div className="health-row">
                 <div className="health-score">
                   <p className="signal-value">{healthScore}</p>
-                  <p className="signal-label">Health score</p>
+                  <p className="signal-label">Maintenance score</p>
                   {healthStatus ? (
                     <span className={`status-chip ${statusClass(healthStatus)}`}>
-                      {healthStatus.replaceAll('_', ' ')}
+                      {maintenanceStatusLabel(healthStatus)}
                     </span>
                   ) : null}
                 </div>
@@ -611,12 +613,12 @@ export function RepoSidebar({
         ) : (
           <>
             <section className="section" aria-labelledby="verdict-heading">
-              <h2 id="verdict-heading" className="section-heading">Agent verdict</h2>
+              <h2 id="verdict-heading" className="section-heading">Agent maintenance assessment</h2>
               {verdict ? (
                 <div className="verdict-card">
                   <div className="verdict-card__head">
                     <span className={`status-chip ${statusClass(verdict.riskLevel)}`}>
-                      {verdict.riskLevel.replaceAll('_', ' ')}
+                      {maintenanceStatusLabel(verdict.riskLevel)}
                     </span>
                     <span className="verdict-card__meta">
                       {verdict.confidence}% confidence · {verdict.investigatedAt}
@@ -627,12 +629,12 @@ export function RepoSidebar({
                   <p className="verdict-card__body">{verdict.explanation}</p>
                   {previousVerdict ? (
                     <p className="verdict-card__prev">
-                      Previous: {previousVerdict.riskLevel.replaceAll('_', ' ')} on {previousVerdict.investigatedAt}
+                      Previous: {maintenanceStatusLabel(previousVerdict.riskLevel)} on {previousVerdict.investigatedAt}
                     </p>
                   ) : null}
                 </div>
               ) : (
-                <p className="empty-note">Not investigated yet. Gold status is {status.replaceAll('_', ' ')}.</p>
+                <p className="empty-note">Not investigated yet. Baseline maintenance status: {maintenanceStatusLabel(status)}.</p>
               )}
             </section>
 

@@ -1,3 +1,4 @@
+import { maintenanceStatusLabel } from '../map/health'
 import type { RepoListItem } from '../components/RepoListSidebar'
 import type { RepoListEntry } from './types'
 
@@ -8,15 +9,6 @@ function statusTone(status: string | null | undefined): RepoListItem['vulnerabil
   if (s === 'watchlist') return 'medium'
   if (s === 'healthy') return 'low'
   return 'none'
-}
-
-function statusLabel(status: string | null | undefined): string {
-  const s = (status || '').toLowerCase()
-  if (s === 'at_risk') return 'At risk'
-  if (s === 'watchlist') return 'Watchlist'
-  if (s === 'healthy') return 'Healthy'
-  if (s === 'ignored') return 'Excluded'
-  return 'Unknown'
 }
 
 function formatHealthScore(score: number | null | undefined): string {
@@ -30,7 +22,7 @@ export function mapRepoToListItem(repo: RepoListEntry): RepoListItem {
     id: repo.repo_id,
     name: repo.name || repo.repo_id,
     description: repo.summary?.trim() || '',
-    vulnerabilityLabel: statusLabel(repo.status),
+    vulnerabilityLabel: maintenanceStatusLabel(repo.status),
     vulnerabilityTone: tone,
     vulnerabilityScore: formatHealthScore(repo.health_score),
     category: repo.category?.trim() || '—',

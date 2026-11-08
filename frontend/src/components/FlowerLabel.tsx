@@ -1,3 +1,4 @@
+import { MAINTENANCE_HEALTH_DESCRIPTION } from '../map/health'
 import { FLOWER_PALETTE, type FlowerCluster, type VulnSeverity } from '../map/flowers'
 
 export type FlowerLabelProps = {
@@ -17,9 +18,9 @@ export type FlowerLabelProps = {
 }
 
 const TONES: { tone: VulnSeverity; short: string; countKey: 'high' | 'medium' | 'low' }[] = [
-  { tone: 'high', short: 'High', countKey: 'high' },
-  { tone: 'medium', short: 'Med', countKey: 'medium' },
-  { tone: 'low', short: 'Low', countKey: 'low' },
+  { tone: 'high', short: 'At Risk', countKey: 'high' },
+  { tone: 'medium', short: 'Watchlist', countKey: 'medium' },
+  { tone: 'low', short: 'Healthy', countKey: 'low' },
 ]
 
 export function FlowerLabel({
@@ -65,7 +66,7 @@ export function FlowerLabel({
         />
         <span className="flower-label__name" style={{ background: palette.chipBg }}>{title}</span>
       </button>
-      <div className="flower-label__counts" role="group" aria-label={`${title} severity counts`}>
+      <div className="flower-label__counts" role="group" aria-label={`${title} maintenance counts`} title={MAINTENANCE_HEALTH_DESCRIPTION}>
         {TONES.map(({ tone, short, countKey }, index) => {
           const count = flower.counts[countKey]
           const active = activeTone === tone

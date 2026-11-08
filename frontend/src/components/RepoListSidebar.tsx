@@ -38,7 +38,7 @@ export function RepoListSidebar({
   title = 'Open-Source Repositories',
   metaLabel = 'Open-source repositories',
   countLabel,
-  scoreLabel = 'Vulnerability score:',
+  scoreLabel = 'Maintenance:',
   categoryLabel = 'Category:',
   emptyLabel = 'No overview available.',
   repos = [],

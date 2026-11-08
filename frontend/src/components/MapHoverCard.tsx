@@ -1,3 +1,4 @@
+import { maintenanceStatusLabel, MAINTENANCE_HEALTH_DESCRIPTION } from '../map/health'
 import type { MapRepo } from '../map/types'
 import { statusColor } from '../map/draw'
 
@@ -11,10 +12,6 @@ function formatHealthScore(score: number | null): string {
   if (score == null || Number.isNaN(score)) return '—'
   const rounded = Math.round(score * 10) / 10
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
-}
-
-function statusLabel(status: MapRepo['status']): string {
-  return status.replaceAll('_', ' ')
 }
 
 export function MapHoverCard({ repo, x, y }: MapHoverCardProps) {
@@ -33,15 +30,15 @@ export function MapHoverCard({ repo, x, y }: MapHoverCardProps) {
         <span className="map-hover-card__name">{repo.name}</span>
       </div>
       <p className="map-hover-card__meta">
-        <span className="map-hover-card__meta-label">Score</span>
+        <span className="map-hover-card__meta-label" title={MAINTENANCE_HEALTH_DESCRIPTION}>Maintenance score</span>
         <span className="map-hover-card__meta-value">
-          {formatHealthScore(repo.healthScore)}
+          {formatHealthScore(repo.healthScore)}{repo.healthScore == null ? '' : '/100'}
         </span>
       </p>
       <p className="map-hover-card__meta">
-        <span className="map-hover-card__meta-label">Status</span>
+        <span className="map-hover-card__meta-label">Maintenance</span>
         <span className={`map-hover-card__status is-${repo.status}`}>
-          {statusLabel(repo.status)}
+          {maintenanceStatusLabel(repo.status)}
         </span>
       </p>
     </div>

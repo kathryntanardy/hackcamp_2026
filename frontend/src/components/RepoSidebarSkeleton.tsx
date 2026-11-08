@@ -193,7 +193,7 @@ export function RepoSidebarSkeleton({
         </section>
 
         <section className="section" aria-hidden="true">
-          <h2 className="section-heading">Health</h2>
+          <h2 className="section-heading">Maintenance</h2>
           <div className="health-row skeleton-health">
             <div className="health-score">
               <span className="skeleton-bar skeleton-bar--value" />

@@ -4,6 +4,11 @@ bundle:
 include:
   - resources/*.yml
 
+# Staged Apps package is gitignored; force-upload for deploy.
+sync:
+  include:
+    - apps/corpus-explorer/**
+
 variables:
   catalog:
     description: Unity Catalog name for hackcamp tables

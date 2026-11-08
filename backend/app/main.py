@@ -1,10 +1,12 @@
 """HTTP API for the Open-Source Corpus Explorer."""
 
 import json
+from pathlib import Path
 
 import httpx
 from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import scan
@@ -14,6 +16,9 @@ from app.db import query
 load_dotenv(find_dotenv())
 
 app = FastAPI(title="Open-Source Corpus Explorer API", version="0.1.0")
+
+# Vite build output copied here before Databricks Apps deploy (`frontend/dist` → `static`).
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 GOLD = """gold AS (
   SELECT * FROM hackcamp.gold.repo_health
@@ -33,10 +38,42 @@ SEVERITY = """CASE f.risk_level WHEN 'at_risk' THEN 0 WHEN 'watchlist' THEN 1
   WHEN 'inconclusive' THEN 2 ELSE 3 END"""
 
 
+def _as_str_list(value) -> list[str]:
+    """Normalize UC array / JSON-string / broken char-list values to string lists."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except json.JSONDecodeError:
+                pass
+        return [text]
+    if isinstance(value, (list, tuple)):
+        # Databricks sometimes yields a JSON array already stringified then list()'d
+        # into characters: ['[', '"', 'C', ...]. Recover those.
+        if value and all(isinstance(x, str) and len(x) <= 1 for x in value):
+            joined = "".join(value)
+            if joined.startswith("["):
+                try:
+                    parsed = json.loads(joined)
+                    if isinstance(parsed, list):
+                        return [str(x) for x in parsed]
+                except json.JSONDecodeError:
+                    pass
+        return [str(x) for x in value]
+    return [str(value)]
+
+
 def _finding(row: dict) -> dict:
     row = dict(row)
     row["evidence"] = json.loads(row["evidence"]) if row.get("evidence") else []
-    row["alternatives"] = list(row["alternatives"]) if row.get("alternatives") is not None else []
+    row["alternatives"] = _as_str_list(row.get("alternatives"))
     return row
 
 
@@ -51,7 +88,7 @@ def health() -> HealthResponse:
 
 @app.get("/api/repos")
 def list_repos() -> list[dict]:
-    return query(f"""
+    rows = query(f"""
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
 SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
   g.importance, g.x, g.y, g.cat_x, g.cat_y, g.stars, g.is_archived,
@@ -63,6 +100,9 @@ SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
 FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
 LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 ORDER BY g.importance DESC""")
+    for row in rows:
+        row["vuln_buckets"] = _as_str_list(row.get("vuln_buckets"))
+    return rows
 
 
 @app.get("/api/repos/{repo_id:path}")
@@ -95,14 +135,14 @@ ORDER BY published_at DESC NULLS LAST""", {"repo_id": repo_id})
                    "commits_90d", "commits_prev_90d", "open_issues", "open_prs", "contributors",
                    "maintainer_reply_rate", "top_contributor_share"]
     repo = {k: v for k, v in r.items() if k not in metric_keys}
-    repo["vuln_buckets"] = list(repo["vuln_buckets"]) if repo.get("vuln_buckets") is not None else []
-    repo["topics"] = list(repo["topics"]) if repo.get("topics") is not None else []
+    repo["vuln_buckets"] = _as_str_list(repo.get("vuln_buckets"))
+    repo["topics"] = _as_str_list(repo.get("topics"))
     repo["github_url"] = f"https://github.com/{repo_id}"
     repo["metrics"] = {k: r[k] for k in metric_keys}
     repo["verdict"] = verdicts[0] if verdicts else None
     repo["previous_verdict"] = verdicts[1] if len(verdicts) > 1 else None
     repo["advisories"] = [
-        {**a, "cwes": list(a["cwes"]) if a.get("cwes") is not None else []}
+        {**a, "cwes": _as_str_list(a.get("cwes"))}
         for a in advisories
     ]
     return repo
@@ -122,7 +162,7 @@ ORDER BY {SEVERITY}, g.importance DESC""", {"language": language, "risk": risk})
     out = []
     for r in rows:
         row = _finding(r)
-        row["vuln_buckets"] = list(row["vuln_buckets"]) if row.get("vuln_buckets") is not None else []
+        row["vuln_buckets"] = _as_str_list(row.get("vuln_buckets"))
         out.append(row)
     return out
 
@@ -198,3 +238,8 @@ def run_scan(repo_id: str) -> dict:
     query("""INSERT INTO hackcamp.agent.code_scans
 VALUES (:repo_id, :commit_sha, :model, :files, :summary, :findings, current_timestamp())""", row)
     return get_scan(repo_id)
+
+
+# Serve the React build from the same origin as /api (required on Databricks Apps).
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

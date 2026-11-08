@@ -1,11 +1,11 @@
 # Ticket dependency graph
 
 Synced from GitHub issues on 2026-11-07 (`kathryntanardy/hackcamp_2026`).
-✅ = closed on GitHub **or done in workspace**. Open: **16** (#14, #17–#22, #23–#30, #33). Closed/done: **17** (#1–#13, #15–#16, #31–#32).
+✅ = closed on GitHub **or done in workspace**. Open: **15** (#14, #17–#18, #20–#22, #23–#30, #33). Closed/done: **18** (#1–#13, #15–#16, #19, #31–#32).
 
 **New:** **#30–#33** (F14 map search + F15 categories/CWEs).
 
-Unblocked next (deps closed): **#14**, **#18**, **#19**, **#20**, **#21**, **#22**.
+Unblocked next (deps closed): **#14**, **#18**, **#20**, **#21**, **#22**.
 Blocked: **#17** (needs #14), **#23–#29** (`blocked-by-design` / after #22), **#30** (needs #24+#31), **#33** (needs FE + #32).
 
 ```mermaid
@@ -51,7 +51,7 @@ flowchart TB
   subgraph Stretch["Stretch / polish"]
     n17["#17 demo prep"]
     n18["#18 vector search"]
-    n19["#19 run memory"]
+    n19["#19 run memory ✅"]
     n20["#20 ai_query"]
     n29["#29 FE stretch"]
     n30["#30 NL map search"]

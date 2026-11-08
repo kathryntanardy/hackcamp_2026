@@ -3,6 +3,7 @@ resources:
     eval_run:
       name: hackcamp-eval-run
       max_concurrent_runs: 1
+      timeout_seconds: 10800
       parameters:
         - name: model_endpoint
           default: databricks-meta-llama-3-3-70b-instruct
@@ -28,6 +29,16 @@ resources:
               experiment_path: "{{job.parameters.experiment_path}}"
               limit: "{{job.parameters.limit}}"
               run_judge: "{{job.parameters.run_judge}}"
+          environment_key: agent_env
+        - task_key: verify_evaluation
+          depends_on:
+            - task_key: evaluate
+          notebook_task:
+            notebook_path: ../src/agent/verify_eval.py
+            source: WORKSPACE
+            base_parameters:
+              mlflow_run_id: "{{tasks.evaluate.values.mlflow_run_id}}"
+              summary_path: "{{tasks.evaluate.values.summary_path}}"
           environment_key: agent_env
 
       environments:

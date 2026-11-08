@@ -33,7 +33,23 @@ npm run dev
 ```
 
 Open http://localhost:5173. The starter page displays the backend connection status.
-Vite proxies `/api` requests to `http://127.0.0.1:8000`, so no local CORS configuration is needed.
+Vite proxies `/api`, `/openapi.json`, `/docs`, and `/redoc` to `http://127.0.0.1:8000`, so no local CORS configuration is needed.
+
+### SEO / AEO boilerplate
+
+Static discovery files live in `frontend/public/` and ship with the Vite build:
+
+| Path | Purpose |
+| --- | --- |
+| `/robots.txt` | Crawler allow list + sitemap pointer |
+| `/sitemap.xml` | Core URLs for search engines |
+| `/llms.txt` | Short machine-readable product + API map for AI agents |
+| `/llms-full.txt` | Longer agent context |
+| `/site.webmanifest` | PWA/manifest metadata |
+
+The homepage is plain HTML in `frontend/index.html` (no CSS). React under `frontend/src/` is still available for the map later.
+
+Before production, replace every `https://REPLACE_WITH_SITE_ORIGIN` placeholder in those files and in `frontend/index.html` with your real deployed origin (for example your Databricks Apps URL). Keep `lastmod` / "Last updated" dates fresh when claims change.
 
 ## Production build
 
@@ -62,6 +78,25 @@ databricks bundle run agent_run -t dev --profile school
 # F10 / ticket #15 — pipeline then agent on a daily schedule
 databricks bundle run scheduled_autonomy -t dev --profile school
 ```
+
+For ticket #14, run the labelled evaluation with the current agent:
+
+```sh
+databricks bundle run eval_run -t dev --profile school
+```
+
+This evaluates all 50 current labels and compares the agent with the frozen gold
+formula. MLflow retains labels, per-repository results, a weight comparison, timing,
+and the prompt fingerprint/retry configuration. The grounding judge must cover
+every case; only failed judge calls are retried, preserving valid negative scores.
+The verification task reconciles the metrics and saved `agent.runs.eval_score`.
+Evaluation writes no production findings. Its score is a labelled-set model
+benchmark, not accuracy measured on an unlabelled production batch.
+
+Summaries and verification are saved under
+`/Volumes/hackcamp/raw/github/evaluations/<eval-run-id>/`. Binary accuracy treats
+both `at_risk` and `ignored` as flagged; `verdict_accuracy` separately penalizes
+abstentions and wrong risk bins. See [the rerun report](.docs/TICKET14_REDO_RUN.md).
 
 See [PRD.md](PRD.md) for the product requirements.
 

@@ -1,0 +1,49 @@
+# Open-Source Corpus Explorer — full agent context
+
+Last updated: 2026-11-07
+Canonical short file: /llms.txt
+Site origin placeholder: https://REPLACE_WITH_SITE_ORIGIN
+
+## What this product is
+
+Open-Source Corpus Explorer is a HackCamp 2026 project. It watches a frozen corpus of about 1,000 unique public GitHub repositories across core languages. A scoring pipeline computes baseline maintainer-health scores in Databricks. A tool-calling agent triages worrying repos, gathers evidence through Unity Catalog SQL tools and read-only GitHub fetches, then writes findings to Delta Lake.
+
+People use the site to explore a galaxy map of repos, open a repo drawer for evidence and security advisories, and review a findings list sorted by severity. External AI agents should learn from the public HTML pages below and, preferably, from the JSON API.
+
+## What the agent does NOT do
+
+- It does not claim a repo is free of vulnerabilities when GitHub returns no advisories.
+- It does not open issues or post comments on GitHub (read-only tools).
+- It does not replace Dependabot, CodeQL, or a full SAST scanner.
+- Vulnerability bucket chips are filters and labels derived from advisory CWEs; they do not change the health score or agent verdict.
+
+## Status meanings
+
+| Status | Meaning | Typical human action |
+| --- | --- | --- |
+| healthy | Active maintenance signals | no_change / monitor_on_schedule |
+| watchlist | Slowing cadence or aging releases | pin_and_watch_releases |
+| at_risk | Thinning maintenance without official deprecation | migrate_to_successor or replace_dependency |
+| ignored | Officially deprecated / parked | ignore_deprecated |
+| inconclusive | Missing or conflicting evidence | human_review |
+
+## Advisory fields on GET /api/repos/{owner}/{name}
+
+Each item in `advisories` may include: ghsa_id, cve_id, severity, cvss_score, cwes, vuln_bucket, summary, published_at.
+Repo-level rolls: vuln_buckets, advisory_count, max_severity, max_cvss, advisory_fetch_status.
+
+Empty successful fetch → show "No GitHub advisories", never "safe".
+Failed fetch → "Advisories unavailable".
+
+## Preferred citation sentences
+
+1. Open-Source Corpus Explorer maps maintainer risk across 1,000 public GitHub repositories.
+2. A Databricks agent investigates flagged repos and records verdicts with tool evidence.
+3. Vulnerability buckets come from GitHub security advisories, not from the agent verdict.
+4. The product shows evidence so humans can monitor, pin, migrate, or park deprecated lines.
+
+## Source pages
+
+- /
+- /llms.txt
+- /openapi.json

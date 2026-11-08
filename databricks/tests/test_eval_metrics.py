@@ -7,6 +7,13 @@ m = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(m)
 
 
+def test_inconclusive_and_wrong_ignored_bin_are_not_correct_verdicts():
+    s = m.score([{"label": "healthy", "pred": "inconclusive"},
+                 {"label": "at_risk", "pred": "ignored"}])
+    assert s["accuracy"] == 1.0
+    assert s["verdict_accuracy"] == 0.0
+
+
 def row(label, pred, tool_calls=None):
     return {"label": label, "pred": pred, "tool_calls": tool_calls}
 

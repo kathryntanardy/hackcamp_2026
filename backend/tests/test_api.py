@@ -78,6 +78,19 @@ def test_repo_detail_splits_metrics_and_verdicts(calls):
     assert body["advisories"][0]["vuln_bucket"] == "Code execution"
     assert body["category"] == "Back-end"
     assert body["vuln_buckets"] == ["Code execution"]
+    assert body["advisories"][0]["cwes"] == ["CWE-94"]
+
+
+def test_as_str_list_recovers_json_string_and_char_lists():
+    from app.main import _as_str_list
+
+    assert _as_str_list('["Code execution","Prototype pollution"]') == [
+        "Code execution",
+        "Prototype pollution",
+    ]
+    assert _as_str_list(list('["Injection"]')) == ["Injection"]
+    assert _as_str_list(["Auth & access control"]) == ["Auth & access control"]
+    assert _as_str_list(None) == []
 
 
 def test_repos_expose_summary(calls):

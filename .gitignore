@@ -1,6 +1,7 @@
 # Frontend
 node_modules/
 dist/
+backend/static/
 *.tsbuildinfo
 
 # Python
@@ -15,6 +16,7 @@ build/
 # Databricks
 .databricks/
 databricks/.databricks/
+databricks/apps/corpus-explorer/
 
 # Local-only docs / ticket dumps (do not push)
 .docs/local/

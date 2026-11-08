@@ -7,6 +7,7 @@ export type MapRepo = {
   language: string | null
   status: MapStatus
   importance: number
+  healthScore: number | null
   x: number
   y: number
   catX: number
@@ -15,6 +16,7 @@ export type MapRepo = {
   vulnerabilityTone: 'high' | 'medium' | 'low' | 'none'
   vulnBuckets: string[]
   flowerId?: string
+  investigated: boolean
   investigatedInLatestRun: boolean
 }
 

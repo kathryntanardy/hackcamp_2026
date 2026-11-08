@@ -17,18 +17,11 @@ function formatScore(maxCvss: number | null | undefined): string {
   return `${display}/10`
 }
 
-function severityTone(
-  severity: string | null | undefined,
-  riskLevel: string | null | undefined,
-): MapRepo['vulnerabilityTone'] {
-  const s = (severity || '').toLowerCase()
-  if (s === 'critical' || s === 'high') return 'high'
-  if (s === 'medium' || s === 'moderate') return 'medium'
-  if (s === 'low') return 'low'
-
-  const risk = (riskLevel || '').toLowerCase()
-  if (risk === 'at_risk') return 'high'
-  if (risk === 'watchlist') return 'medium'
+/** Map High/Med/Low to maintainer risk so "High" = most vulnerable (at risk). */
+function severityTone(status: MapStatus): MapRepo['vulnerabilityTone'] {
+  if (status === 'at_risk') return 'high'
+  if (status === 'watchlist') return 'medium'
+  if (status === 'healthy') return 'low'
   return 'none'
 }
 
@@ -43,13 +36,17 @@ export function mapRepoToMapPoint(repo: RepoListEntry): MapRepo | null {
     language: repo.language,
     status: normalizeStatus(repo.status),
     importance: repo.importance ?? 0,
+    healthScore: repo.health_score == null || Number.isNaN(repo.health_score)
+      ? null
+      : repo.health_score,
     x: repo.x,
     y: repo.y,
     catX: repo.cat_x ?? repo.x,
     catY: repo.cat_y ?? repo.y,
     vulnerabilityScore: formatScore(repo.max_cvss),
-    vulnerabilityTone: severityTone(repo.max_severity, repo.risk_level),
+    vulnerabilityTone: severityTone(normalizeStatus(repo.status)),
     vulnBuckets: Array.isArray(repo.vuln_buckets) ? repo.vuln_buckets.filter(Boolean) : [],
+    investigated: Boolean(repo.investigated),
     investigatedInLatestRun: Boolean(repo.investigated_in_latest_run),
   }
 }

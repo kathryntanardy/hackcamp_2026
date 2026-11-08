@@ -41,7 +41,7 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 
 **Should-have (P1, once the must-haves work)**
 
-- Repo categories and CWE vulnerability buckets for sorting and filtering the map and findings
+- Repo categories and CWE vulnerability buckets for sorting the map and filtering findings
 - Natural-language map search that zooms to matching stars, powered by Vector Search
 
 **Nice-to-have (only if ahead of schedule)**
@@ -70,15 +70,15 @@ Assumption about judging (to confirm against the track's rules): judges reward D
 | F4 | Agent investigation | P0 must | The agent calls at least 2 tools per eligible repo, chosen by the model rather than a fixed sequence, and stops when it is confident or reaches 8 calls. Confirmed deprecation is an early-exit exception: record the exclusion and stop without a public finding |
 | F5 | Structured verdict | P0 must | Each investigation writes one `findings` row matching the schema in Agent design, with every evidence item pointing to a tool result |
 | F6 | Reasoning trace | P0 must | Every investigation has an MLflow trace, and the repo drawer shows its tool calls and results in order |
-| F7 | Galaxy map | P0 must | Renders eligible repos as stars clustered by language, sized by importance and coloured by health; deprecated repos have no star or Ignored bin; hover shows the name and score; click opens the drawer; 1,000 stars render smoothly |
+| F7 | Galaxy map | P0 must | Renders eligible repos as nodes in vulnerability-bucket flowers, sized by importance; each flower label shows High / Med / Low counts from maintainer health status (`at_risk` / `watchlist` / `healthy`), not advisory severity—High means most vulnerable; hover a level highlights matching nodes, click zooms to fit that flower; hover a node shows name and score, click opens the drawer; deprecated repos have no node; 1,000 nodes render smoothly |
 | F8 | Findings page | P0 must | Lists findings sorted by severity, then importance; filters by language and risk; deprecated repos and historical findings for them are excluded; a row click opens that repo on the map |
 | F9 | Evaluation | P1 should | The agent runs on 30–50 labelled repos; accuracy and false-positive rate are logged in MLflow and shown in the pitch |
 | F10 | Scheduled autonomy | P2 stretch | The `scheduled_autonomy` Lakeflow Job runs daily at 10:00 Pacific: the `repo_health` pipeline refresh, then the agent run, on the frozen snapshot. Scraping stays a separate on-demand job; recurring scraping is not required within the 20-hour build |
 | F11 | Lineage view | P1 should | A Unity Catalog lineage screenshot or link from the raw volume to `findings` |
 | F12 | Find alternatives | P2 if time | For an at-risk repo, the agent returns up to 3 similar healthy repos from Vector Search |
 | F13 | Run-over-run memory | P2 if time | The agent reads its previous finding for each repo; the UI shows newly at risk and recovered badges |
-| F14 | Natural-language map search | P1 should | The user types a natural-language query on the galaxy map; Databricks Vector Search matches it against repo name, description, topics and advisory summaries, within the active filters. One match zooms to that star and opens the drawer; several matches zoom to fit them and dim the rest; zero matches shows "no matches" and leaves the map unchanged. Clearing the query restores the full map |
-| F15 | Categories and vulnerability buckets | P1 should | Every repo has one of 6 categories (Front-end, Back-end, Machine learning, Database, Hardware/embedded, DevOps & infra) or `other`, and a list of CWE vulnerability buckets from its GitHub security advisories (see Pages and UX). The map and Findings sort and filter by both |
+| F14 | Natural-language map search | P1 should | The user types a natural-language query on the galaxy map; Databricks Vector Search matches it against repo name, description, topics and advisory summaries. One match zooms to that star and opens the drawer; several matches zoom to fit them and dim the rest; zero matches shows "no matches" and leaves the map unchanged. Clearing the query restores the full map |
+| F15 | Categories and vulnerability buckets | P1 should | Every repo has one of 6 categories (Front-end, Back-end, Machine learning, Database, Hardware/embedded, DevOps & infra) or `other`, and a list of CWE vulnerability buckets from its GitHub security advisories (see Pages and UX). The map lays out flowers by vulnerability bucket; Findings filters by category and bucket |
 
 ## Pages and UX
 
@@ -86,11 +86,11 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 
 **Galaxy Map (`/`)**: the hero screen
 
-- Full-screen star field. Each language gets a fixed cluster centre, and repos are scattered around it with a seeded random offset so positions stay the same between reloads.
-- Star size = importance, the log of dependents (or stars if dependents are missing). Star colour = status: green healthy, amber watchlist, red at risk. A pulsing ring marks eligible repos the agent investigated in the latest run. Deprecated repos are absent, including when historical rows still exist.
-- Top bar: eligible repos tracked, healthy, watchlist, at risk, last agent run time. Deprecated repos are excluded from all displayed totals.
-- Filters: language, category, vulnerability bucket, status, "investigated only". Exclusion of deprecated repos is mandatory across filters; there is no Ignored tab, chip or opt-in display.
-- Cluster toggle: group stars by programming language (default) or by category.
+- Full-screen map of vulnerability-bucket flowers. Repos that share a CWE vulnerability bucket sit on one flower; nodes are uniform in that flower's colour until a severity level is focused.
+- Node size = importance, the log of dependents (or stars if dependents are missing). A pulsing ring marks eligible repos the agent investigated in the latest run. Deprecated repos are absent, including when historical rows still exist.
+- Each flower label lists **High / Med / Low** counts from **maintainer health status**, not GitHub advisory severity: High = `at_risk`, Med = `watchlist`, Low = `healthy`. Hovering a level highlights matching nodes on that flower; clicking a level zooms so the whole flower fits the viewport. Users looking for vulnerable packages use High.
+- Advisory severity and CVSS stay on the repo drawer and Findings sorts; they do not drive the map High / Med / Low chips.
+- No map chrome for corpus totals or facet filters; the navbar is brand and page tabs only. Deprecated repos stay out of the map and list by serving rules, with no Ignored tab, chip or opt-in display.
 - Search box (F14): a natural-language query zooms to the repos Vector Search matches (one star: zoom and open the drawer; several: zoom to fit, dim the rest). It is a search, not a chatbot.
 - Hover shows a tooltip with the name, score and status. Click opens the drawer.
 
@@ -110,7 +110,7 @@ Two pages plus a slide-out drawer. Dark space theme, built in React with ECharts
 - Previous verdict and its date, if one exists.
 - Security advisories: GHSA ID, CVE ID, severity, CVSS, summary and vulnerability bucket for each. With none, show "No GitHub advisories", never "safe"; if the advisory fetch failed, show "Advisories unavailable".
 
-**Vulnerability buckets (F15)**: each advisory's CWE IDs map to one bucket; a repo carries every bucket its advisories hit. Buckets do not change the health score or the agent's verdict.
+**Vulnerability buckets (F15)**: each advisory's CWE IDs map to one bucket; a repo carries every bucket its advisories hit. Buckets lay out the galaxy map flowers and support Findings filters. They do not change the health score or the agent's verdict, and the flower High / Med / Low chips still count health status within the bucket (`at_risk` / `watchlist` / `healthy`), not advisory severity.
 
 | # | Bucket | CWEs | Example |
 | --- | --- | --- | --- |
@@ -315,7 +315,7 @@ The core services carry the Best Use of Databricks story; additional services su
 | Lakeflow Jobs | Runs one on-demand scraping notebook; pipeline runs may be started manually | Source collection runs on Databricks, with visible task history | Core for F1 notebook; Stretch for F10 chaining/scheduling |
 | Databricks Apps + SQL warehouse | Hosts the React app and a thin Python API querying gold and findings | The whole product lives inside the workspace | Should |
 | Model Serving | Agent as an endpoint, for the live demo investigation | One-click "investigate now" from the UI | If time |
-| Vector Search | Index over repo descriptions for find\_alternatives and natural-language map search | Retrieval as an agent tool and a map filter, not a chatbot | If time |
+| Vector Search | Index over repo descriptions for find\_alternatives and natural-language map search | Retrieval as an agent tool and map search, not a chatbot | If time |
 | `ai_query()` | Classify each repo into one of 6 categories (F15); batch one-liners for repos not investigated (if time) | LLM inference in plain SQL at table scale | Should |
 
 **Skipped on purpose:** Genie (a chatbot, out of scope), Lakebase (Delta through a SQL warehouse is fast enough), AI/BI dashboards (the custom UI covers it).
@@ -369,7 +369,7 @@ The frontend works against mock data until hour 9, so the data and agent workstr
 A 3-minute walkthrough. Every Databricks claim is shown on screen, not just said.
 
 1. **Hook (0:00–0:20).** "Your app depends on hundreds of packages. Which ones are dying?" Open the galaxy map with the verified eligible repo count (target 1,000; deprecated repos filtered out), with red ones scattered through the clusters.
-2. **The map (0:20–0:50).** Type "unmaintained Python HTTP clients" and the map zooms to the matches; filter by the Injection bucket. Filter to at-risk. Hover a big red star and click it. The drawer shows the score, the agent's verdict and the evidence.
+2. **The map (0:20–0:50).** Type "unmaintained Python HTTP clients" and the map zooms to the matches. Hover a big red star and click it. The drawer shows the score, the agent's verdict and the evidence.
 3. **How the agent decided (0:50–1:30).** Open the trace tab and walk through its steps: the agent checked releases, saw conflicting commit data, compared archive status and last push, and concluded at risk using the collected evidence. If the agent used a live README or issue fetch, show it. Point out that it chose those steps itself.
 4. **Live run (1:30–2:00).** Hit "Investigate now" on a repo not yet investigated, or show the Lakeflow Job's last run graph if serving isn't ready. Show the new finding appear.
 5. **Platform (2:00–2:30).** Show the successful Databricks scraping task and its raw Volume output, Unity Catalog lineage from the raw volume to findings, and the UC functions list showing the agent's tools. Show the Lakeflow Job schedule if implemented.

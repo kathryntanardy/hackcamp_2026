@@ -1,9 +1,10 @@
 import { worldToScreen } from './camera'
 import {
   FLOWER_PALETTE,
-  drawFlowerLabel,
+  SEVERITY_HIGHLIGHT,
   drawFlowerPetals,
   type FlowerCluster,
+  type SeverityFocus,
   type VulnEdge,
 } from './flowers'
 import { dispersePoint, growFactor } from './hoverAnim'
@@ -16,6 +17,9 @@ const STATUS_FILL: Record<MapStatus, string> = {
   ignored: '#a2a2a2',
   unknown: '#8a8a8a',
 }
+
+/** Soft glow is disabled once this many points are on screen. */
+export const GLOW_POINT_LIMIT = 300
 
 export function statusColor(status: MapStatus): string {
   return STATUS_FILL[status]
@@ -35,6 +39,48 @@ export function pointRadius(importance: number, scale: number, grow = 1): number
   return xFontSize(importance, scale, grow) * 0.55
 }
 
+function isOnScreen(
+  screen: { x: number; y: number },
+  pad: number,
+  width: number,
+  height: number,
+): boolean {
+  return !(
+    screen.x < -pad ||
+    screen.y < -pad ||
+    screen.x > width + pad ||
+    screen.y > height + pad
+  )
+}
+
+function flowerById(
+  flowers: FlowerCluster[],
+  id: string | undefined,
+): FlowerCluster | null {
+  if (!id) return null
+  return flowers.find((f) => f.id === id) ?? null
+}
+
+function glyphColor(
+  repo: MapRepo,
+  flowers: FlowerCluster[],
+  severityFocus: SeverityFocus | null,
+): { fill: string; dim: boolean; lit: boolean } {
+  const flower = flowerById(flowers, repo.flowerId)
+  const base = flower
+    ? FLOWER_PALETTE[flower.colorIndex % FLOWER_PALETTE.length].glyph
+    : '#8a8a8a'
+
+  if (!severityFocus) return { fill: base, dim: false, lit: false }
+
+  const onFocusedFlower = repo.flowerId === severityFocus.flowerId
+  if (!onFocusedFlower) return { fill: base, dim: true, lit: false }
+
+  const matches = repo.vulnerabilityTone === severityFocus.tone
+  if (matches) return { fill: SEVERITY_HIGHLIGHT, dim: false, lit: true }
+  return { fill: base, dim: true, lit: false }
+}
+
 export function drawMap(
   ctx: CanvasRenderingContext2D,
   repos: MapRepo[],
@@ -46,6 +92,8 @@ export function drawMap(
   hoverAmount: number,
   width: number,
   height: number,
+  nowMs = 0,
+  severityFocus: SeverityFocus | null = null,
 ): void {
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = '#fafafa'
@@ -61,7 +109,12 @@ export function drawMap(
 
   for (const flower of flowers) {
     const center = worldToScreen(flower.center, camera)
+    const dimOutside =
+      severityFocus != null && severityFocus.flowerId !== flower.id
+    ctx.save()
+    if (dimOutside) ctx.globalAlpha = 0.45
     drawFlowerPetals(ctx, center, flower.radius, flower.colorIndex, camera.scale)
+    ctx.restore()
   }
 
   ctx.save()
@@ -104,57 +157,82 @@ export function drawMap(
     return rank(a.id) - rank(b.id)
   })
 
+  let visibleCount = 0
+  const screens: {
+    repo: MapRepo
+    screen: { x: number; y: number }
+    size: number
+    grow: number
+    fill: string
+    dim: boolean
+    lit: boolean
+  }[] = []
   for (const repo of ordered) {
     const world = placed.get(repo.id)!
     const screen = worldToScreen(world, camera)
     const isSelected = repo.id === selectedId
     const isHovered = repo.id === hoveredId
-    const grow = growFactor(isHovered, isSelected, amount)
+    const { fill, dim, lit } = glyphColor(repo, flowers, severityFocus)
+    const grow = growFactor(isHovered, isSelected, amount) * (lit ? 1.12 : 1)
     const size = xFontSize(repo.importance, camera.scale, grow)
-    const pad = size
+    if (!isOnScreen(screen, size, width, height)) continue
+    visibleCount += 1
+    screens.push({ repo, screen, size, grow, fill, dim, lit })
+  }
 
-    if (
-      screen.x < -pad ||
-      screen.y < -pad ||
-      screen.x > width + pad ||
-      screen.y > height + pad
-    ) {
-      continue
-    }
+  const allowGlow = visibleCount <= GLOW_POINT_LIMIT
+  const pulse = 0.55 + 0.45 * Math.sin((nowMs / 1000) * Math.PI * 2)
 
-    ctx.font = `${isHovered || isSelected ? 800 : 700} ${size}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+  for (const { repo, screen, size, fill, dim, lit } of screens) {
+    const isSelected = repo.id === selectedId
+    const isHovered = repo.id === hoveredId
 
-    // Selected only — no hover background / fill ring.
+    ctx.save()
+    if (dim) ctx.globalAlpha = 0.28
+
+    ctx.font = `${isHovered || isSelected || lit ? 800 : 700} ${size}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
+
     if (isSelected && !isHovered) {
       ctx.beginPath()
       ctx.arc(screen.x, screen.y, size * 0.62, 0, Math.PI * 2)
-      ctx.strokeStyle = '#fc5239'
+      ctx.strokeStyle = SEVERITY_HIGHLIGHT
       ctx.lineWidth = Math.max(1.5, camera.scale * 0.06)
       ctx.stroke()
     }
 
     if (repo.investigatedInLatestRun && !isHovered) {
+      const ringR = size * (0.55 + 0.12 * pulse)
+      if (allowGlow) {
+        const glow = ctx.createRadialGradient(
+          screen.x,
+          screen.y,
+          size * 0.2,
+          screen.x,
+          screen.y,
+          size * (0.95 + 0.25 * pulse),
+        )
+        glow.addColorStop(0, `rgba(252, 82, 57, ${0.22 + 0.18 * pulse})`)
+        glow.addColorStop(1, 'rgba(252, 82, 57, 0)')
+        ctx.beginPath()
+        ctx.fillStyle = glow
+        ctx.arc(screen.x, screen.y, size * (0.95 + 0.25 * pulse), 0, Math.PI * 2)
+        ctx.fill()
+      }
       ctx.beginPath()
-      ctx.arc(screen.x, screen.y, size * 0.55, 0, Math.PI * 2)
-      ctx.strokeStyle = 'rgba(252, 82, 57, 0.4)'
-      ctx.lineWidth = 1
+      ctx.arc(screen.x, screen.y, ringR, 0, Math.PI * 2)
+      ctx.strokeStyle = `rgba(252, 82, 57, ${0.35 + 0.45 * pulse})`
+      ctx.lineWidth = Math.max(1.2, camera.scale * 0.05)
       ctx.stroke()
     }
 
-    ctx.fillStyle = statusColor(repo.status)
-    ctx.fillText('x', screen.x, screen.y + size * 0.04)
-  }
+    if (lit) {
+      ctx.shadowColor = 'rgba(252, 82, 57, 0.55)'
+      ctx.shadowBlur = Math.max(4, size * 0.35)
+    }
 
-  for (const flower of flowers) {
-    const center = worldToScreen(flower.center, camera)
-    drawFlowerLabel(
-      ctx,
-      center,
-      flower.radius,
-      flower.label,
-      flower.colorIndex,
-      camera.scale,
-    )
+    ctx.fillStyle = fill
+    ctx.fillText('x', screen.x, screen.y + size * 0.04)
+    ctx.restore()
   }
 }
 
@@ -182,5 +260,5 @@ export function hitTest(
 }
 
 export function flowerColor(colorIndex: number): string {
-  return FLOWER_PALETTE[colorIndex % FLOWER_PALETTE.length].label
+  return FLOWER_PALETTE[colorIndex % FLOWER_PALETTE.length].glyph
 }

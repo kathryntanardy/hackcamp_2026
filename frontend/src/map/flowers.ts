@@ -1,15 +1,20 @@
 import type { MapRepo, Point } from './types'
 
-/** Soft petal fills matching Figma flower palette (40:6204). */
+/** Soft petal fills matching Figma flower palette (40:13967). */
 export const FLOWER_PALETTE = [
-  { fill: 'rgba(252, 120, 70, 0.55)', core: 'rgba(220, 70, 40, 0.7)', label: '#c4452a' },
-  { fill: 'rgba(70, 130, 210, 0.5)', core: 'rgba(40, 90, 180, 0.65)', label: '#2f5fad' },
-  { fill: 'rgba(50, 180, 170, 0.5)', core: 'rgba(20, 140, 130, 0.65)', label: '#1f8a82' },
-  { fill: 'rgba(210, 70, 90, 0.5)', core: 'rgba(170, 30, 55, 0.65)', label: '#b02844' },
-  { fill: 'rgba(230, 180, 50, 0.5)', core: 'rgba(190, 140, 20, 0.65)', label: '#b08a14' },
-  { fill: 'rgba(120, 90, 190, 0.5)', core: 'rgba(80, 50, 150, 0.65)', label: '#5c3d9e' },
-  { fill: 'rgba(90, 100, 120, 0.45)', core: 'rgba(50, 55, 70, 0.6)', label: '#4a5160' },
+  { fill: 'rgba(57, 145, 252, 0.55)', core: 'rgba(57, 145, 252, 0.78)', glyph: '#3991fc', chipBg: '#ebf4ff' },
+  { fill: 'rgba(57, 90, 252, 0.5)', core: 'rgba(57, 90, 252, 0.72)', glyph: '#395afc', chipBg: '#eef0ff' },
+  { fill: 'rgba(252, 82, 57, 0.5)', core: 'rgba(252, 82, 57, 0.72)', glyph: '#fc5239', chipBg: '#ffeae6' },
+  { fill: 'rgba(50, 180, 170, 0.5)', core: 'rgba(20, 140, 130, 0.65)', glyph: '#1f8a82', chipBg: '#e8f8f6' },
+  { fill: 'rgba(230, 180, 50, 0.5)', core: 'rgba(190, 140, 20, 0.65)', glyph: '#b08a14', chipBg: '#fff8e6' },
+  { fill: 'rgba(120, 90, 190, 0.5)', core: 'rgba(80, 50, 150, 0.65)', glyph: '#5c3d9e', chipBg: '#f2ecff' },
+  { fill: 'rgba(90, 100, 120, 0.45)', core: 'rgba(50, 55, 70, 0.6)', glyph: '#4a5160', chipBg: '#f0f1f3' },
 ] as const
+
+/** Severity highlight when hovering High / Med / Low on a flower label. */
+export const SEVERITY_HIGHLIGHT = '#fc5239'
+
+export type VulnSeverity = 'high' | 'medium' | 'low'
 
 export type FlowerCluster = {
   id: string
@@ -18,6 +23,12 @@ export type FlowerCluster = {
   radius: number
   colorIndex: number
   repoIds: string[]
+  counts: { high: number; medium: number; low: number }
+}
+
+export type SeverityFocus = {
+  flowerId: string
+  tone: VulnSeverity
 }
 
 export type VulnEdge = {
@@ -110,6 +121,13 @@ export function layoutFlowerMap(repos: MapRepo[]): {
     const baseR = radii[index]
     const colorIndex = index % FLOWER_PALETTE.length
 
+    const counts = { high: 0, medium: 0, low: 0 }
+    for (const repo of members) {
+      if (repo.vulnerabilityTone === 'high') counts.high += 1
+      else if (repo.vulnerabilityTone === 'medium') counts.medium += 1
+      else if (repo.vulnerabilityTone === 'low') counts.low += 1
+    }
+
     flowers.push({
       id: key,
       label: key,
@@ -117,6 +135,7 @@ export function layoutFlowerMap(repos: MapRepo[]): {
       radius: baseR,
       colorIndex,
       repoIds: members.map((m) => m.id),
+      counts,
     })
 
     members.forEach((repo, i) => {
@@ -229,54 +248,18 @@ export function drawFlowerPetals(
   ctx.restore()
 }
 
-export function drawFlowerLabel(
-  ctx: CanvasRenderingContext2D,
-  center: Point,
-  radius: number,
-  label: string,
-  colorIndex: number,
-  scale: number,
-): void {
-  const palette = FLOWER_PALETTE[colorIndex % FLOWER_PALETTE.length]
-  const x = center.x
-  const y = center.y + radius * scale + Math.max(22, scale * 1.2)
-  const padX = 10
-  const fontPx = Math.round(Math.min(16, Math.max(11, 10 + scale * 0.15)))
-  ctx.font = `500 ${fontPx}px "Inter Tight", system-ui, sans-serif`
-  const textW = ctx.measureText(label).width
-  const boxW = textW + 28 + padX * 2
-  const boxH = fontPx + 14
-  const left = x - boxW / 2
-  const swatch = Math.max(12, fontPx)
-
-  ctx.fillStyle = 'rgba(255,255,255,0.94)'
-  ctx.strokeStyle = 'rgba(231,229,230,1)'
-  ctx.lineWidth = 1
-  roundRect(ctx, left, y - boxH / 2, boxW, boxH, 4)
-  ctx.fill()
-  ctx.stroke()
-
-  ctx.fillStyle = palette.label
-  ctx.fillRect(left + padX, y - swatch / 2, swatch, swatch)
-
-  ctx.fillStyle = '#1e1e1e'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(label, left + padX + swatch + 8, y)
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.arcTo(x + w, y, x + w, y + h, r)
-  ctx.arcTo(x + w, y + h, x, y + h, r)
-  ctx.arcTo(x, y + h, x, y, r)
-  ctx.arcTo(x, y, x + w, y, r)
-  ctx.closePath()
+/** World bounds that frame an entire flower (petals + label breathing room). */
+export function flowerWorldBounds(flower: FlowerCluster): {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+} {
+  const pad = flower.radius * 1.35
+  return {
+    minX: flower.center.x - pad,
+    maxX: flower.center.x + pad,
+    minY: flower.center.y - pad,
+    maxY: flower.center.y + pad + flower.radius * 0.35,
+  }
 }

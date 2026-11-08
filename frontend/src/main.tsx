@@ -25,7 +25,7 @@ import { RepoSidebar, type RepoSidebarProps } from './components/RepoSidebar'
 import { SidebarPanel } from './components/SidebarPanel'
 import { TopNavbar, type TopNavbarTab } from './components/TopNavbar'
 import { useFavourites } from './favourites/useFavourites'
-import { layoutFlowerMap } from './map/flowers'
+import { flowerWorldBounds, layoutFlowerMap } from './map/flowers'
 import type { MapRepo } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
 import './styles.css'
@@ -36,9 +36,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const mapCamera = useMapCamera()
-
-  const flowerLayout = useMemo(() => layoutFlowerMap(rawMapRepos), [rawMapRepos])
-  const mapRepos = flowerLayout.repos
 
   const [findings, setFindings] = useState<FindingListEntry[]>([])
   const [findingsError, setFindingsError] = useState<string | null>(null)
@@ -136,25 +133,36 @@ function App() {
     [findings],
   )
 
-  const filteredRepos = useMemo(() => {
+  const filteredMapRepos = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    if (!q) return repos
-    return repos.filter((repo) => {
+    if (!q) return rawMapRepos
+    return rawMapRepos.filter((repo) => {
       const name = repo.name.toLowerCase()
-      const category = repo.category.toLowerCase()
-      const description = repo.description.toLowerCase()
+      const language = (repo.language || '').toLowerCase()
+      const overview = repo.overview.toLowerCase()
       if (searchScope === 'name') return name.includes(q)
-      if (searchScope === 'category') return category.includes(q)
-      if (searchScope === 'language') {
-        return description.includes(q) || name.includes(q)
+      if (searchScope === 'language') return language.includes(q)
+      if (searchScope === 'category') {
+        return overview.includes(q) || name.includes(q)
       }
-      return name.includes(q) || category.includes(q) || description.includes(q)
+      return name.includes(q) || language.includes(q) || overview.includes(q)
     })
-  }, [repos, searchQuery, searchScope])
+  }, [rawMapRepos, searchQuery, searchScope])
+
+  const filteredRepos = useMemo(() => {
+    const ids = new Set(filteredMapRepos.map((repo) => repo.id))
+    return repos.filter((repo) => ids.has(repo.id))
+  }, [repos, filteredMapRepos])
+
+  const flowerLayout = useMemo(
+    () => layoutFlowerMap(filteredMapRepos),
+    [filteredMapRepos],
+  )
 
   const {
     setViewportSize,
     fitToRepos,
+    fitToBoundsAnimated,
     pan,
     zoomIn,
     zoomOut,
@@ -164,16 +172,23 @@ function App() {
   } = mapCamera
 
   useEffect(() => {
-    if (mapRepos.length === 0) return
-    fitToRepos(mapRepos, true)
-  }, [mapRepos, fitToRepos])
+    if (flowerLayout.repos.length === 0) return
+    fitToRepos(flowerLayout.repos, true)
+  }, [flowerLayout.repos, fitToRepos])
 
   const handleViewportChange = useCallback(
     (width: number, height: number) => {
       setViewportSize(width, height)
-      if (mapRepos.length > 0) fitToRepos(mapRepos)
+      if (flowerLayout.repos.length > 0) fitToRepos(flowerLayout.repos)
     },
-    [fitToRepos, mapRepos, setViewportSize],
+    [fitToRepos, flowerLayout.repos, setViewportSize],
+  )
+
+  const handleZoomToFlower = useCallback(
+    (flower: (typeof flowerLayout.flowers)[number]) => {
+      fitToBoundsAnimated(flowerWorldBounds(flower), 64)
+    },
+    [fitToBoundsAnimated],
   )
 
   const backLabel =
@@ -195,9 +210,10 @@ function App() {
 
   function handleSelectRepo(id: string) {
     setSelectedId(id)
-    const point = mapRepos.find((repo) => repo.id === id)
+    const point = flowerLayout.repos.find((repo) => repo.id === id)
+      ?? filteredMapRepos.find((repo) => repo.id === id)
+      ?? rawMapRepos.find((repo) => repo.id === id)
     if (point) {
-      // Switch to map so the zoom is visible when coming from findings/list.
       if (tab !== 'map') setTab('map')
       focusOnPoint({ x: point.x, y: point.y }, point.importance)
     }
@@ -313,7 +329,7 @@ function App() {
         ) : (
           <main className="app-shell__map" aria-label="Repository galaxy map">
             <GalaxyMap
-              repos={mapRepos}
+              repos={flowerLayout.repos}
               flowers={flowerLayout.flowers}
               edges={flowerLayout.edges}
               camera={camera}
@@ -322,6 +338,7 @@ function App() {
               onViewportChange={handleViewportChange}
               onPan={pan}
               onZoomByFactor={zoomByFactor}
+              onZoomToFlower={handleZoomToFlower}
             />
             <MapSearchBar
               query={searchQuery}

@@ -11,7 +11,7 @@ import {
   panBy,
   zoomAt,
 } from './camera'
-import type { MapCamera, MapRepo, Point } from './types'
+import type { MapCamera, MapRepo, Point, WorldBounds } from './types'
 
 export { worldToScreen, screenToWorld } from './camera'
 
@@ -157,12 +157,23 @@ export function useMapCamera() {
     [animateTo],
   )
 
+  /** Animate camera so the given world bounds (e.g. an entire flower) fill the view. */
+  const fitToBoundsAnimated = useCallback(
+    (bounds: WorldBounds, padding = 72) => {
+      const { width, height } = viewport.current
+      if (width <= 1 || height <= 1) return
+      animateTo(fitBounds(bounds, width, height, padding), 520)
+    },
+    [animateTo],
+  )
+
   return useMemo(
     () => ({
       camera,
       setCamera,
       setViewportSize,
       fitToRepos,
+      fitToBoundsAnimated,
       zoomIn,
       zoomOut,
       zoomByFactor,
@@ -171,6 +182,7 @@ export function useMapCamera() {
     }),
     [
       camera,
+      fitToBoundsAnimated,
       fitToRepos,
       focusOnPoint,
       pan,

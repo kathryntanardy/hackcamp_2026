@@ -208,11 +208,96 @@ img {
   cursor: grabbing;
 }
 
+.flower-label {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, 0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 50%);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+
+.flower-label__title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.flower-label__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.flower-label__name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flower-label__counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.flower-label__count-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flower-label__divider {
+  width: 1px;
+  height: 15px;
+  background: #e7e5e6;
+}
+
+.flower-label__count {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--color-text-muted);
+  border-radius: 4px;
+  padding: 2px 2px;
+  transition: color 120ms ease;
+}
+
+.flower-label__count:hover,
+.flower-label__count:focus-visible {
+  color: var(--color-accent-underline);
+  outline: none;
+}
+
+.flower-label__count.is-active {
+  color: var(--color-accent-underline);
+}
+
+.flower-label__count-num {
+  font-weight: 600;
+}
+
 .map-hover-card {
   position: absolute;
   z-index: 3;
-  width: 314px;
-  padding: 21px;
+  width: 260px;
+  padding: 14px 16px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -220,7 +305,7 @@ img {
   pointer-events: none;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .map-hover-card__chip {
@@ -242,22 +327,6 @@ img {
   background: var(--color-border-strong);
 }
 
-.map-hover-card__swatch.is-high {
-  background: var(--color-danger);
-}
-
-.map-hover-card__swatch.is-medium {
-  background: #d4a017;
-}
-
-.map-hover-card__swatch.is-low {
-  background: #2f9e6b;
-}
-
-.map-hover-card__swatch.is-none {
-  background: var(--color-border-strong);
-}
-
 .map-hover-card__name {
   font-size: var(--text-xs);
   color: var(--color-text);
@@ -266,42 +335,44 @@ img {
   text-overflow: ellipsis;
 }
 
-.map-hover-card__bucket {
+.map-hover-card__meta {
   margin: 0;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.map-hover-card__overview {
-  margin: 0;
-  font-size: var(--text-xs);
-  line-height: 1.35;
-  color: var(--color-text);
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.map-hover-card__overview.is-empty {
-  color: var(--color-text-muted);
-}
-
-.map-hover-card__score {
-  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: var(--text-xs);
 }
 
-.map-hover-card__score-label {
+.map-hover-card__meta-label {
   color: var(--color-text-muted);
 }
 
-.map-hover-card__score-value {
+.map-hover-card__meta-value {
   color: var(--color-text);
+  font-weight: 600;
 }
 
-.map-hover-card__score-value.is-danger {
-  color: var(--color-danger);
+.map-hover-card__status {
+  text-transform: capitalize;
+  font-weight: 600;
+}
+
+.map-hover-card__status.is-healthy {
+  color: #2f9e6b;
+}
+
+.map-hover-card__status.is-watchlist {
+  color: #d4a017;
+}
+
+.map-hover-card__status.is-at_risk {
+  color: #c20c0c;
+}
+
+.map-hover-card__status.is-ignored,
+.map-hover-card__status.is-unknown {
+  color: var(--color-text-muted);
 }
 
 .visually-hidden {

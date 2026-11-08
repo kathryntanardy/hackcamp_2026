@@ -1,0 +1,16 @@
+resources:
+  apps:
+    corpus_explorer_api:
+      name: corpus-explorer-api
+      description: Open-Source Corpus Explorer (API + React UI)
+      # Populated by scripts/prepare_corpus_explorer_app.sh from ../../backend (+ static UI).
+      source_code_path: ../apps/corpus-explorer
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_MANAGE
+        - name: hackcamp-agent-experiment
+          experiment:
+            experiment_id: "313223408700180"
+            permission: CAN_MANAGE

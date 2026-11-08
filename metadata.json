@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6WJVXBZV8KYVY7NH6V5WMPP",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 11,
+  "files_touched": [
+    "backend/app/main.py",
+    "backend/app/scan.py",
+    "backend/requirements.txt",
+    "backend/tests/test_scan.py",
+    "databricks/src/setup/create_uc.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 134,
+    "cache_creation_tokens": 90096,
+    "cache_read_tokens": 6066120,
+    "output_tokens": 41379,
+    "api_call_count": 56
+  },
+  "redaction": {
+    "replacements": 35,
+    "layers": {
+      "betterleaks": 0,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 12,
+      "credentialed_uri": 0,
+      "entropy": 12,
+      "key_context": 11,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}

@@ -1,0 +1,45 @@
+I want to add a new feature using gemini API, when user clicks on a node/repo on the details panel, gemini will take a look at the code and scan for vulnerabilities and give recommendations on how to fix it
+
+---
+
+where should i put the key?
+
+---
+
+i want to load it from .env
+
+---
+
+whats github token for?
+
+---
+
+github_token is on databricks
+
+---
+
+How does it work can u pull it?
+
+---
+
+Can you test the feature?
+
+---
+
+show me ane xample of the response
+
+---
+
+for the cwe part, can you add the name too, use the ones that we have the 10 names that the project uses for CWE
+
+---
+
+for the desscription part, can you give a link to the code line but after gemini's response so it uses less tokens
+
+---
+
+how did u create the link?
+
+---
+
+looks good

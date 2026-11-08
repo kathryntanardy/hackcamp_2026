@@ -80,7 +80,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(580)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchScope, setSearchScope] = useState<MapSearchScope>('all')
+  const [searchScope, setSearchScope] = useState<MapSearchScope>('vulnerabilities')
   /** null = no active search; array (maybe empty) = latest hits for the query. */
   const [searchMatchIds, setSearchMatchIds] = useState<string[] | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)

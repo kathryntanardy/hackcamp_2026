@@ -21,7 +21,6 @@ export type MapSearchBarProps = {
 }
 
 const SCOPE_OPTIONS: { id: MapSearchScope; label: string }[] = [
-  { id: 'all', label: 'All' },
   { id: 'vulnerabilities', label: 'Vulnerabilities' },
   { id: 'category', label: 'Category' },
   { id: 'name', label: 'Repository' },
@@ -31,7 +30,7 @@ const MAX_VISIBLE_RESULTS = 8
 
 export function MapSearchBar({
   query = '',
-  scope = 'all',
+  scope = 'vulnerabilities',
   results = [],
   loading = false,
   error = null,
@@ -51,7 +50,7 @@ export function MapSearchBar({
   const visibleResults = results.slice(0, MAX_VISIBLE_RESULTS)
   const showResults = resultsOpen && trimmed.length > 0
   const buttonLabel =
-    SCOPE_OPTIONS.find((option) => option.id === scope)?.label ?? 'All'
+    SCOPE_OPTIONS.find((option) => option.id === scope)?.label ?? 'Vulnerabilities'
 
   useEffect(() => {
     if (!menuOpen && !showResults) return

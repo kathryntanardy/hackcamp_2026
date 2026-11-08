@@ -9,6 +9,7 @@ import { flowerLabelLayout } from '../map/flowerLabels'
 import { MAX_SCALE } from '../map/camera'
 import { drawMap, hitTest } from '../map/draw'
 import { prefetchFlowerBloom } from '../map/flowerBloom'
+import { advanceFlowerPresence, reconcileFlowerPresence, type FlowerPresence } from '../map/flowerPresence'
 import type {
   FlowerCluster,
   SeverityFocus,
@@ -68,6 +69,15 @@ export function GalaxyMap({
   const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
   const [hoverSeverity, setHoverSeverity] = useState<SeverityFocus | null>(null)
   const severityFocus = hoverSeverity ?? pinnedSeverity
+  const presenceRef = useRef<FlowerPresence[]>([])
+  const [visibleFlowers, setVisibleFlowers] = useState<FlowerPresence[]>([])
+
+  useEffect(() => {
+    const immediate = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const next = reconcileFlowerPresence(presenceRef.current, repos, flowers, performance.now(), immediate)
+    presenceRef.current = next
+    setVisibleFlowers(next)
+  }, [repos, flowers])
 
   const reposRef = useRef(repos)
   const flowersRef = useRef(flowers)
@@ -135,6 +145,11 @@ export function GalaxyMap({
     const tick = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
+      if (presenceRef.current.some((entry) => entry.opacity !== entry.target)) {
+        const next = advanceFlowerPresence(presenceRef.current, now)
+        presenceRef.current = next
+        setVisibleFlowers(next)
+      }
 
       // Keep neighbours pushed out while a repo is selected, not only on hover.
       const target = hoverTargetId.current || selectedRef.current ? 1 : 0
@@ -168,6 +183,7 @@ export function GalaxyMap({
             severityRef.current,
             matchIdsRef.current,
             maxScaleRef.current,
+            presenceRef.current,
           )
         }
       }
@@ -288,16 +304,18 @@ export function GalaxyMap({
         onDragStart={(event) => event.preventDefault()}
         draggable={false}
       />
-      {flowers.map((flower) => {
+      {visibleFlowers.map(({ key, flower, opacity, target }) => {
         const label = flowerLabelLayout(flower, camera, maxScale)
         return (
           <FlowerLabel
-            key={flower.id}
+            key={key}
             flower={flower}
             x={label.x}
             y={label.y}
             scale={label.scale}
             width={label.width}
+            opacity={opacity}
+            interactive={target !== 0}
             activeTone={
               severityFocus?.flowerId === flower.id ? severityFocus.tone : null
             }

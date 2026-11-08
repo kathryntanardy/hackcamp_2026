@@ -1,5 +1,5 @@
 import { branchArtwork, flowerArtwork } from './flowerArtwork'
-import { FLOWER_SCENE } from './flowerScene'
+import { CENTRAL_BRANCH_JUNCTION_Y } from './flowerPresence'
 import type { MapCamera } from './types'
 
 type Artwork = {
@@ -11,7 +11,7 @@ type Artwork = {
 }
 type Bloom = { image: HTMLCanvasElement; x: number; y: number; width: number; height: number }
 const blooms = new Map<number, Bloom>()
-let branches: HTMLCanvasElement | null = null
+const branches = new Map<number, Bloom>()
 let loading: Promise<void> | null = null
 const RESOLUTION = 2
 
@@ -60,22 +60,61 @@ export function prefetchFlowerBloom(): void {
     }),
     (async () => {
       const images = await Promise.all(branchArtwork.map(branch => loadImage(branch.src)))
-      const image = createCanvas(FLOWER_SCENE.width, FLOWER_SCENE.height)
-      const ctx = image.getContext('2d')
-      if (!ctx) return
-      ctx.scale(RESOLUTION, RESOLUTION)
-      branchArtwork.forEach((branch, i) => drawAsset(ctx, branch, images[i]))
-      branches = image
+      branchArtwork.forEach((branch, i) => {
+        const asset = images[i]
+        const [a, b, c, d, tx, ty] = branch.matrix
+        const offset = branch.offset
+        const corners = [[0, 0], [asset.naturalWidth, 0], [0, asset.naturalHeight],
+          [asset.naturalWidth, asset.naturalHeight]].map(([x, y]) => ({
+            x: a * (x + offset.x) + c * (y + offset.y) + tx,
+            y: b * (x + offset.x) + d * (y + offset.y) + ty,
+          }))
+        const x = Math.floor(Math.min(...corners.map((p) => p.x)))
+        const y = Math.floor(Math.min(...corners.map((p) => p.y)))
+        const width = Math.ceil(Math.max(...corners.map((p) => p.x))) - x
+        const height = Math.ceil(Math.max(...corners.map((p) => p.y))) - y
+        const image = createCanvas(width, height)
+        const ctx = image.getContext('2d')
+        if (!ctx) return
+        ctx.scale(RESOLUTION, RESOLUTION)
+        ctx.translate(-x, -y)
+        drawAsset(ctx, branch, asset)
+        branches.set(i, { image, x, y, width, height })
+      })
     })(),
   ]).then(() => undefined).catch(() => { loading = null })
 }
 
-export function drawFlowerBranches(ctx: CanvasRenderingContext2D, camera: MapCamera): void {
-  if (!branches) return
+export function drawFlowerBranches(
+  ctx: CanvasRenderingContext2D, camera: MapCamera, opacities: readonly number[],
+): void {
   ctx.save()
   ctx.translate(camera.offsetX, camera.offsetY)
   ctx.scale(camera.scale, camera.scale)
-  ctx.drawImage(branches, 0, 0, FLOWER_SCENE.width, FLOWER_SCENE.height)
+  branches.forEach((branch, i) => {
+    if (i === 4) {
+      // Remove the upper flower's own stem while keeping the trunk below the
+      // magenta junction connected to its remaining flower.
+      for (const [alpha, y, height] of [
+        [opacities[4] ?? 0, branch.y, CENTRAL_BRANCH_JUNCTION_Y - branch.y],
+        [opacities[9] ?? 0, CENTRAL_BRANCH_JUNCTION_Y, branch.y + branch.height - CENTRAL_BRANCH_JUNCTION_Y],
+      ]) {
+        if (alpha <= 0) continue
+        ctx.save()
+        ctx.globalAlpha = alpha
+        ctx.beginPath()
+        ctx.rect(branch.x, y, branch.width, height)
+        ctx.clip()
+        ctx.drawImage(branch.image, branch.x, branch.y, branch.width, branch.height)
+        ctx.restore()
+      }
+      return
+    }
+    ctx.globalAlpha = opacities[i] ?? 0
+    if (ctx.globalAlpha > 0) {
+      ctx.drawImage(branch.image, branch.x, branch.y, branch.width, branch.height)
+    }
+  })
   ctx.restore()
 }
 

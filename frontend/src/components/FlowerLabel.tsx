@@ -6,6 +6,8 @@ export type FlowerLabelProps = {
   y: number
   scale?: number
   width?: number
+  opacity?: number
+  interactive?: boolean
   activeTone?: VulnSeverity | null
   /** True when this whole category (not a High/Med/Low band) is the list filter. */
   categoryActive?: boolean
@@ -26,6 +28,8 @@ export function FlowerLabel({
   y,
   scale = 1,
   width,
+  opacity = 1,
+  interactive = true,
   activeTone = null,
   categoryActive = false,
   onHoverTone,
@@ -38,7 +42,11 @@ export function FlowerLabel({
   return (
     <div
       className="flower-label"
-      style={{ left: x, top: y, width, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+      style={{ left: x + (width ?? 0) * scale / 2, top: y, minWidth: width, opacity,
+        pointerEvents: interactive ? undefined : 'none',
+        transform: `scale(${scale}) translateX(-50%)`, transformOrigin: 'top left' }}
+      inert={!interactive}
+      aria-hidden={!interactive || undefined}
       onPointerLeave={() => onHoverTone?.(null)}
     >
       <button

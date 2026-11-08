@@ -8,6 +8,7 @@ import {
 } from './flowers'
 import { dispersePoint, growFactor } from './hoverAnim'
 import { healthTone } from './health'
+import { branchOpacities, flowerSlotOpacities, type FlowerPresence } from './flowerPresence'
 import type { MapCamera, MapRepo, MapStatus } from './types'
 
 const STATUS_FILL: Record<MapStatus, string> = {
@@ -108,6 +109,7 @@ export function drawMap(
   severityFocus: SeverityFocus | null = null,
   matchIds: ReadonlySet<string> | null = null,
   maxScale = MAX_SCALE,
+  presence?: FlowerPresence[],
 ): void {
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = '#f8f8f8'
@@ -121,29 +123,33 @@ export function drawMap(
   const focusRepo = hoverRepo ?? selectedRepo
   const amount = focusRepo ? hoverAmount : 0
 
-  const placed = new Map<string, { x: number; y: number }>()
-  for (const repo of repos) {
-    placed.set(repo.id, dispersePoint(repo, focusRepo, amount))
-  }
-
   const matchingFlowers = matchIds == null ? null : new Set(
     repos.filter(repo => matchIds.has(repo.id)).map(repo => repo.flowerId),
   )
-  if (flowers.length > 0) drawFlowerBranches(ctx, camera)
-  for (const flower of flowers) {
+  const visibleFlowers = presence ?? flowers.map((flower) => ({ flower, opacity: 1 }))
+  drawFlowerBranches(ctx, camera, branchOpacities(visibleFlowers))
+  const bloomVisibility = visibleFlowers.map(({ flower, opacity }) => {
     const dimOutside =
       (severityFocus != null && severityFocus.flowerId !== flower.id) ||
       (matchingFlowers != null && !matchingFlowers.has(flower.id))
-    drawFlowerBloom(ctx, flower.colorIndex, camera, dimOutside ? 0.4 : 1)
+    return { flower, opacity: opacity * (dimOutside ? 0.4 : 1) }
+  })
+  // A category change reuses the same petal artwork. Draw each slot once so
+  // two half-transparent copies do not make the whole scene flash dimmer.
+  for (const [slot, opacity] of flowerSlotOpacities(bloomVisibility)) {
+    drawFlowerBloom(ctx, slot, camera, opacity)
   }
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
 
-  const ordered = [...repos].sort((a, b) => {
+  const visibleRepos = presence
+    ? presence.flatMap((entry) => entry.repos.map((repo) => ({ repo, opacity: entry.opacity })))
+    : repos.map((repo) => ({ repo, opacity: 1 }))
+  const ordered = visibleRepos.sort((a, b) => {
     const rank = (id: string) =>
       id === hoveredId ? 2 : id === selectedId ? 1 : 0
-    return rank(a.id) - rank(b.id)
+    return rank(a.repo.id) - rank(b.repo.id)
   })
 
   const screens: {
@@ -153,9 +159,10 @@ export function drawMap(
     fill: string
     dim: boolean
     lit: boolean
+    opacity: number
   }[] = []
-  for (const repo of ordered) {
-    const world = placed.get(repo.id)!
+  for (const { repo, opacity } of ordered) {
+    const world = dispersePoint(repo, focusRepo, amount)
     const screen = worldToScreen(world, camera)
     const isSelected = repo.id === selectedId
     const isHovered = repo.id === hoveredId
@@ -163,15 +170,15 @@ export function drawMap(
     const grow = growFactor(isHovered, isSelected, amount) * (lit ? 1.12 : 1)
     const size = xFontSize(repo.importance, camera.scale, grow, repo.glyphSize)
     if (!isOnScreen(screen, size, width, height)) continue
-    screens.push({ repo, screen, size, fill, dim, lit })
+    screens.push({ repo, screen, size, fill, dim, lit, opacity })
   }
 
-  for (const { repo, screen, size, fill, dim, lit } of screens) {
+  for (const { repo, screen, size, fill, dim, lit, opacity } of screens) {
     const isSelected = repo.id === selectedId
     const isHovered = repo.id === hoveredId
 
     ctx.save()
-    if (dim) ctx.globalAlpha = 0.28
+    ctx.globalAlpha = opacity * (dim ? 0.28 : 1)
 
     ctx.font = `${isHovered || isSelected || lit ? 800 : 700} ${size}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
 

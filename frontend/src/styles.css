@@ -242,6 +242,7 @@ img {
 
 .flower-label {
   position: absolute;
+  width: max-content;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -288,9 +289,8 @@ img {
   padding: 6px 8px;
   flex: 1;
   border-radius: 4px;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .flower-label__counts {
@@ -2500,7 +2500,6 @@ img {
   .map-search__scope-btn { min-width: 0; padding: 8px; font-size: 14px; }
   .map-search__field input { font-size: 16px; }
   .flower-label__title { font-size: 13px; }
-  .flower-label__name { max-width: 170px; }
   .flower-label__count { font-size: 11px; }
 }
 

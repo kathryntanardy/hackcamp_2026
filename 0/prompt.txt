@@ -1,0 +1,69 @@
+just another tab besides agent process, if user goes to that tab gemini will run to scan it, if there's advisories, gemini will recommend the fixes for the advisory. If no advisory, gemini will scan the whole codebase and find vulnerabilities with the recommended fixes or workarounds. Fix the backend first then push, after that do the front end and integration
+
+---
+
+can you shorten the workaround?
+
+---
+
+should the recommended fix be like code fix since it's a open source repo so u can contribute to it?
+
+---
+
+can you contribute to open-source repo?
+
+---
+
+so codefix for contributors then not jsut the maintainer?
+
+---
+
+lets do that
+
+---
+
+pull first
+
+---
+
+pull again
+
+---
+
+refresh the backend i changed the gemini key
+
+---
+
+when does the gemini suggest code recommendations?
+
+---
+
+is it possible to always suggest code fix?
+
+---
+
+shouldnt a repo with advisory have code fixes?
+
+---
+
+i mean like code fix suggestion
+
+---
+
+there was a button about how to report the security right?
+
+---
+
+when will it show contribute fix block
+
+---
+
+what about clash-verge-rev?
+
+---
+
+should we just make it to always show a code fix? so gemini scans through all the codebase and find vulnarabilities
+
+---
+
+go ahead

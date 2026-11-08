@@ -188,28 +188,52 @@ ORDER BY published_at DESC NULLS LAST""", {"repo_id": repo_id})
     return repo
 
 
+FINDINGS_SORT = {
+    "severity": f"{SEVERITY}, g.importance DESC",
+    "health_score": "g.health_score ASC NULLS LAST, g.importance DESC",
+    "importance": "g.importance DESC NULLS LAST",
+    "days_since_release": "g.days_since_release DESC NULLS LAST, g.importance DESC",
+    "advisory_count": "g.advisory_count DESC NULLS LAST, g.importance DESC",
+    "max_severity": """CASE lower(coalesce(g.max_severity, ''))
+      WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2
+      WHEN 'low' THEN 3 ELSE 4 END, g.max_cvss DESC NULLS LAST""",
+    "max_cvss": "g.max_cvss DESC NULLS LAST, g.importance DESC",
+    "language": "g.language ASC NULLS LAST, g.importance DESC",
+}
+
+
 @app.get("/api/findings")
 def list_findings(
     language: str | None = None,
     risk: str | None = None,
+    category: str | None = None,
+    vuln_bucket: str | None = None,
+    sort: str = "severity",
     limit: int = 50,
     offset: int = 0,
 ) -> dict:
     """Paginated findings list. limit/offset are clamped server-side."""
     limit = max(1, min(int(limit), 100))
     offset = max(0, int(offset))
+    order = FINDINGS_SORT.get(sort, FINDINGS_SORT["severity"])
     # LIMIT/OFFSET as literals — warehouse drivers often reject bound values here.
     rows = query(f"""
 WITH {REPO_SCOPE}, {LATEST_RUN}
 SELECT f.repo_id, g.name, g.language, g.importance, g.health_score,
-  g.category, to_json(g.vuln_buckets) AS vuln_buckets, {FINDING_COLS},
+  g.category, to_json(g.vuln_buckets) AS vuln_buckets,
+  g.days_since_release, g.advisory_count, g.max_severity, g.max_cvss,
+  {FINDING_COLS},
   f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run,
   COUNT(*) OVER() AS total_count
 FROM latest_finding f JOIN eligible_gold g ON g.repo_id = f.repo_id
 WHERE (:language IS NULL OR g.language = :language)
   AND (:risk IS NULL OR f.risk_level = :risk)
-ORDER BY {SEVERITY}, g.importance DESC
-LIMIT {limit} OFFSET {offset}""", {"language": language, "risk": risk})
+  AND (:category IS NULL OR g.category = :category)
+  AND (:vuln_bucket IS NULL OR array_contains(g.vuln_buckets, cast(:vuln_bucket AS STRING)))
+ORDER BY {order}
+LIMIT {limit} OFFSET {offset}""",
+                 {"language": language, "risk": risk, "category": category,
+                  "vuln_bucket": vuln_bucket})
     out = []
     for r in rows:
         row = _finding(r)
@@ -217,7 +241,8 @@ LIMIT {limit} OFFSET {offset}""", {"language": language, "risk": risk})
         row["vuln_buckets"] = _as_str_list(row.get("vuln_buckets"))
         out.append(row)
     total = int(rows[0]["total_count"]) if rows else 0
-    return {"items": out, "total": total, "limit": limit, "offset": offset}
+    return {"items": out, "total": total, "limit": limit, "offset": offset,
+            "sort": sort if sort in FINDINGS_SORT else "severity"}
 
 
 @app.get("/api/findings/{repo_id:path}/trace")
@@ -303,10 +328,20 @@ SEARCH_MIN_SCORE = float(os.environ.get("SEARCH_MIN_SCORE", "0.56"))
 SEARCH_SCORE_WINDOW = float(os.environ.get("SEARCH_SCORE_WINDOW", "0.06"))
 SEARCH_MAX_RESULTS = 25
 
+# Reuse one SDK client — constructing WorkspaceClient per request adds seconds of auth overhead.
+_ws: WorkspaceClient | None = None
+
+
+def _workspace() -> WorkspaceClient:
+    global _ws
+    if _ws is None:
+        _ws = WorkspaceClient()
+    return _ws
+
 
 def vector_search(text: str, filters: dict, k: int) -> list[tuple[str, float]]:
     """(repo_id, score) pairs from the Delta Sync index, best first."""
-    res = WorkspaceClient().vector_search_indexes.query_index(
+    res = _workspace().vector_search_indexes.query_index(
         SEARCH_INDEX, columns=["repo_id"], query_text=text, num_results=k,
         filters_json=json.dumps(filters) if filters else None)
     return [(row[0], float(row[-1])) for row in (res.result.data_array or [])]
@@ -326,8 +361,10 @@ def search(q: str = Query(min_length=1), language: str | None = None, category: 
     ranked = [rid for rid, score in hits if score >= cutoff]
     if not ranked:
         return {"query": q, "repo_ids": []}
-    # Re-check against live gold: drops stale index rows for excluded repos, applies the
-    # filters Vector Search can't (array bucket, investigated flag).
+    # Index is synced from an eligible-only source. Skip the warehouse round-trip unless
+    # we need filters Vector Search can't apply (array bucket / investigated flag).
+    if vuln_bucket is None and not investigated_only:
+        return {"query": q, "repo_ids": ranked}
     rows = query(f"""
 WITH {REPO_SCOPE}
 SELECT g.repo_id FROM eligible_gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id

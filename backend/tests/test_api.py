@@ -122,14 +122,30 @@ def test_findings_passes_filters_as_params(calls):
     assert body["items"][0]["alternatives"] == []
     assert "total_count" not in body["items"][0]
     assert body["total"] == 1 and body["limit"] == 50 and body["offset"] == 0
-    assert calls[-1][1] == {"language": "Go", "risk": "at_risk"}
+    assert calls[-1][1] == {
+        "language": "Go", "risk": "at_risk", "category": None, "vuln_bucket": None,
+    }
     assert "LIMIT 50 OFFSET 0" in calls[-1][0]
     assert "COUNT(*) OVER()" in calls[-1][0]
 
 
 def test_findings_no_filters(calls):
     client.get("/api/findings")
-    assert calls[-1][1] == {"language": None, "risk": None}
+    assert calls[-1][1] == {
+        "language": None, "risk": None, "category": None, "vuln_bucket": None,
+    }
+
+
+def test_findings_category_bucket_and_sort(calls):
+    body = client.get(
+        "/api/findings?category=Back-end&vuln_bucket=Injection&sort=max_severity"
+    ).json()
+    assert body["sort"] == "max_severity"
+    stmt, params = calls[-1]
+    assert params["category"] == "Back-end" and params["vuln_bucket"] == "Injection"
+    assert "array_contains(g.vuln_buckets" in stmt
+    assert "max_severity" in stmt
+    assert "g.days_since_release" in stmt
 
 
 def test_findings_pagination(calls):

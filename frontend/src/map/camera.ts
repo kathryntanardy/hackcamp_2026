@@ -1,9 +1,9 @@
 import type { MapCamera, MapRepo, Point, WorldBounds } from './types'
 
-export const MIN_SCALE = 1.5
-export const MAX_SCALE = 48
-export const ZOOM_STEP = 1.28
-export const FIT_PADDING = 48
+export const MIN_SCALE = 0.35
+export const MAX_SCALE = 120
+export const ZOOM_STEP = 1.35
+export const FIT_PADDING = 56
 
 export function worldToScreen(point: Point, camera: MapCamera): Point {
   return {
@@ -89,5 +89,31 @@ export function panBy(camera: MapCamera, dx: number, dy: number): MapCamera {
     ...camera,
     offsetX: camera.offsetX + dx,
     offsetY: camera.offsetY + dy,
+  }
+}
+
+/** Center a world point in the viewport at the given scale. */
+export function focusOn(
+  point: Point,
+  width: number,
+  height: number,
+  scale: number,
+): MapCamera {
+  const s = clampScale(scale)
+  return {
+    scale: s,
+    offsetX: width / 2 - point.x * s,
+    offsetY: height / 2 - point.y * s,
+  }
+}
+
+export function lerpCamera(from: MapCamera, to: MapCamera, t: number): MapCamera {
+  const u = Math.min(1, Math.max(0, t))
+  // Ease-out cubic.
+  const e = 1 - (1 - u) ** 3
+  return {
+    scale: from.scale + (to.scale - from.scale) * e,
+    offsetX: from.offsetX + (to.offsetX - from.offsetX) * e,
+    offsetY: from.offsetY + (to.offsetY - from.offsetY) * e,
   }
 }

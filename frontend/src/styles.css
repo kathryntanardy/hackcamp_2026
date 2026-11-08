@@ -266,6 +266,12 @@ img {
   text-overflow: ellipsis;
 }
 
+.map-hover-card__bucket {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
 .map-hover-card__overview {
   margin: 0;
   font-size: var(--text-xs);

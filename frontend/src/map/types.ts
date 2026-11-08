@@ -13,6 +13,8 @@ export type MapRepo = {
   catY: number
   vulnerabilityScore: string
   vulnerabilityTone: 'high' | 'medium' | 'low' | 'none'
+  vulnBuckets: string[]
+  flowerId?: string
   investigatedInLatestRun: boolean
 }
 

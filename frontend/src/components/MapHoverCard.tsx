@@ -20,6 +20,9 @@ export function MapHoverCard({ repo, x, y }: MapHoverCardProps) {
         />
         <span className="map-hover-card__name">{repo.name}</span>
       </div>
+      {repo.flowerId ? (
+        <p className="map-hover-card__bucket">{repo.flowerId}</p>
+      ) : null}
       {repo.overview ? (
         <p className="map-hover-card__overview">{repo.overview}</p>
       ) : (

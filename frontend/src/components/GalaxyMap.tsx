@@ -1,17 +1,19 @@
 import {
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react'
 import { drawMap, hitTest } from '../map/draw'
+import type { FlowerCluster, VulnEdge } from '../map/flowers'
 import type { MapCamera, MapRepo } from '../map/types'
 import { MapHoverCard } from './MapHoverCard'
 
 export type GalaxyMapProps = {
   repos: MapRepo[]
+  flowers: FlowerCluster[]
+  edges: VulnEdge[]
   camera: MapCamera
   selectedId?: string | null
   onSelectRepo?: (id: string) => void
@@ -20,14 +22,19 @@ export type GalaxyMapProps = {
   onZoomByFactor?: (factor: number, anchor: { x: number; y: number }) => void
 }
 
-type HoverState = {
+type HoverCard = {
   repo: MapRepo
   x: number
   y: number
 }
 
+const HOVER_LERP_UP = 10
+const HOVER_LERP_DOWN = 7
+
 export function GalaxyMap({
   repos,
+  flowers,
+  edges,
   camera,
   selectedId = null,
   onSelectRepo,
@@ -38,8 +45,22 @@ export function GalaxyMap({
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sizeRef = useRef({ width: 1, height: 1 })
-  const [sizeVersion, setSizeVersion] = useState(0)
-  const [hover, setHover] = useState<HoverState | null>(null)
+  const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
+
+  const reposRef = useRef(repos)
+  const flowersRef = useRef(flowers)
+  const edgesRef = useRef(edges)
+  const cameraRef = useRef(camera)
+  const selectedRef = useRef(selectedId)
+  reposRef.current = repos
+  flowersRef.current = flowers
+  edgesRef.current = edges
+  cameraRef.current = camera
+  selectedRef.current = selectedId
+
+  const hoverTargetId = useRef<string | null>(null)
+  const hoverAmount = useRef(0)
+  const hoverRepoRef = useRef<MapRepo | null>(null)
   const drag = useRef<{
     pointerId: number
     lastX: number
@@ -47,7 +68,6 @@ export function GalaxyMap({
     moved: boolean
   } | null>(null)
 
-  // Keep canvas buffer sized to the pane; notify parent of viewport for camera fit.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -69,7 +89,6 @@ export function GalaxyMap({
         canvas.height = nextH
         canvas.style.width = `${width}px`
         canvas.style.height = `${height}px`
-        setSizeVersion((v) => v + 1)
       }
     }
 
@@ -79,22 +98,77 @@ export function GalaxyMap({
     return () => observer.disconnect()
   }, [onViewportChange])
 
-  useLayoutEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const { width, height } = sizeRef.current
-    const dpr = window.devicePixelRatio || 1
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    drawMap(ctx, repos, camera, selectedId, hover?.repo.id ?? null, width, height)
-  }, [camera, hover?.repo.id, repos, selectedId, sizeVersion])
+  useEffect(() => {
+    let frame = 0
+    let last = performance.now()
+
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000)
+      last = now
+
+      const target = hoverTargetId.current ? 1 : 0
+      const rate = target > hoverAmount.current ? HOVER_LERP_UP : HOVER_LERP_DOWN
+      const next =
+        hoverAmount.current + (target - hoverAmount.current) * (1 - Math.exp(-rate * dt))
+      hoverAmount.current = Math.abs(next - target) < 0.001 ? target : next
+
+      if (!hoverTargetId.current && hoverAmount.current < 0.01) {
+        hoverAmount.current = 0
+        hoverRepoRef.current = null
+      }
+
+      const canvas = canvasRef.current
+      if (canvas) {
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          const { width, height } = sizeRef.current
+          const dpr = window.devicePixelRatio || 1
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+          drawMap(
+            ctx,
+            reposRef.current,
+            flowersRef.current,
+            edgesRef.current,
+            cameraRef.current,
+            selectedRef.current,
+            hoverRepoRef.current?.id ?? hoverTargetId.current,
+            hoverAmount.current,
+            width,
+            height,
+          )
+        }
+      }
+
+      frame = requestAnimationFrame(tick)
+    }
+
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   function localPoint(event: { clientX: number; clientY: number }) {
     const el = containerRef.current
     if (!el) return { x: 0, y: 0 }
     const rect = el.getBoundingClientRect()
     return { x: event.clientX - rect.left, y: event.clientY - rect.top }
+  }
+
+  function clearHover() {
+    hoverTargetId.current = null
+    setHoverCard(null)
+  }
+
+  function setHoverFromHit(hit: MapRepo, point: { x: number; y: number }) {
+    hoverTargetId.current = hit.id
+    hoverRepoRef.current = hit
+    const cardW = 314
+    const cardH = 196
+    const { width, height } = sizeRef.current
+    let x = point.x + 16
+    let y = point.y + 16
+    if (x + cardW > width - 8) x = Math.max(8, point.x - cardW - 12)
+    if (y + cardH > height - 8) y = Math.max(8, point.y - cardH - 12)
+    setHoverCard({ repo: hit, x, y })
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -121,24 +195,17 @@ export function GalaxyMap({
       active.lastY = point.y
       if (active.moved) {
         onPan?.(dx, dy)
-        setHover(null)
+        clearHover()
       }
       return
     }
 
-    const hit = hitTest(repos, camera, point.x, point.y)
+    const hit = hitTest(reposRef.current, cameraRef.current, point.x, point.y)
     if (!hit) {
-      setHover(null)
+      clearHover()
       return
     }
-    const cardW = 314
-    const cardH = 196
-    const { width, height } = sizeRef.current
-    let x = point.x + 16
-    let y = point.y + 16
-    if (x + cardW > width - 8) x = Math.max(8, point.x - cardW - 12)
-    if (y + cardH > height - 8) y = Math.max(8, point.y - cardH - 12)
-    setHover({ repo: hit, x, y })
+    setHoverFromHit(hit, point)
   }
 
   function endDrag(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -149,7 +216,7 @@ export function GalaxyMap({
     }
     if (!active.moved) {
       const point = localPoint(event)
-      const hit = hitTest(repos, camera, point.x, point.y)
+      const hit = hitTest(reposRef.current, cameraRef.current, point.x, point.y)
       if (hit) onSelectRepo?.(hit.id)
     }
     drag.current = null
@@ -172,11 +239,13 @@ export function GalaxyMap({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onPointerLeave={() => {
-          if (!drag.current) setHover(null)
+          if (!drag.current) clearHover()
         }}
         onWheel={onWheel}
       />
-      {hover ? <MapHoverCard repo={hover.repo} x={hover.x} y={hover.y} /> : null}
+      {hoverCard ? (
+        <MapHoverCard repo={hoverCard.repo} x={hoverCard.x} y={hoverCard.y} />
+      ) : null}
     </div>
   )
 }

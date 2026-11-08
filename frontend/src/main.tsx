@@ -25,16 +25,20 @@ import { RepoSidebar, type RepoSidebarProps } from './components/RepoSidebar'
 import { SidebarPanel } from './components/SidebarPanel'
 import { TopNavbar, type TopNavbarTab } from './components/TopNavbar'
 import { useFavourites } from './favourites/useFavourites'
+import { layoutFlowerMap } from './map/flowers'
 import type { MapRepo } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
 import './styles.css'
 
 function App() {
   const [repos, setRepos] = useState<RepoListItem[]>([])
-  const [mapRepos, setMapRepos] = useState<MapRepo[]>([])
+  const [rawMapRepos, setRawMapRepos] = useState<MapRepo[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const mapCamera = useMapCamera()
+
+  const flowerLayout = useMemo(() => layoutFlowerMap(rawMapRepos), [rawMapRepos])
+  const mapRepos = flowerLayout.repos
 
   const [findings, setFindings] = useState<FindingListEntry[]>([])
   const [findingsError, setFindingsError] = useState<string | null>(null)
@@ -61,7 +65,7 @@ function App() {
     fetchRepos(controller.signal)
       .then((entries) => {
         setRepos(entries.map(mapRepoToListItem))
-        setMapRepos(
+        setRawMapRepos(
           entries
             .map(mapRepoToMapPoint)
             .filter((point): point is MapRepo => point != null),
@@ -148,12 +152,20 @@ function App() {
     })
   }, [repos, searchQuery, searchScope])
 
-  const { setViewportSize, fitToRepos, pan, zoomIn, zoomOut, zoomByFactor, camera } =
-    mapCamera
+  const {
+    setViewportSize,
+    fitToRepos,
+    pan,
+    zoomIn,
+    zoomOut,
+    zoomByFactor,
+    focusOnPoint,
+    camera,
+  } = mapCamera
 
   useEffect(() => {
     if (mapRepos.length === 0) return
-    fitToRepos(mapRepos)
+    fitToRepos(mapRepos, true)
   }, [mapRepos, fitToRepos])
 
   const handleViewportChange = useCallback(
@@ -183,6 +195,12 @@ function App() {
 
   function handleSelectRepo(id: string) {
     setSelectedId(id)
+    const point = mapRepos.find((repo) => repo.id === id)
+    if (point) {
+      // Switch to map so the zoom is visible when coming from findings/list.
+      if (tab !== 'map') setTab('map')
+      focusOnPoint({ x: point.x, y: point.y }, point.importance)
+    }
   }
 
   function handleTabChange(next: TopNavbarTab) {
@@ -296,6 +314,8 @@ function App() {
           <main className="app-shell__map" aria-label="Repository galaxy map">
             <GalaxyMap
               repos={mapRepos}
+              flowers={flowerLayout.flowers}
+              edges={flowerLayout.edges}
               camera={camera}
               selectedId={selectedId}
               onSelectRepo={handleSelectRepo}

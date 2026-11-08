@@ -49,6 +49,7 @@ export function mapRepoToMapPoint(repo: RepoListEntry): MapRepo | null {
     catY: repo.cat_y ?? repo.y,
     vulnerabilityScore: formatScore(repo.max_cvss),
     vulnerabilityTone: severityTone(repo.max_severity, repo.risk_level),
+    vulnBuckets: Array.isArray(repo.vuln_buckets) ? repo.vuln_buckets.filter(Boolean) : [],
     investigatedInLatestRun: Boolean(repo.investigated_in_latest_run),
   }
 }

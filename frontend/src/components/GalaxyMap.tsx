@@ -23,7 +23,9 @@ export type GalaxyMapProps = {
   edges: VulnEdge[]
   camera: MapCamera
   selectedId?: string | null
+  pinnedSeverity?: SeverityFocus | null
   onSelectRepo?: (id: string) => void
+  onPinnedSeverityChange?: (focus: SeverityFocus | null) => void
   onViewportChange?: (width: number, height: number) => void
   onPan?: (dx: number, dy: number) => void
   onZoomByFactor?: (factor: number, anchor: { x: number; y: number }) => void
@@ -45,7 +47,9 @@ export function GalaxyMap({
   edges,
   camera,
   selectedId = null,
+  pinnedSeverity = null,
   onSelectRepo,
+  onPinnedSeverityChange,
   onViewportChange,
   onPan,
   onZoomByFactor,
@@ -56,7 +60,6 @@ export function GalaxyMap({
   const sizeRef = useRef({ width: 1, height: 1 })
   const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
   const [hoverSeverity, setHoverSeverity] = useState<SeverityFocus | null>(null)
-  const [pinnedSeverity, setPinnedSeverity] = useState<SeverityFocus | null>(null)
   const severityFocus = hoverSeverity ?? pinnedSeverity
 
   const reposRef = useRef(repos)
@@ -234,10 +237,11 @@ export function GalaxyMap({
       const point = localPoint(event)
       const hit = hitTest(reposRef.current, cameraRef.current, point.x, point.y)
       if (hit) {
-        setPinnedSeverity(null)
+        onPinnedSeverityChange?.(null)
+        setHoverSeverity(null)
         onSelectRepo?.(hit.id)
       } else {
-        setPinnedSeverity(null)
+        onPinnedSeverityChange?.(null)
         setHoverSeverity(null)
       }
     }
@@ -281,9 +285,13 @@ export function GalaxyMap({
               setHoverSeverity(tone ? { flowerId: flower.id, tone } : null)
             }}
             onSelectTone={(tone) => {
-              setPinnedSeverity({ flowerId: flower.id, tone })
-              setHoverSeverity({ flowerId: flower.id, tone })
-              onZoomToFlower?.(flower, tone)
+              const same =
+                pinnedSeverity?.flowerId === flower.id &&
+                pinnedSeverity?.tone === tone
+              const next = same ? null : { flowerId: flower.id, tone }
+              onPinnedSeverityChange?.(next)
+              setHoverSeverity(next)
+              if (next) onZoomToFlower?.(flower, tone)
             }}
           />
         )

@@ -25,7 +25,11 @@ import { RepoSidebar, type RepoSidebarProps } from './components/RepoSidebar'
 import { SidebarPanel } from './components/SidebarPanel'
 import { TopNavbar, type TopNavbarTab } from './components/TopNavbar'
 import { useFavourites } from './favourites/useFavourites'
-import { flowerWorldBounds, layoutFlowerMap } from './map/flowers'
+import {
+  flowerWorldBounds,
+  layoutFlowerMap,
+  type SeverityFocus,
+} from './map/flowers'
 import type { MapRepo } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
 import './styles.css'
@@ -53,6 +57,7 @@ function App() {
   const [detailError, setDetailError] = useState<string | null>(null)
   const [view, setView] = useState<'list' | 'detail'>('list')
   const [listMode, setListMode] = useState<'browse' | 'saved'>('browse')
+  const [severityFocus, setSeverityFocus] = useState<SeverityFocus | null>(null)
   const favourites = useFavourites()
 
   useEffect(() => {
@@ -149,15 +154,49 @@ function App() {
     })
   }, [rawMapRepos, searchQuery, searchScope])
 
-  const filteredRepos = useMemo(() => {
-    const ids = new Set(filteredMapRepos.map((repo) => repo.id))
-    return repos.filter((repo) => ids.has(repo.id))
-  }, [repos, filteredMapRepos])
-
   const flowerLayout = useMemo(
     () => layoutFlowerMap(filteredMapRepos),
     [filteredMapRepos],
   )
+
+  const severityMatchedIds = useMemo(() => {
+    if (!severityFocus) return null
+    const ids = new Set<string>()
+    for (const repo of flowerLayout.repos) {
+      if (
+        repo.flowerId === severityFocus.flowerId &&
+        repo.vulnerabilityTone === severityFocus.tone
+      ) {
+        ids.add(repo.id)
+      }
+    }
+    return ids
+  }, [flowerLayout.repos, severityFocus])
+
+  const filteredRepos = useMemo(() => {
+    const ids = new Set(filteredMapRepos.map((repo) => repo.id))
+    return repos.filter((repo) => {
+      if (!ids.has(repo.id)) return false
+      if (severityMatchedIds && !severityMatchedIds.has(repo.id)) return false
+      return true
+    })
+  }, [repos, filteredMapRepos, severityMatchedIds])
+
+  const severityFocusLabel = useMemo(() => {
+    if (!severityFocus) return null
+    const flower = flowerLayout.flowers.find((f) => f.id === severityFocus.flowerId)
+    const toneLabel =
+      severityFocus.tone === 'high'
+        ? 'High'
+        : severityFocus.tone === 'medium'
+          ? 'Med'
+          : 'Low'
+    const bucket =
+      flower?.label === 'No GitHub advisories'
+        ? 'No advisories'
+        : flower?.label ?? severityFocus.flowerId
+    return `${toneLabel} · ${bucket}`
+  }, [severityFocus, flowerLayout.flowers])
 
   const {
     setViewportSize,
@@ -191,19 +230,38 @@ function App() {
     [fitToBoundsAnimated],
   )
 
+  const handlePinnedSeverityChange = useCallback((focus: SeverityFocus | null) => {
+    setSeverityFocus(focus)
+    setSelectedId(null)
+    setListMode('browse')
+    setView('list')
+  }, [])
+
   const backLabel =
     listMode === 'saved'
       ? '← Favourites'
-      : tab === 'findings'
-        ? '← Findings'
-        : '← Repositories'
+      : severityFocus
+        ? '← All repositories'
+        : tab === 'findings'
+          ? '← Findings'
+          : '← Repositories'
 
   function handleBack() {
+    if (selectedId && severityFocus) {
+      setSelectedId(null)
+      return
+    }
+    if (severityFocus) {
+      setSeverityFocus(null)
+      setSelectedId(null)
+      return
+    }
     setSelectedId(null)
   }
 
   function handleViewSaved() {
     setSelectedId(null)
+    setSeverityFocus(null)
     setListMode('saved')
     setView('list')
   }
@@ -222,6 +280,7 @@ function App() {
   function handleTabChange(next: TopNavbarTab) {
     setTab(next)
     setSelectedId(null)
+    setSeverityFocus(null)
     setListMode('browse')
   }
 
@@ -298,14 +357,23 @@ function App() {
       />
     ) : (
       <RepoListSidebar
+        title={severityFocusLabel ? severityFocusLabel : undefined}
+        metaLabel={
+          severityFocusLabel
+            ? 'Matching repositories on the map'
+            : undefined
+        }
         repos={filteredRepos}
         loading={loading}
         error={error}
         selectedId={selectedId}
         onViewSaved={handleViewSaved}
         onSelectRepo={handleSelectRepo}
+        onClearFilter={
+          severityFocus ? () => handlePinnedSeverityChange(null) : undefined
+        }
         countLabel={
-          searchQuery.trim()
+          severityFocus || searchQuery.trim()
             ? `${filteredRepos.length} of ${repos.length} repositories`
             : undefined
         }
@@ -334,7 +402,9 @@ function App() {
               edges={flowerLayout.edges}
               camera={camera}
               selectedId={selectedId}
+              pinnedSeverity={severityFocus}
               onSelectRepo={handleSelectRepo}
+              onPinnedSeverityChange={handlePinnedSeverityChange}
               onViewportChange={handleViewportChange}
               onPan={pan}
               onZoomByFactor={zoomByFactor}

@@ -19,12 +19,14 @@ export type RepoListSidebarProps = {
   scoreLabel?: string
   categoryLabel?: string
   emptyLabel?: string
+  clearFilterLabel?: string
   repos?: RepoListItem[]
   loading?: boolean
   error?: string | null
   selectedId?: string | null
   onViewSaved?: () => void
   onSelectRepo?: (id: string) => void
+  onClearFilter?: () => void
 }
 
 function toneClass(tone: RepoListItem['vulnerabilityTone']): string {
@@ -41,12 +43,14 @@ export function RepoListSidebar({
   scoreLabel = 'Vulnerability score:',
   categoryLabel = 'Category:',
   emptyLabel = 'No overview available.',
+  clearFilterLabel = 'Show all',
   repos = [],
   loading = false,
   error = null,
   selectedId = null,
   onViewSaved,
   onSelectRepo,
+  onClearFilter,
 }: RepoListSidebarProps) {
   const resolvedCount =
     countLabel ??
@@ -66,6 +70,15 @@ export function RepoListSidebar({
       </header>
 
       <div className="repo-list-sidebar__hero">
+        {onClearFilter ? (
+          <button
+            type="button"
+            className="repo-list-sidebar__clear"
+            onClick={onClearFilter}
+          >
+            ← {clearFilterLabel}
+          </button>
+        ) : null}
         <h1 className="repo-list-sidebar__title">{title}</h1>
       </div>
 

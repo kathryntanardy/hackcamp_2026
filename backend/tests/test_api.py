@@ -88,7 +88,15 @@ def test_as_str_list_recovers_json_string_and_char_lists():
         "Code execution",
         "Prototype pollution",
     ]
+    assert _as_str_list("['Other / unclassified', 'Injection']") == [
+        "Other / unclassified",
+        "Injection",
+    ]
     assert _as_str_list(list('["Injection"]')) == ["Injection"]
+    assert _as_str_list(list("['Code execution']")) == ["Code execution"]
+    assert _as_str_list(["['Path traversal & file access']"]) == [
+        "Path traversal & file access",
+    ]
     assert _as_str_list(["Auth & access control"]) == ["Auth & access control"]
     assert _as_str_list(None) == []
 

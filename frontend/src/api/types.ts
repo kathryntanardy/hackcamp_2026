@@ -31,7 +31,8 @@ export type RepoListEntry = {
   stars: number | null
   is_archived: boolean | null
   category: string | null
-  vuln_buckets: string[]
+  /** Prefer string[]; warehouse may also send a JSON/Python-repr array string. */
+  vuln_buckets: string[] | string | null
   advisory_count: number | null
   max_severity: string | null
   max_cvss: number | null

@@ -25,6 +25,43 @@ function severityTone(status: MapStatus): MapRepo['vulnerabilityTone'] {
   return 'none'
 }
 
+/** Normalize UC / mangled array payloads into clean bucket names. */
+export function normalizeVulnBuckets(raw: unknown): string[] {
+  if (raw == null) return []
+  if (typeof raw === 'string') {
+    const text = raw.trim()
+    if (!text) return []
+    if (text.startsWith('[')) {
+      try {
+        return normalizeVulnBuckets(JSON.parse(text))
+      } catch {
+        try {
+          // Python-repr arrays from the warehouse: ['Code execution']
+          const asJson = text.replace(/'/g, '"')
+          return normalizeVulnBuckets(JSON.parse(asJson))
+        } catch {
+          return []
+        }
+      }
+    }
+    return [text]
+  }
+  if (!Array.isArray(raw)) return [String(raw)].filter(Boolean)
+  if (raw.length > 0 && raw.every((x) => typeof x === 'string' && x.length <= 1)) {
+    return normalizeVulnBuckets(raw.join(''))
+  }
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item === 'string' && item.trim().startsWith('[')) {
+      out.push(...normalizeVulnBuckets(item))
+      continue
+    }
+    const text = String(item ?? '').trim()
+    if (text) out.push(text)
+  }
+  return out
+}
+
 export function mapRepoToMapPoint(repo: RepoListEntry): MapRepo | null {
   if (repo.x == null || repo.y == null || Number.isNaN(repo.x) || Number.isNaN(repo.y)) {
     return null
@@ -45,7 +82,7 @@ export function mapRepoToMapPoint(repo: RepoListEntry): MapRepo | null {
     catY: repo.cat_y ?? repo.y,
     vulnerabilityScore: formatScore(repo.max_cvss),
     vulnerabilityTone: severityTone(normalizeStatus(repo.status)),
-    vulnBuckets: Array.isArray(repo.vuln_buckets) ? repo.vuln_buckets.filter(Boolean) : [],
+    vulnBuckets: normalizeVulnBuckets(repo.vuln_buckets),
     investigated: Boolean(repo.investigated),
     investigatedInLatestRun: Boolean(repo.investigated_in_latest_run),
   }

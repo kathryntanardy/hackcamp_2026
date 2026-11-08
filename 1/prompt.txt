@@ -1,0 +1,20 @@
+can you check if the search feature uses vector search?
+
+---
+
+wha about these kinds of search?
+
+---
+
+<!-- reply 1 -->
+> logging library for go, terminal file search, web scraping, and the rest: no repo’s text contains those exact phrases, so local search finds nothing. Every result in your table has to come from vector search.
+
+so does it work for our integrtion?
+
+---
+
+Yes, wire it up
+
+---
+
+push

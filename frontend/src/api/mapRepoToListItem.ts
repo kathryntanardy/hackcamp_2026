@@ -1,47 +1,38 @@
 import type { RepoListItem } from '../components/RepoListSidebar'
 import type { RepoListEntry } from './types'
 
-function severityTone(
-  severity: string | null | undefined,
-  riskLevel: string | null | undefined,
-): RepoListItem['vulnerabilityTone'] {
-  const s = (severity || '').toLowerCase()
-  if (s === 'critical' || s === 'high') return 'high'
-  if (s === 'medium' || s === 'moderate') return 'medium'
-  if (s === 'low') return 'low'
-
-  const risk = (riskLevel || '').toLowerCase()
-  if (risk === 'at_risk') return 'high'
-  if (risk === 'watchlist') return 'medium'
+/** High / Med / Low follow gold.status (same as the map), not advisory max_severity. */
+function statusTone(status: string | null | undefined): RepoListItem['vulnerabilityTone'] {
+  const s = (status || '').toLowerCase()
+  if (s === 'at_risk') return 'high'
+  if (s === 'watchlist') return 'medium'
+  if (s === 'healthy') return 'low'
   return 'none'
 }
 
-function severityLabel(tone: RepoListItem['vulnerabilityTone'], severity: string | null): string {
-  if (tone === 'high') {
-    if ((severity || '').toLowerCase() === 'critical') return 'Critical Vulnerability'
-    return 'High Vulnerability'
-  }
-  if (tone === 'medium') return 'Medium Vulnerability'
-  if (tone === 'low') return 'Low Vulnerability'
-  return 'No advisories'
+function statusLabel(status: string | null | undefined): string {
+  const s = (status || '').toLowerCase()
+  if (s === 'at_risk') return 'At risk'
+  if (s === 'watchlist') return 'Watchlist'
+  if (s === 'healthy') return 'Healthy'
+  if (s === 'ignored') return 'Excluded'
+  return 'Unknown'
 }
 
-function formatScore(maxCvss: number | null | undefined): string {
-  if (maxCvss == null || Number.isNaN(maxCvss)) return '—'
-  const rounded = Math.round(maxCvss * 10) / 10
-  const display = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
-  return `${display}/10`
+function formatHealthScore(score: number | null | undefined): string {
+  if (score == null || Number.isNaN(score)) return '—'
+  return `${Math.round(score)}/100`
 }
 
 export function mapRepoToListItem(repo: RepoListEntry): RepoListItem {
-  const tone = severityTone(repo.max_severity, repo.risk_level)
+  const tone = statusTone(repo.status)
   return {
     id: repo.repo_id,
     name: repo.name || repo.repo_id,
     description: repo.summary?.trim() || '',
-    vulnerabilityLabel: severityLabel(tone, repo.max_severity),
+    vulnerabilityLabel: statusLabel(repo.status),
     vulnerabilityTone: tone,
-    vulnerabilityScore: formatScore(repo.max_cvss),
+    vulnerabilityScore: formatHealthScore(repo.health_score),
     category: repo.category?.trim() || '—',
   }
 }

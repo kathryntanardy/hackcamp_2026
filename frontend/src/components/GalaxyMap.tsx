@@ -5,21 +5,32 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react'
+import { worldToScreen } from '../map/camera'
 import { drawMap, hitTest } from '../map/draw'
-import type { FlowerCluster, VulnEdge } from '../map/flowers'
+import { prefetchFlowerBloom } from '../map/flowerBloom'
+import type {
+  FlowerCluster,
+  SeverityFocus,
+  VulnSeverity,
+} from '../map/flowers'
 import type { MapCamera, MapRepo } from '../map/types'
+import { FlowerLabel } from './FlowerLabel'
 import { MapHoverCard } from './MapHoverCard'
 
 export type GalaxyMapProps = {
   repos: MapRepo[]
   flowers: FlowerCluster[]
-  edges: VulnEdge[]
   camera: MapCamera
   selectedId?: string | null
+  pinnedSeverity?: SeverityFocus | null
   onSelectRepo?: (id: string) => void
+  onPinnedSeverityChange?: (focus: SeverityFocus | null) => void
+  /** Empty-map click (not a drag). Parent should close the sidebar. */
+  onBackgroundClick?: () => void
   onViewportChange?: (width: number, height: number) => void
   onPan?: (dx: number, dy: number) => void
   onZoomByFactor?: (factor: number, anchor: { x: number; y: number }) => void
+  onZoomToFlower?: (flower: FlowerCluster, tone?: VulnSeverity | null) => void
 }
 
 type HoverCard = {
@@ -34,29 +45,38 @@ const HOVER_LERP_DOWN = 7
 export function GalaxyMap({
   repos,
   flowers,
-  edges,
   camera,
   selectedId = null,
+  pinnedSeverity = null,
   onSelectRepo,
+  onPinnedSeverityChange,
+  onBackgroundClick,
   onViewportChange,
   onPan,
   onZoomByFactor,
+  onZoomToFlower,
 }: GalaxyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sizeRef = useRef({ width: 1, height: 1 })
   const [hoverCard, setHoverCard] = useState<HoverCard | null>(null)
+  const [hoverSeverity, setHoverSeverity] = useState<SeverityFocus | null>(null)
+  const severityFocus = hoverSeverity ?? pinnedSeverity
 
   const reposRef = useRef(repos)
   const flowersRef = useRef(flowers)
-  const edgesRef = useRef(edges)
   const cameraRef = useRef(camera)
   const selectedRef = useRef(selectedId)
+  const severityRef = useRef(severityFocus)
   reposRef.current = repos
   flowersRef.current = flowers
-  edgesRef.current = edges
   cameraRef.current = camera
   selectedRef.current = selectedId
+  severityRef.current = severityFocus
+
+  useEffect(() => {
+    prefetchFlowerBloom()
+  }, [])
 
   const hoverTargetId = useRef<string | null>(null)
   const hoverAmount = useRef(0)
@@ -106,13 +126,14 @@ export function GalaxyMap({
       const dt = Math.min(0.05, (now - last) / 1000)
       last = now
 
-      const target = hoverTargetId.current ? 1 : 0
+      // Keep neighbours pushed out while a repo is selected, not only on hover.
+      const target = hoverTargetId.current || selectedRef.current ? 1 : 0
       const rate = target > hoverAmount.current ? HOVER_LERP_UP : HOVER_LERP_DOWN
       const next =
         hoverAmount.current + (target - hoverAmount.current) * (1 - Math.exp(-rate * dt))
       hoverAmount.current = Math.abs(next - target) < 0.001 ? target : next
 
-      if (!hoverTargetId.current && hoverAmount.current < 0.01) {
+      if (!hoverTargetId.current && !selectedRef.current && hoverAmount.current < 0.01) {
         hoverAmount.current = 0
         hoverRepoRef.current = null
       }
@@ -128,13 +149,14 @@ export function GalaxyMap({
             ctx,
             reposRef.current,
             flowersRef.current,
-            edgesRef.current,
             cameraRef.current,
             selectedRef.current,
             hoverRepoRef.current?.id ?? hoverTargetId.current,
             hoverAmount.current,
             width,
             height,
+            now,
+            severityRef.current,
           )
         }
       }
@@ -161,8 +183,8 @@ export function GalaxyMap({
   function setHoverFromHit(hit: MapRepo, point: { x: number; y: number }) {
     hoverTargetId.current = hit.id
     hoverRepoRef.current = hit
-    const cardW = 314
-    const cardH = 196
+    const cardW = 260
+    const cardH = 120
     const { width, height } = sizeRef.current
     let x = point.x + 16
     let y = point.y + 16
@@ -217,7 +239,16 @@ export function GalaxyMap({
     if (!active.moved) {
       const point = localPoint(event)
       const hit = hitTest(reposRef.current, cameraRef.current, point.x, point.y)
-      if (hit) onSelectRepo?.(hit.id)
+      if (hit) {
+        setHoverSeverity(null)
+        onSelectRepo?.(hit.id)
+      } else {
+        // Click empty map: clear filters and let parent close the sidebar.
+        // Drags never reach here (active.moved).
+        setHoverSeverity(null)
+        onPinnedSeverityChange?.(null)
+        onBackgroundClick?.()
+      }
     }
     drag.current = null
   }
@@ -242,7 +273,51 @@ export function GalaxyMap({
           if (!drag.current) clearHover()
         }}
         onWheel={onWheel}
+        onContextMenu={(event) => event.preventDefault()}
+        onDragStart={(event) => event.preventDefault()}
+        draggable={false}
       />
+      {flowers.map((flower) => {
+        const screen = worldToScreen(flower.center, camera)
+        const labelY = screen.y + flower.radius * camera.scale + 18
+        return (
+          <FlowerLabel
+            key={flower.id}
+            flower={flower}
+            x={screen.x}
+            y={labelY}
+            activeTone={
+              severityFocus?.flowerId === flower.id ? severityFocus.tone : null
+            }
+            categoryActive={
+              pinnedSeverity?.flowerId === flower.id && pinnedSeverity.tone == null
+            }
+            onHoverTone={(tone) => {
+              setHoverSeverity(tone ? { flowerId: flower.id, tone } : null)
+            }}
+            onFocusFlower={() => {
+              const same =
+                pinnedSeverity?.flowerId === flower.id && pinnedSeverity.tone == null
+              const next: SeverityFocus | null = same
+                ? null
+                : { flowerId: flower.id, tone: null }
+              setHoverSeverity(null)
+              onPinnedSeverityChange?.(next)
+              if (next) onZoomToFlower?.(flower, null)
+            }}
+            onSelectTone={(tone) => {
+              const same =
+                pinnedSeverity?.flowerId === flower.id &&
+                pinnedSeverity?.tone === tone
+              const next = same ? null : { flowerId: flower.id, tone }
+              onPinnedSeverityChange?.(next)
+              setHoverSeverity(next)
+              // Always frame the whole flower, even when clearing a tone pin.
+              onZoomToFlower?.(flower, tone)
+            }}
+          />
+        )
+      })}
       {hoverCard ? (
         <MapHoverCard repo={hoverCard.repo} x={hoverCard.x} y={hoverCard.y} />
       ) : null}

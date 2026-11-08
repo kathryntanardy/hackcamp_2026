@@ -4,13 +4,19 @@ export type FindingsRiskFilter = 'all' | 'at_risk' | 'watchlist' | 'healthy' | '
 
 export type FindingsViewProps = {
   findings?: FindingListEntry[]
+  total?: number
+  page?: number
+  pageSize?: number
   loading?: boolean
   error?: string | null
   selectedId?: string | null
   riskFilter?: FindingsRiskFilter
   onRiskFilterChange?: (risk: FindingsRiskFilter) => void
+  onPageChange?: (page: number) => void
   onSelectFinding?: (repoId: string) => void
 }
+
+const DEFAULT_PAGE_SIZE = 50
 
 function riskClass(risk: string | null | undefined): string {
   const r = (risk || '').toLowerCase()
@@ -41,23 +47,35 @@ const FILTERS: { id: FindingsRiskFilter; label: string }[] = [
 
 export function FindingsView({
   findings = [],
+  total = 0,
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
   loading = false,
   error = null,
   selectedId = null,
   riskFilter = 'all',
   onRiskFilterChange,
+  onPageChange,
   onSelectFinding,
 }: FindingsViewProps) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const safePage = Math.min(Math.max(1, page), pageCount)
+  const rangeStart = total === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const rangeEnd = Math.min(safePage * pageSize, total)
+
   return (
-    <section className="findings-view" aria-label="Agent findings">
-      <header className="findings-view__header">
-        <div className="findings-view__intro">
-          <p className="findings-view__eyebrow">Agent output</p>
-          <h1 className="findings-view__title">Findings</h1>
-          <p className="findings-view__subtitle">
-            Investigations sorted by severity. Open a row to inspect the repo in the sidebar.
-          </p>
+    <aside className="findings-view" aria-label="Agent findings">
+      <header className="findings-view__top">
+        <div className="findings-view__meta">
+          <span>Investigation findings</span>
         </div>
+      </header>
+
+      <div className="findings-view__hero">
+        <h1 className="findings-view__title">Findings</h1>
+        <p className="findings-view__subtitle">
+          Investigations sorted by severity. Open a row to inspect that repo on the map.
+        </p>
         <div className="findings-view__filters" role="toolbar" aria-label="Risk filter">
           {FILTERS.map((filter) => (
             <button
@@ -71,7 +89,7 @@ export function FindingsView({
             </button>
           ))}
         </div>
-      </header>
+      </div>
 
       <div className="findings-view__body">
         {loading ? (
@@ -80,12 +98,16 @@ export function FindingsView({
           <p className="findings-view__status is-error" role="alert">
             {error}
           </p>
-        ) : findings.length === 0 ? (
+        ) : total === 0 ? (
           <p className="findings-view__status">No findings for this filter yet.</p>
         ) : (
           <>
             <p className="findings-view__count">
-              {findings.length} {findings.length === 1 ? 'finding' : 'findings'}
+              {total} {total === 1 ? 'finding' : 'findings'}
+              <span className="findings-view__count-range">
+                {' '}
+                · showing {rangeStart}–{rangeEnd}
+              </span>
             </p>
             <ul className="findings-list">
               {findings.map((finding) => {
@@ -128,6 +150,30 @@ export function FindingsView({
           </>
         )}
       </div>
-    </section>
+
+      {!loading && !error && total > pageSize ? (
+        <nav className="findings-pagination" aria-label="Findings pages">
+          <button
+            type="button"
+            className="findings-pagination__btn"
+            disabled={safePage <= 1}
+            onClick={() => onPageChange?.(safePage - 1)}
+          >
+            Previous
+          </button>
+          <p className="findings-pagination__status">
+            Page {safePage} of {pageCount}
+          </p>
+          <button
+            type="button"
+            className="findings-pagination__btn"
+            disabled={safePage >= pageCount}
+            onClick={() => onPageChange?.(safePage + 1)}
+          >
+            Next
+          </button>
+        </nav>
+      ) : null}
+    </aside>
   )
 }

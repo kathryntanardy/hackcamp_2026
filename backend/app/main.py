@@ -1,11 +1,14 @@
 """HTTP API for the Open-Source Corpus Explorer."""
 
+import ast
 import json
+import os
 from pathlib import Path
 
 import httpx
 from dotenv import find_dotenv, load_dotenv
-from fastapi import FastAPI, HTTPException
+from databricks.sdk import WorkspaceClient
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -24,8 +27,10 @@ GOLD = """gold AS (
   SELECT * FROM hackcamp.gold.repo_health
   QUALIFY row_number() OVER (PARTITION BY repo_id ORDER BY scored_at DESC) = 1
 )"""
+# Live UC schema: risk_level includes legacy 'ignored' rows; product surfaces exclude them.
 LATEST_FINDING = """latest_finding AS (
   SELECT * FROM hackcamp.agent.findings
+  WHERE coalesce(risk_level, '') <> 'ignored'
   QUALIFY row_number() OVER (PARTITION BY repo_id ORDER BY investigated_at DESC) = 1
 )"""
 LATEST_RUN = """latest_run AS (
@@ -35,38 +40,60 @@ FINDING_COLS = """f.run_id, f.risk_level, f.confidence, f.headline, f.explanatio
   to_json(f.evidence) AS evidence, f.changed_since_last, f.alternatives,
   f.tool_calls, f.trace_id, f.investigated_at"""
 SEVERITY = """CASE f.risk_level WHEN 'at_risk' THEN 0 WHEN 'watchlist' THEN 1
-  WHEN 'inconclusive' THEN 2 ELSE 3 END"""
+  WHEN 'inconclusive' THEN 2 WHEN 'healthy' THEN 3 ELSE 4 END"""
+
+
+def _parse_str_list_text(text: str) -> list[str] | None:
+    """Parse JSON or Python-repr array text into a string list."""
+    text = text.strip()
+    if not text.startswith("["):
+        return None
+    for loader in (json.loads, ast.literal_eval):
+        try:
+            parsed = loader(text)
+        except (json.JSONDecodeError, SyntaxError, ValueError):
+            continue
+        if isinstance(parsed, list):
+            return [str(x) for x in parsed if str(x).strip()]
+    return None
 
 
 def _as_str_list(value) -> list[str]:
-    """Normalize UC array / JSON-string / broken char-list values to string lists."""
+    """Normalize UC array / JSON-string / Python-repr / broken char-list values."""
     if value is None:
         return []
     if isinstance(value, str):
         text = value.strip()
         if not text:
             return []
-        if text.startswith("["):
-            try:
-                parsed = json.loads(text)
-                if isinstance(parsed, list):
-                    return [str(x) for x in parsed]
-            except json.JSONDecodeError:
-                pass
+        parsed = _parse_str_list_text(text)
+        if parsed is not None:
+            return parsed
+        # Unwrap a single mangled bucket like "['Code execution']".
+        if text.startswith("[") and text.endswith("]"):
+            return []
         return [text]
     if isinstance(value, (list, tuple)):
-        # Databricks sometimes yields a JSON array already stringified then list()'d
-        # into characters: ['[', '"', 'C', ...]. Recover those.
+        # Databricks sometimes yields a JSON/Python array stringified then list()'d
+        # into characters: ['[', "'", 'C', ...]. Recover those.
         if value and all(isinstance(x, str) and len(x) <= 1 for x in value):
             joined = "".join(value)
-            if joined.startswith("["):
-                try:
-                    parsed = json.loads(joined)
-                    if isinstance(parsed, list):
-                        return [str(x) for x in parsed]
-                except json.JSONDecodeError:
-                    pass
-        return [str(x) for x in value]
+            parsed = _parse_str_list_text(joined)
+            if parsed is not None:
+                return parsed
+            return []
+        # Flatten one level if an element is itself a serialized list.
+        out: list[str] = []
+        for item in value:
+            if isinstance(item, str) and item.strip().startswith("["):
+                nested = _parse_str_list_text(item)
+                if nested is not None:
+                    out.extend(nested)
+                    continue
+            text = str(item).strip()
+            if text:
+                out.append(text)
+        return out
     return [str(value)]
 
 
@@ -92,7 +119,7 @@ def list_repos() -> list[dict]:
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
 SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
   g.importance, g.x, g.y, g.cat_x, g.cat_y, g.stars, g.is_archived,
-  g.category, g.vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
+  g.category, to_json(g.vuln_buckets) AS vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
   f.risk_level, f.changed_since_last,
   f.repo_id IS NOT NULL AS investigated,
   coalesce(f.run_id = (SELECT run_id FROM latest_run), false) AS investigated_in_latest_run,
@@ -111,12 +138,12 @@ def get_repo(repo_id: str) -> dict:
 WITH {GOLD}
 SELECT g.repo_id, g.name, g.owner, g.language, g.stars, g.dependents, g.is_archived,
   g.health_score, g.status, g.importance, g.x, g.y, g.cat_x, g.cat_y, g.scored_at,
-  g.category, g.vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
+  g.category, to_json(g.vuln_buckets) AS vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
   g.days_since_release, g.commit_trend_pct,
   s.pushed_at, s.last_release_at, s.commits_90d, s.commits_prev_90d,
   s.open_issues, s.open_prs, s.contributors,
   s.maintainer_reply_rate, s.top_contributor_share, s.advisory_fetch_status,
-  s.description, s.topics, sm.summary
+  s.description, to_json(s.topics) AS topics, sm.summary
 FROM gold g LEFT JOIN hackcamp.silver.repos s ON s.repo_id = g.repo_id
 LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
@@ -125,7 +152,8 @@ WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
     r = rows[0]
     verdicts = [_finding(v) for v in query(f"""
 SELECT {FINDING_COLS} FROM hackcamp.agent.findings f
-WHERE f.repo_id = :repo_id ORDER BY f.investigated_at DESC LIMIT 2""", {"repo_id": repo_id})]
+WHERE f.repo_id = :repo_id AND coalesce(f.risk_level, '') <> 'ignored'
+ORDER BY f.investigated_at DESC LIMIT 2""", {"repo_id": repo_id})]
     advisories = query("""
 SELECT ghsa_id, cve_id, severity, cvss_score, cwes, vuln_bucket, summary, published_at
 FROM hackcamp.silver.repo_advisories
@@ -149,22 +177,36 @@ ORDER BY published_at DESC NULLS LAST""", {"repo_id": repo_id})
 
 
 @app.get("/api/findings")
-def list_findings(language: str | None = None, risk: str | None = None) -> list[dict]:
+def list_findings(
+    language: str | None = None,
+    risk: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """Paginated findings list. limit/offset are clamped server-side."""
+    limit = max(1, min(int(limit), 100))
+    offset = max(0, int(offset))
+    # LIMIT/OFFSET as literals — warehouse drivers often reject bound values here.
     rows = query(f"""
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
 SELECT f.repo_id, g.name, g.language, g.importance, g.health_score,
-  g.category, g.vuln_buckets, {FINDING_COLS},
-  f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run
+  g.category, to_json(g.vuln_buckets) AS vuln_buckets, {FINDING_COLS},
+  f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run,
+  COUNT(*) OVER() AS total_count
 FROM latest_finding f LEFT JOIN gold g ON g.repo_id = f.repo_id
-WHERE (:language IS NULL OR g.language = :language)
+WHERE coalesce(f.risk_level, '') <> 'ignored'
+  AND (:language IS NULL OR g.language = :language)
   AND (:risk IS NULL OR f.risk_level = :risk)
-ORDER BY {SEVERITY}, g.importance DESC""", {"language": language, "risk": risk})
+ORDER BY {SEVERITY}, g.importance DESC
+LIMIT {limit} OFFSET {offset}""", {"language": language, "risk": risk})
     out = []
     for r in rows:
         row = _finding(r)
+        row.pop("total_count", None)
         row["vuln_buckets"] = _as_str_list(row.get("vuln_buckets"))
         out.append(row)
-    return out
+    total = int(rows[0]["total_count"]) if rows else 0
+    return {"items": out, "total": total, "limit": limit, "offset": offset}
 
 
 @app.get("/api/findings/{repo_id:path}/trace")
@@ -238,6 +280,51 @@ def run_scan(repo_id: str) -> dict:
     query("""INSERT INTO hackcamp.agent.code_scans
 VALUES (:repo_id, :commit_sha, :model, :files, :summary, :findings, current_timestamp())""", row)
     return get_scan(repo_id)
+
+
+SEARCH_INDEX = os.environ.get("SEARCH_INDEX", "hackcamp.gold.repo_search_index")
+# Calibrated on gte-large scores: gibberish/off-topic queries top out ~0.54, real ones start
+# ~0.6 with a tail down to ~0.55. Floor gives "no matches"; window trims the weak tail (#30).
+SEARCH_MIN_SCORE = float(os.environ.get("SEARCH_MIN_SCORE", "0.56"))
+SEARCH_SCORE_WINDOW = float(os.environ.get("SEARCH_SCORE_WINDOW", "0.06"))
+SEARCH_MAX_RESULTS = 25
+
+
+def vector_search(text: str, filters: dict, k: int) -> list[tuple[str, float]]:
+    """(repo_id, score) pairs from the Delta Sync index, best first."""
+    res = WorkspaceClient().vector_search_indexes.query_index(
+        SEARCH_INDEX, columns=["repo_id"], query_text=text, num_results=k,
+        filters_json=json.dumps(filters) if filters else None)
+    return [(row[0], float(row[-1])) for row in (res.result.data_array or [])]
+
+
+@app.get("/api/search")
+def search(q: str = Query(min_length=1), language: str | None = None, category: str | None = None,
+           status: str | None = None, vuln_bucket: str | None = None,
+           investigated_only: bool = False) -> dict:
+    """Natural-language map search (F14): query + active map filters in, matching repo IDs out."""
+    filters = {k: v for k, v in {"language": language, "category": category, "status": status}.items() if v}
+    try:
+        hits = vector_search(q.strip(), filters, SEARCH_MAX_RESULTS)
+    except Exception as e:  # SDK raises many types; surface as upstream failure
+        raise HTTPException(502, f"vector search failed: {e}")
+    cutoff = max(SEARCH_MIN_SCORE, (hits[0][1] - SEARCH_SCORE_WINDOW) if hits else 0)
+    ranked = [rid for rid, score in hits if score >= cutoff]
+    if not ranked:
+        return {"query": q, "repo_ids": []}
+    # Re-check against live gold: drops stale index rows for excluded repos, applies the
+    # filters Vector Search can't (array bucket, investigated flag).
+    rows = query(f"""
+WITH {GOLD}, {LATEST_FINDING}
+SELECT g.repo_id FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
+WHERE array_contains(from_json(:ids, 'array<string>'), g.repo_id)
+  AND g.status <> 'ignored'
+  AND (:vuln_bucket IS NULL OR array_contains(g.vuln_buckets, cast(:vuln_bucket AS STRING)))
+  AND (NOT :investigated_only OR f.repo_id IS NOT NULL)""",
+                 {"ids": json.dumps(ranked), "vuln_bucket": vuln_bucket,
+                  "investigated_only": investigated_only})
+    keep = {r["repo_id"] for r in rows}
+    return {"query": q, "repo_ids": [rid for rid in ranked if rid in keep]}
 
 
 # Serve the React build from the same origin as /api (required on Databricks Apps).

@@ -41,7 +41,7 @@ def calls(monkeypatch):
                      "stars": 100, "dependents": 0, "is_archived": False,
                      "language": "JavaScript", "owner": "moment", "scored_at": "2026-11-07",
                      "summary": "Stale but stable."}]
-        if "LIMIT 2" in statement:
+        if "DESC LIMIT 2" in statement:
             return [FINDING, {**FINDING, "run_id": "r1", "evidence": None}]
         if "trace_steps" in statement:
             payload = {"trace_id": "tr-1", "steps": [{"order": 1, "tool_name": "t"}]}
@@ -49,7 +49,8 @@ def calls(monkeypatch):
                     "old/repo": [{"repo_id": "old/repo", "run_id": "r1", "trace_id": "tr-0", "payload": None}],
                     }.get(params["repo_id"], [{"repo_id": params["repo_id"], "run_id": "r2",
                                                "trace_id": "tr-1", "payload": json.dumps(payload)}])
-        return [{"repo_id": "a/b", "category": "other", "vuln_buckets": [], **FINDING}]
+        return [{"repo_id": "a/b", "category": "other", "vuln_buckets": [],
+                 "total_count": 1, **FINDING}]
 
     monkeypatch.setattr(main, "query", fake_query)
     return log
@@ -88,7 +89,15 @@ def test_as_str_list_recovers_json_string_and_char_lists():
         "Code execution",
         "Prototype pollution",
     ]
+    assert _as_str_list("['Other / unclassified', 'Injection']") == [
+        "Other / unclassified",
+        "Injection",
+    ]
     assert _as_str_list(list('["Injection"]')) == ["Injection"]
+    assert _as_str_list(list("['Code execution']")) == ["Code execution"]
+    assert _as_str_list(["['Path traversal & file access']"]) == [
+        "Path traversal & file access",
+    ]
     assert _as_str_list(["Auth & access control"]) == ["Auth & access control"]
     assert _as_str_list(None) == []
 
@@ -110,13 +119,29 @@ def test_repo_detail_404(calls):
 
 def test_findings_passes_filters_as_params(calls):
     body = client.get("/api/findings?language=Go&risk=at_risk").json()
-    assert body[0]["alternatives"] == []
+    assert body["items"][0]["alternatives"] == []
+    assert "total_count" not in body["items"][0]
+    assert body["total"] == 1 and body["limit"] == 50 and body["offset"] == 0
     assert calls[-1][1] == {"language": "Go", "risk": "at_risk"}
+    assert "LIMIT 50 OFFSET 0" in calls[-1][0]
+    assert "COUNT(*) OVER()" in calls[-1][0]
 
 
 def test_findings_no_filters(calls):
     client.get("/api/findings")
     assert calls[-1][1] == {"language": None, "risk": None}
+
+
+def test_findings_pagination(calls):
+    body = client.get("/api/findings?limit=25&offset=50").json()
+    assert body["limit"] == 25 and body["offset"] == 50
+    assert "LIMIT 25 OFFSET 50" in calls[-1][0]
+
+
+def test_findings_pagination_clamped(calls):
+    body = client.get("/api/findings?limit=999&offset=-3").json()
+    assert body["limit"] == 100 and body["offset"] == 0
+    assert "LIMIT 100 OFFSET 0" in calls[-1][0]
 
 
 def test_trace(calls):

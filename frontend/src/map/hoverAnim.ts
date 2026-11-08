@@ -10,23 +10,23 @@ export function easeOutCubic(t: number): number {
 }
 
 /**
- * Push neighbours away from the hovered node.
+ * Push neighbours away from the focus node (hover or selection).
  * Strength falls off with world distance; scaled by animated amount 0..1.
  */
 export function dispersePoint(
   repo: Pick<MapRepo, 'id' | 'x' | 'y'>,
-  hover: Pick<MapRepo, 'id' | 'x' | 'y'> | null,
+  focus: Pick<MapRepo, 'id' | 'x' | 'y'> | null,
   amount: number,
 ): Point {
-  if (!hover || amount <= 0 || repo.id === hover.id) {
+  if (!focus || amount <= 0 || repo.id === focus.id) {
     return { x: repo.x, y: repo.y }
   }
-  const dx = repo.x - hover.x
-  const dy = repo.y - hover.y
+  const dx = repo.x - focus.x
+  const dy = repo.y - focus.y
   const dist = Math.hypot(dx, dy) || 0.0001
   // Soft falloff — nearby x's move more, far ones barely twitch.
-  const influence = Math.exp(-dist / 22)
-  const push = 11 * easeOutCubic(amount) * influence
+  const influence = Math.exp(-dist / 34)
+  const push = 20 * easeOutCubic(amount) * influence
   return {
     x: repo.x + (dx / dist) * push,
     y: repo.y + (dy / dist) * push,

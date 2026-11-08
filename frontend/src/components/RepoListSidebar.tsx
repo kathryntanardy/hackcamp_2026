@@ -1,5 +1,4 @@
 import reposMetaIcon from '../assets/icons/repos-meta.svg'
-import starViewSavedIcon from '../assets/icons/star-view-saved.svg'
 import cornerDownRightIcon from '../assets/icons/corner-down-right.svg'
 
 export type RepoListItem = {
@@ -23,7 +22,6 @@ export type RepoListSidebarProps = {
   loading?: boolean
   error?: string | null
   selectedId?: string | null
-  onViewSaved?: () => void
   onSelectRepo?: (id: string) => void
 }
 
@@ -45,7 +43,6 @@ export function RepoListSidebar({
   loading = false,
   error = null,
   selectedId = null,
-  onViewSaved,
   onSelectRepo,
 }: RepoListSidebarProps) {
   const resolvedCount =
@@ -59,10 +56,6 @@ export function RepoListSidebar({
           <img src={reposMetaIcon} alt="" width={17} height={17} />
           <span>{metaLabel}</span>
         </div>
-        <button type="button" className="repo-list-sidebar__saved" onClick={onViewSaved}>
-          <img src={starViewSavedIcon} alt="" width={15} height={14} />
-          View Saved
-        </button>
       </header>
 
       <div className="repo-list-sidebar__hero">

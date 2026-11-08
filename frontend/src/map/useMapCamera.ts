@@ -5,13 +5,17 @@ import {
   ZOOM_STEP,
   boundsOf,
   clampScale,
+  contentCenter,
   fitBounds,
   focusOn,
   lerpCamera,
   panBy,
   zoomAt,
+  type ViewInsets,
 } from './camera'
-import type { MapCamera, MapRepo, Point } from './types'
+import type { MapCamera, MapRepo, Point, WorldBounds } from './types'
+
+export type { ViewInsets }
 
 export { worldToScreen, screenToWorld } from './camera'
 
@@ -84,7 +88,9 @@ export function useMapCamera() {
       if (width <= 1 || height <= 1) return
       const bounds = boundsOf(repos)
       if (!bounds) return
-      const key = `${repos.length}:${bounds.minX}:${bounds.maxX}:${bounds.minY}:${bounds.maxY}:${width}x${height}`
+      // Key ignores viewport size so sidebar resize updates layout metrics
+      // without reframing the camera.
+      const key = `${repos.length}:${bounds.minX}:${bounds.maxX}:${bounds.minY}:${bounds.maxY}`
       if (!force && fittedKey.current === key) return
       fittedKey.current = key
       stopAnim()
@@ -98,7 +104,7 @@ export function useMapCamera() {
       stopAnim()
       setCamera((prev) => {
         const { width, height } = viewport.current
-        const screen = anchor ?? { x: width / 2, y: height / 2 }
+        const screen = anchor ?? contentCenter(width, height)
         return zoomAt(prev, screen, prev.scale * ZOOM_STEP)
       })
     },
@@ -110,7 +116,7 @@ export function useMapCamera() {
       stopAnim()
       setCamera((prev) => {
         const { width, height } = viewport.current
-        const screen = anchor ?? { x: width / 2, y: height / 2 }
+        const screen = anchor ?? contentCenter(width, height)
         return zoomAt(prev, screen, prev.scale / ZOOM_STEP)
       })
     },
@@ -133,9 +139,13 @@ export function useMapCamera() {
     [stopAnim],
   )
 
-  /** Smoothly center + zoom onto a world-space point (e.g. a clicked repo). */
+  /**
+   * Smoothly center + zoom onto a world-space point (e.g. a clicked repo).
+   * Pass `insets.right` when the sidebar is about to open so the target lands
+   * in the remaining map, not under the panel.
+   */
   const focusOnPoint = useCallback(
-    (point: Point, importance = 1) => {
+    (point: Point, importance = 1, insets?: ViewInsets) => {
       const { width, height } = viewport.current
       if (width <= 1 || height <= 1) return
 
@@ -152,7 +162,19 @@ export function useMapCamera() {
           ? clampScale(Math.min(MAX_SCALE, prev.scale * 1.6))
           : targetScale
 
-      animateTo(focusOn(point, width, height, Math.max(scale, MIN_SCALE * 4)))
+      animateTo(
+        focusOn(point, width, height, Math.max(scale, MIN_SCALE * 4), insets),
+      )
+    },
+    [animateTo],
+  )
+
+  /** Animate camera so the given world bounds (e.g. an entire flower) fill the view. */
+  const fitToBoundsAnimated = useCallback(
+    (bounds: WorldBounds, padding = 72, insets?: ViewInsets) => {
+      const { width, height } = viewport.current
+      if (width <= 1 || height <= 1) return
+      animateTo(fitBounds(bounds, width, height, padding, insets), 520)
     },
     [animateTo],
   )
@@ -163,6 +185,7 @@ export function useMapCamera() {
       setCamera,
       setViewportSize,
       fitToRepos,
+      fitToBoundsAnimated,
       zoomIn,
       zoomOut,
       zoomByFactor,
@@ -171,6 +194,7 @@ export function useMapCamera() {
     }),
     [
       camera,
+      fitToBoundsAnimated,
       fitToRepos,
       focusOnPoint,
       pan,

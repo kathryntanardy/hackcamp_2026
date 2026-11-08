@@ -44,23 +44,56 @@ export function boundsOf(repos: Pick<MapRepo, 'x' | 'y'>[]): WorldBounds | null 
   return { minX, maxX, minY, maxY }
 }
 
+/** Screen-space gutters so focus/fit centers in the visible map, not under chrome. */
+export type ViewInsets = {
+  left?: number
+  right?: number
+  top?: number
+  bottom?: number
+}
+
+function resolveInsets(insets?: ViewInsets) {
+  return {
+    left: Math.max(0, insets?.left ?? 0),
+    right: Math.max(0, insets?.right ?? 0),
+    top: Math.max(0, insets?.top ?? 0),
+    bottom: Math.max(0, insets?.bottom ?? 0),
+  }
+}
+
+/** Center of the content box after subtracting insets. */
+export function contentCenter(
+  width: number,
+  height: number,
+  insets?: ViewInsets,
+): Point {
+  const i = resolveInsets(insets)
+  return {
+    x: i.left + (width - i.left - i.right) / 2,
+    y: i.top + (height - i.top - i.bottom) / 2,
+  }
+}
+
 export function fitBounds(
   bounds: WorldBounds,
   width: number,
   height: number,
   padding = FIT_PADDING,
+  insets?: ViewInsets,
 ): MapCamera {
+  const i = resolveInsets(insets)
   const worldW = bounds.maxX - bounds.minX
   const worldH = bounds.maxY - bounds.minY
-  const availW = Math.max(1, width - padding * 2)
-  const availH = Math.max(1, height - padding * 2)
+  const availW = Math.max(1, width - i.left - i.right - padding * 2)
+  const availH = Math.max(1, height - i.top - i.bottom - padding * 2)
   const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min(availW / worldW, availH / worldH)))
   const cx = (bounds.minX + bounds.maxX) / 2
   const cy = (bounds.minY + bounds.maxY) / 2
+  const screen = contentCenter(width, height, i)
   return {
     scale,
-    offsetX: width / 2 - cx * scale,
-    offsetY: height / 2 - cy * scale,
+    offsetX: screen.x - cx * scale,
+    offsetY: screen.y - cy * scale,
   }
 }
 
@@ -92,18 +125,20 @@ export function panBy(camera: MapCamera, dx: number, dy: number): MapCamera {
   }
 }
 
-/** Center a world point in the viewport at the given scale. */
+/** Center a world point in the (inset-aware) viewport at the given scale. */
 export function focusOn(
   point: Point,
   width: number,
   height: number,
   scale: number,
+  insets?: ViewInsets,
 ): MapCamera {
   const s = clampScale(scale)
+  const screen = contentCenter(width, height, insets)
   return {
     scale: s,
-    offsetX: width / 2 - point.x * s,
-    offsetY: height / 2 - point.y * s,
+    offsetX: screen.x - point.x * s,
+    offsetY: screen.y - point.y * s,
   }
 }
 

@@ -1,12 +1,12 @@
 # Ticket dependency graph
 
-Synced from GitHub issues on 2026-11-07 (`kathryntanardy/hackcamp_2026`).
-✅ = closed on GitHub **or done in workspace**. Open: **15** (#14, #17–#18, #20–#22, #23–#30, #33). Closed/done: **18** (#1–#13, #15–#16, #19, #31–#32).
+Synced from GitHub issues on 2026-11-08 (`kathryntanardy/hackcamp_2026`); #24+#28 closed with F7 map wiring.
+✅ = closed on GitHub **or done in workspace**. Open: **9** (#17–#18, #21–#22, #26–#27, #29–#30, #33). Closed/done: **25**.
 
 **New:** **#30–#33** (F14 map search + F15 categories/CWEs).
 
-Unblocked next (deps closed): **#14**, **#18**, **#20**, **#21**, **#22**.
-Blocked: **#17** (needs #14), **#23–#29** (`blocked-by-design` / after #22), **#30** (needs #24+#31), **#33** (needs FE + #32).
+Unblocked next (deps closed): **#18**, **#21**, **#22**, **#29** (after #28), **#30** (after #24+#31).
+Blocked: **#17** (needs #14), **#26–#27** (after drawer/findings polish), **#33** (needs FE + #32).
 
 ```mermaid
 flowchart TB
@@ -42,11 +42,11 @@ flowchart TB
   subgraph Frontend["Frontend"]
     n22["#22 design handoff"]
     n23["#23 FE scaffold"]
-    n24["#24 galaxy map"]
+    n24["#24 galaxy map ✅"]
     n25["#25 repo drawer"]
     n26["#26 trace tab"]
     n27["#27 findings page"]
-    n28["#28 FE↔API"]
+    n28["#28 FE↔API ✅"]
   end
   subgraph Stretch["Stretch / polish"]
     n17["#17 demo prep"]

@@ -2606,3 +2606,16 @@ img {
 }
 
 .map-zoom__btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+
+.scan-title {
+  font-size: var(--text-md);
+}
+
+.scan-text {
+  white-space: pre-wrap;
+}
+
+.advisory-card__ids a {
+  color: inherit;
+  text-decoration: underline;
+}

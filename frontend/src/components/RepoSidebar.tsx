@@ -9,8 +9,9 @@ import chevronUpIcon from '../assets/icons/chevron-up.svg'
 import { fetchTrace, type TracePayload } from '../api/trace'
 import type { FavouriteList } from '../favourites/types'
 import { FavouriteStarButton } from './FavouriteStarButton'
+import { SecurityScanPanel } from './SecurityScanPanel'
 
-export type RepoSidebarTab = 'overview' | 'agent'
+export type RepoSidebarTab = 'overview' | 'agent' | 'security'
 
 export type EvidenceView = {
   signal: string
@@ -313,6 +314,14 @@ export function RepoSidebar({
         >
           Agent Process
         </button>
+        <button
+          type="button"
+          className={`repo-sidebar__tab${tab === 'security' ? ' is-active' : ''}`}
+          aria-current={tab === 'security' ? 'page' : undefined}
+          onClick={() => setTab('security')}
+        >
+          Security Scan
+        </button>
       </nav>
 
       <div className="repo-sidebar__body">
@@ -610,6 +619,8 @@ export function RepoSidebar({
               </section>
             ) : null}
           </>
+        ) : tab === 'security' ? (
+          repoId && repoId !== '—' ? <SecurityScanPanel key={repoId} repoId={repoId} /> : null
         ) : (
           <>
             <section className="section" aria-labelledby="verdict-heading">

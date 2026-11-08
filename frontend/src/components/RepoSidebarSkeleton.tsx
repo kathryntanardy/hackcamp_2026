@@ -174,6 +174,7 @@ export function RepoSidebarSkeleton({
           Overview
         </span>
         <span className="repo-sidebar__tab">Agent Process</span>
+        <span className="repo-sidebar__tab">Security Scan</span>
       </nav>
 
       <div className="repo-sidebar__body">

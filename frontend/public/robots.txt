@@ -1,9 +1,9 @@
-# Open-Source Corpus Explorer — crawler policy
-# Replace SITE_ORIGIN in sitemap.xml / llms.txt before production deploy.
+# Open Commitment Issues — crawler policy
 
 User-agent: *
 Allow: /
 Allow: /llms.txt
+Allow: /llms-full.txt
 Allow: /sitemap.xml
 Allow: /api/
 Disallow: /src/
@@ -39,4 +39,4 @@ Allow: /
 User-agent: Applebot-Extended
 Allow: /
 
-Sitemap: https://REPLACE_WITH_SITE_ORIGIN/sitemap.xml
+Sitemap: https://www.opencommitmentissues.work/sitemap.xml

@@ -1,7 +1,7 @@
 {
   "name": "Open Commitment Issues",
   "short_name": "Open Commitment",
-  "description": "Galaxy map of open-source maintainer risk with Databricks agent findings and GitHub advisories.",
+  "description": "Interactive map of maintainer risk across 1,000 GitHub repositories with Databricks agent findings and GitHub advisories.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b1020",

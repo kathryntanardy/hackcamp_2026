@@ -648,7 +648,7 @@ function App() {
           findingsActive={findingsActive}
           savedActive={savedActive}
         />
-        <main className="app-shell__map" aria-label="Repository galaxy map">
+        <main className="app-shell__map" aria-label="Repository map">
           <GalaxyMap
             repos={flowerLayout.repos}
             flowers={flowerLayout.flowers}

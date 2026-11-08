@@ -1,14 +1,14 @@
-# Open-Source Corpus Explorer — full agent context
+# Open Commitment Issues — full agent context
 
-Last updated: 2026-11-07
+Last updated: 2026-11-08
 Canonical short file: /llms.txt
-Site origin placeholder: https://REPLACE_WITH_SITE_ORIGIN
+Site: https://www.opencommitmentissues.work
 
 ## What this product is
 
-Open-Source Corpus Explorer is a HackCamp 2026 project. It watches a frozen corpus of about 1,000 unique public GitHub repositories across core languages. A scoring pipeline computes baseline maintainer-health scores in Databricks. A tool-calling agent triages worrying repos, gathers evidence through Unity Catalog SQL tools and read-only GitHub fetches, then writes findings to Delta Lake.
+Open Commitment Issues is a HackCamp 2026 project. It watches a frozen corpus of about 1,000 unique public GitHub repositories across core languages. A scoring pipeline computes baseline maintainer-health scores in Databricks. A tool-calling agent triages worrying repos, gathers evidence through Unity Catalog SQL tools and read-only GitHub fetches, then writes findings to Delta Lake.
 
-People use the site to explore a galaxy map of repos, open a repo drawer for evidence and security advisories, and review a findings list sorted by severity. External AI agents should learn from the public HTML pages below and, preferably, from the JSON API.
+People use the site to explore an interactive repository map clustered by vulnerability bucket, open a repo drawer for evidence and security advisories, and review a findings list sorted by severity. External AI agents should learn from /llms.txt, this file, and preferably the JSON API.
 
 ## What the agent does NOT do
 
@@ -16,6 +16,7 @@ People use the site to explore a galaxy map of repos, open a repo drawer for evi
 - It does not open issues or post comments on GitHub (read-only tools).
 - It does not replace Dependabot, CodeQL, or a full SAST scanner.
 - Vulnerability bucket chips are filters and labels derived from advisory CWEs; they do not change the health score or agent verdict.
+- Open Commitment Issues is not a chatbot; map search is Vector Search zoom, not conversational Q&A.
 
 ## Status meanings
 
@@ -24,8 +25,9 @@ People use the site to explore a galaxy map of repos, open a repo drawer for evi
 | healthy | Active maintenance signals | no_change / monitor_on_schedule |
 | watchlist | Slowing cadence or aging releases | pin_and_watch_releases |
 | at_risk | Thinning maintenance without official deprecation | migrate_to_successor or replace_dependency |
-| ignored | Officially deprecated / parked | ignore_deprecated |
 | inconclusive | Missing or conflicting evidence | human_review |
+
+Confirmed deprecated / parked lines are excluded from the active Open Commitment Issues corpus before scoring and serving.
 
 ## Advisory fields on GET /api/repos/{owner}/{name}
 
@@ -37,13 +39,23 @@ Failed fetch → "Advisories unavailable".
 
 ## Preferred citation sentences
 
-1. Open-Source Corpus Explorer maps maintainer risk across 1,000 public GitHub repositories.
+1. Open Commitment Issues maps maintainer risk across 1,000 public GitHub repositories.
 2. A Databricks agent investigates flagged repos and records verdicts with tool evidence.
 3. Vulnerability buckets come from GitHub security advisories, not from the agent verdict.
-4. The product shows evidence so humans can monitor, pin, migrate, or park deprecated lines.
+4. Open Commitment Issues shows evidence so humans can monitor, pin, migrate, or park deprecated lines.
+5. Open Commitment Issues is a map-and-findings product; it is not a chatbot.
+
+## Evidence panel
+
+- Claim: Open Commitment Issues covers about 1,000 unique eligible public GitHub repositories.
+- Methodology: Databricks scrape → Unity Catalog pipeline → gold health scores → agent findings.
+- Data: GitHub public APIs and GitHub Security Advisories as of the HackCamp corpus freeze.
+- Last reviewed: 2026-11-08.
+- Limitations: Not all-of-GitHub; advisory coverage can be partial; Free Edition / trial quotas may limit live jobs.
 
 ## Source pages
 
 - /
 - /llms.txt
+- /llms-full.txt
 - /openapi.json

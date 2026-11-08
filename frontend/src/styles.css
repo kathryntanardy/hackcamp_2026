@@ -686,31 +686,24 @@ img {
 }
 
 .findings-view__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-text-muted);
   font-size: var(--text-xs);
 }
 
-.findings-view__saved {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-bg-muted) 50%, var(--color-bg));
-  font-size: var(--text-sm);
-  color: var(--color-text);
-}
-
-.findings-view__saved img {
-  width: 15px;
-  height: 14px;
+.findings-view__meta img {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
 }
 
 .findings-view__hero {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
   padding: var(--space-6) var(--space-7);
   border-bottom: 1px solid var(--color-border);
 }
@@ -725,9 +718,18 @@ img {
 
 .findings-view__subtitle {
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--color-text-muted);
   line-height: 1.4;
+}
+
+.findings-view__controls {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-7);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .findings-view__filters {
@@ -902,14 +904,13 @@ img {
   background: var(--color-bg);
 }
 
-.top-navbar__inner, .top-navbar__left, .top-navbar__tabs {
+.top-navbar__inner,
+.top-navbar__tabs {
   display: flex;
   align-items: center;
 }
-.top-navbar__inner { width: 100%; justify-content: space-between; gap: 12px; }
-.top-navbar__left { gap: 24px; min-width: 0; }
-.top-navbar__brand { font-size: 18px; font-weight: 600; white-space: nowrap; }
-.top-navbar__tabs { gap: 12px; }
+.top-navbar__inner { width: 100%; gap: 12px; }
+.top-navbar__tabs { gap: 12px; min-width: 0; flex-wrap: wrap; }
 .top-navbar__tab {
   display: inline-flex;
   align-items: center;
@@ -918,13 +919,18 @@ img {
   padding: 6px 12px;
   border-radius: 4px;
   background: #f3f3f3;
+  color: #a2a2a2;
   font-size: 18px;
-  line-height: 22px;
+  line-height: normal;
   white-space: nowrap;
 }
+.top-navbar__tab img {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
 .top-navbar__tab.is-active { background: #fff1e9; color: #fc5239; }
-.top-navbar__layout { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 40px; border-radius: 4px; }
-.top-navbar__layout:hover { background: #f3f3f3; }
 .top-navbar button:focus-visible, .flower-label button:focus-visible { outline: 2px solid #fc5239; outline-offset: 3px; }
 .app-shell__map { border: 1px solid #e7e5e6; border-radius: 8px; margin-bottom: 24px; }
 
@@ -1385,13 +1391,13 @@ img {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-6) var(--space-7);
+  padding: var(--space-8) var(--space-7) var(--space-6);
 }
 
 .repo-sidebar__title-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-4);
+  gap: 17px;
 }
 
 .repo-sidebar__title-main {
@@ -1410,23 +1416,24 @@ img {
 }
 
 .repo-sidebar__star-btn {
-  width: 29px;
-  height: 29px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-muted);
+  border-radius: 4px;
+  background: color-mix(in srgb, #fc5239 5%, white);
   flex-shrink: 0;
 }
 
 .repo-sidebar__star-btn.is-saved {
-  background: color-mix(in srgb, var(--color-accent) 18%, var(--color-bg-muted));
+  background: color-mix(in srgb, #fc5239 12%, white);
 }
 
 .repo-sidebar__star-btn img {
-  width: 15px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .favourite-star {
@@ -1565,19 +1572,18 @@ img {
   color: var(--color-text);
 }
 
-.favourites-sidebar__saved-badge {
+.favourites-sidebar__meta {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-bg-muted) 50%, var(--color-bg));
-  font-size: var(--text-sm);
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
 }
 
-.favourites-sidebar__saved-badge img {
-  width: 15px;
-  height: 14px;
+.favourites-sidebar__meta img {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
 }
 
 .favourites-sidebar__hero {
@@ -1594,12 +1600,14 @@ img {
   font-size: var(--text-xl);
   font-weight: 600;
   line-height: 1.2;
+  color: var(--color-text);
 }
 
 .favourites-sidebar__subtitle {
   margin: 0;
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+  line-height: 1.4;
 }
 
 .favourites-sidebar__body {
@@ -1739,7 +1747,7 @@ img {
 
 .repo-sidebar__name {
   margin: 0;
-  font-size: var(--text-xl);
+  font-size: 28px;
   font-weight: 600;
   line-height: 1.2;
   color: var(--color-text);
@@ -1754,15 +1762,16 @@ img {
 }
 
 .repo-sidebar__ext-link img {
-  width: 29px;
-  height: 29px;
+  width: 24px;
+  height: 24px;
 }
 
 .repo-sidebar__repo-id {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: 14px;
   color: var(--color-text-muted);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .repo-sidebar__owner {
@@ -2366,10 +2375,6 @@ img {
     padding: 0 var(--space-5);
   }
 
-  .top-navbar__left {
-    gap: var(--space-4);
-  }
-
   .app-shell__map {
     min-height: 0;
     overflow: hidden;
@@ -2492,11 +2497,9 @@ img {
 
 @media (max-width: 720px) {
   .top-navbar { height: auto; min-height: 64px; padding: 10px 12px; }
-  .top-navbar__left { flex-wrap: wrap; gap: 8px; }
-  .top-navbar__brand { font-size: 15px; width: 100%; text-align: left; }
   .top-navbar__tabs { gap: 6px; }
   .top-navbar__tab { font-size: 14px; padding: 5px 8px; }
-  .top-navbar__tab img { width: 18px; height: 18px; }
+  .top-navbar__tab img { width: 16px; height: 16px; }
   .map-search__scope-btn { min-width: 0; padding: 8px; font-size: 14px; }
   .map-search__field input { font-size: 16px; }
   .flower-label__title { font-size: 13px; }
@@ -2565,11 +2568,9 @@ img {
 /* Keep the navigation usable when the drawer narrows the map. */
 @container map-shell (max-width: 720px) {
   .top-navbar { height: auto; min-height: 64px; padding: 10px 12px; }
-  .top-navbar__left { flex-wrap: wrap; gap: 8px; }
-  .top-navbar__brand { font-size: 15px; text-align: left; }
   .top-navbar__tabs { gap: 6px; }
   .top-navbar__tab { font-size: 14px; padding: 5px 8px; }
-  .top-navbar__tab img { width: 18px; height: 18px; }
+  .top-navbar__tab img { width: 16px; height: 16px; }
   .map-search__scope-btn { min-width: 0; padding: 8px; font-size: 14px; }
   .map-search__category-name { width: 74px; }
   .flower-label__title { font-size: 14px; }

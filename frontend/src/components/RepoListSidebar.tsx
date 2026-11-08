@@ -1,4 +1,3 @@
-import savedIcon from '../assets/icons/star-view-saved.svg'
 import reposMetaIcon from '../assets/icons/repos-meta.svg'
 import cornerDownRightIcon from '../assets/icons/corner-down-right.svg'
 
@@ -24,7 +23,6 @@ export type RepoListSidebarProps = {
   error?: string | null
   selectedId?: string | null
   onSelectRepo?: (id: string) => void
-  onViewSaved?: () => void
 }
 
 function toneClass(tone: RepoListItem['vulnerabilityTone']): string {
@@ -46,7 +44,6 @@ export function RepoListSidebar({
   error = null,
   selectedId = null,
   onSelectRepo,
-  onViewSaved,
 }: RepoListSidebarProps) {
   const resolvedCount =
     countLabel ??
@@ -59,9 +56,6 @@ export function RepoListSidebar({
           <img src={reposMetaIcon} alt="" width={17} height={17} />
           <span>{metaLabel}</span>
         </div>
-        {onViewSaved ? <button type="button" className="repo-list-sidebar__saved" onClick={onViewSaved}>
-          <img src={savedIcon} alt="" width={15} height={14} /> Saved
-        </button> : null}
       </header>
 
       <div className="repo-list-sidebar__hero">

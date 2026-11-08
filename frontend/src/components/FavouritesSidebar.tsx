@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import starViewSavedIcon from '../assets/icons/star-view-saved.svg'
+import savedBookmarkIcon from '../assets/icons/saved-bookmark.svg'
 import cornerDownRightIcon from '../assets/icons/corner-down-right.svg'
 import type { FavouriteList } from '../favourites/types'
 import type { RepoListItem } from './RepoListSidebar'
@@ -87,14 +87,14 @@ export function FavouritesSidebar({
   return (
     <aside className="favourites-sidebar" aria-label="Saved repositories">
       <header className="favourites-sidebar__top">
-        <div className="favourites-sidebar__saved-badge">
-          <img src={starViewSavedIcon} alt="" width={15} height={14} />
-          Saved
+        <div className="favourites-sidebar__meta">
+          <img src={savedBookmarkIcon} alt="" width={17} height={17} />
+          <span>Saved repositories</span>
         </div>
       </header>
 
       <div className="favourites-sidebar__hero">
-        <h1 className="favourites-sidebar__title">Favourites</h1>
+        <h1 className="favourites-sidebar__title">Saved</h1>
         <p className="favourites-sidebar__subtitle">
           {totalSaved} {totalSaved === 1 ? 'repository' : 'repositories'} across {lists.length}{' '}
           {lists.length === 1 ? 'list' : 'lists'} · stored on this browser
@@ -186,7 +186,7 @@ export function FavouritesSidebar({
           </p>
           {entries.length === 0 ? (
             <p className="favourites-sidebar__empty">
-              Star a repository to add it here. Right-click the star to choose a list.
+              Save a repository to add it here. Right-click the bookmark to choose a list.
             </p>
           ) : (
             <ul className="repo-list">

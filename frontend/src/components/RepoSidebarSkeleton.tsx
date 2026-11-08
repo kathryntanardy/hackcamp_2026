@@ -1,8 +1,8 @@
 import { useEffect, useState, type MouseEvent } from 'react'
 import languageIcon from '../assets/icons/language.svg'
 import starIcon from '../assets/icons/star.svg'
-import starOutlineIcon from '../assets/icons/star-outline.svg'
-import arrowUpRightIcon from '../assets/icons/arrow-up-right.svg'
+import savedBookmarkIcon from '../assets/icons/saved-bookmark.svg'
+import arrowExtIcon from '../assets/icons/arrow-ext.svg'
 
 export type RepoSidebarSkeletonProps = {
   repoId: string
@@ -140,7 +140,7 @@ export function RepoSidebarSkeleton({
       <div className="repo-sidebar__title-block">
         <div className="repo-sidebar__title-row">
           <span className="repo-sidebar__star-btn" aria-hidden="true">
-            <img src={starOutlineIcon} alt="" width={15} height={14} draggable={false} />
+            <img src={savedBookmarkIcon} alt="" width={18} height={18} draggable={false} />
           </span>
           <div className="repo-sidebar__title-main">
             <div className="repo-sidebar__name-row">
@@ -153,17 +153,17 @@ export function RepoSidebarSkeleton({
                   rel="noreferrer"
                   aria-label="Open on GitHub"
                 >
-                  <img src={arrowUpRightIcon} alt="" width={29} height={29} draggable={false} />
+                  <img src={arrowExtIcon} alt="" width={24} height={24} draggable={false} />
                 </a>
               </div>
-              <p className="repo-sidebar__repo-id">{repoId}</p>
             </div>
             <div className="repo-sidebar__owner-row">
               <p className="repo-sidebar__owner">{owner}</p>
-              <div className="chip-row" aria-hidden="true">
-                <span className="skeleton-bar skeleton-bar--chip" />
-                <span className="skeleton-bar skeleton-bar--chip skeleton-bar--chip-wide" />
-              </div>
+              <p className="repo-sidebar__repo-id">{repoId}</p>
+            </div>
+            <div className="chip-row" aria-hidden="true">
+              <span className="skeleton-bar skeleton-bar--chip" />
+              <span className="skeleton-bar skeleton-bar--chip skeleton-bar--chip-wide" />
             </div>
           </div>
         </div>

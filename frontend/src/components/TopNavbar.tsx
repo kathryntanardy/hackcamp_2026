@@ -1,5 +1,6 @@
-import layoutIcon from '../assets/flower-map/layout.svg'
-import mapNavIcon from '../assets/flower-map/map.svg'
+import brandIcon from '../assets/icons/brand-nav.svg'
+import findingsIcon from '../assets/icons/findings-document.svg'
+import savedIcon from '../assets/icons/nav-saved.svg'
 
 export type TopNavbarTab = 'map' | 'findings'
 
@@ -7,55 +8,54 @@ export type TopNavbarProps = {
   brand?: string
   activeTab?: TopNavbarTab
   onTabChange?: (tab: TopNavbarTab) => void
+  onViewSaved?: () => void
   findingsActive?: boolean
-  sidebarOpen?: boolean
-  onToggleSidebar?: () => void
   savedActive?: boolean
 }
 
 export function TopNavbar({
   brand = 'Open Commitment Issues',
   onTabChange,
-  sidebarOpen = false,
-  onToggleSidebar,
+  onViewSaved,
   findingsActive = false,
   savedActive = false,
 }: TopNavbarProps) {
+  const mapActive = !findingsActive && !savedActive
+
   return (
     <header className="top-navbar" aria-label="Primary">
       <div className="top-navbar__inner">
-        <div className="top-navbar__left">
+        <nav className="top-navbar__tabs" aria-label="Views">
           <button
             type="button"
-            className="top-navbar__brand"
-            aria-current={!findingsActive && !savedActive ? 'page' : undefined}
+            className={`top-navbar__tab${mapActive ? ' is-active' : ''}`}
+            aria-current={mapActive ? 'page' : undefined}
             onClick={() => onTabChange?.('map')}
           >
-            {brand}
+            <img src={brandIcon} alt="" width={16} height={18} />
+            <span>{brand}</span>
           </button>
-          <nav className="top-navbar__tabs" aria-label="Views">
-            <button type="button"
-              className={`top-navbar__tab${!findingsActive && !savedActive ? ' is-active' : ''}`}
-              aria-current={!findingsActive && !savedActive ? 'page' : undefined}
-              onClick={() => onTabChange?.('map')}>
-              <img src={mapNavIcon} alt="" width={22} height={22} />
-              <span>Interactive Map</span>
-            </button>
-            <button
-              type="button"
-              className={`top-navbar__tab${findingsActive ? ' is-active' : ''}`}
-              aria-current={findingsActive ? 'page' : undefined}
-              aria-pressed={findingsActive}
-              onClick={() => onTabChange?.('findings')}
-            >
-              Findings
-            </button>
-          </nav>
-        </div>
-        <button type="button" className="top-navbar__layout" aria-label="Toggle repository panel"
-          aria-expanded={sidebarOpen} onClick={onToggleSidebar}>
-          <img src={layoutIcon} width={24} height={24} alt="" />
-        </button>
+          <button
+            type="button"
+            className={`top-navbar__tab${findingsActive ? ' is-active' : ''}`}
+            aria-current={findingsActive ? 'page' : undefined}
+            aria-pressed={findingsActive}
+            onClick={() => onTabChange?.('findings')}
+          >
+            <img src={findingsIcon} alt="" width={18} height={18} />
+            <span>Findings</span>
+          </button>
+          <button
+            type="button"
+            className={`top-navbar__tab${savedActive ? ' is-active' : ''}`}
+            aria-current={savedActive ? 'page' : undefined}
+            aria-pressed={savedActive}
+            onClick={() => onViewSaved?.()}
+          >
+            <img src={savedIcon} alt="" width={18} height={18} />
+            <span>Saved</span>
+          </button>
+        </nav>
       </div>
     </header>
   )

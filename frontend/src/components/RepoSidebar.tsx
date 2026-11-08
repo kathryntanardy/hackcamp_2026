@@ -2,8 +2,8 @@ import { maintenanceStatusLabel, MAINTENANCE_HEALTH_DESCRIPTION } from '../map/h
 import { useEffect, useState } from 'react'
 import languageIcon from '../assets/icons/language.svg'
 import starIcon from '../assets/icons/star.svg'
-import starOutlineIcon from '../assets/icons/star-outline.svg'
-import arrowUpRightIcon from '../assets/icons/arrow-up-right.svg'
+import savedBookmarkIcon from '../assets/icons/saved-bookmark.svg'
+import arrowExtIcon from '../assets/icons/arrow-ext.svg'
 import gitCommitIcon from '../assets/icons/git-commit.svg'
 import chevronUpIcon from '../assets/icons/chevron-up.svg'
 import { fetchTrace, type TracePayload } from '../api/trace'
@@ -256,7 +256,7 @@ export function RepoSidebar({
             />
           ) : (
             <span className="repo-sidebar__star-btn" aria-hidden="true">
-              <img src={starOutlineIcon} alt="" width={15} height={14} />
+              <img src={savedBookmarkIcon} alt="" width={18} height={18} />
             </span>
           )}
           <div className="repo-sidebar__title-main">
@@ -270,20 +270,20 @@ export function RepoSidebar({
                   rel="noreferrer"
                   aria-label="Open on GitHub"
                 >
-                  <img src={arrowUpRightIcon} alt="" width={29} height={29} />
+                  <img src={arrowExtIcon} alt="" width={24} height={24} />
                 </a>
               </div>
-              <p className="repo-sidebar__repo-id">{repoId}</p>
             </div>
             <div className="repo-sidebar__owner-row">
               <p className="repo-sidebar__owner">{owner}</p>
-              <div className="chip-row">
-                <span className={`status-chip ${statusClass(status)}`}>
-                  {maintenanceStatusLabel(status)}
-                </span>
-                {isArchived ? <span className="status-chip is-ignored">archived</span> : null}
-                {category ? <span className="chip">{category}</span> : null}
-              </div>
+              <p className="repo-sidebar__repo-id">{repoId}</p>
+            </div>
+            <div className="chip-row">
+              <span className={`status-chip ${statusClass(status)}`}>
+                {maintenanceStatusLabel(status)}
+              </span>
+              {isArchived ? <span className="status-chip is-ignored">archived</span> : null}
+              {category ? <span className="chip">{category}</span> : null}
             </div>
             {topics.length > 0 ? (
               <div className="chip-row chip-row--wrap">

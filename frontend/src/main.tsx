@@ -629,7 +629,6 @@ function App() {
             : undefined
         }
         repos={filteredRepos}
-        onViewSaved={handleViewSaved}
         loading={loading}
         error={error}
         selectedId={selectedId}
@@ -647,9 +646,8 @@ function App() {
       <div className="app-shell__main">
         <TopNavbar
           activeTab={tab}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen(open => !open)}
           onTabChange={handleTabChange}
+          onViewSaved={handleViewSaved}
           findingsActive={findingsActive}
           savedActive={savedActive}
         />

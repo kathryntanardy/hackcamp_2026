@@ -1,3 +1,4 @@
+import findingsMetaIcon from '../assets/icons/findings-document.svg'
 import { maintenanceStatusLabel } from '../map/health'
 import type { FindingsSort } from '../api/findings'
 import type { FindingListEntry } from '../api/types'
@@ -100,6 +101,7 @@ export function FindingsView({
     <aside className="findings-view" aria-label="Agent findings">
       <header className="findings-view__top">
         <div className="findings-view__meta">
+          <img src={findingsMetaIcon} alt="" width={17} height={17} />
           <span>Investigation findings</span>
         </div>
       </header>
@@ -109,6 +111,9 @@ export function FindingsView({
         <p className="findings-view__subtitle">
           Sorted by {sortLabel.toLowerCase()}. Open a row to inspect that repo on the map.
         </p>
+      </div>
+
+      <div className="findings-view__controls">
         <div className="findings-view__filters" role="toolbar" aria-label="Maintenance filter">
           {FILTERS.map((filter) => (
             <button

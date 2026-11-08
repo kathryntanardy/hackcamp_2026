@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import starFilledIcon from '../assets/icons/star-filled.svg'
-import starOutlineIcon from '../assets/icons/star-outline.svg'
+import savedBookmarkIcon from '../assets/icons/saved-bookmark.svg'
 import type { FavouriteList } from '../favourites/types'
 
 export type FavouriteStarButtonProps = {
@@ -75,10 +74,10 @@ export function FavouriteStarButton({
         }}
       >
         <img
-          src={saved ? starOutlineIcon : starFilledIcon}
+          src={savedBookmarkIcon}
           alt=""
-          width={15}
-          height={14}
+          width={18}
+          height={18}
         />
       </button>
       {open ? (

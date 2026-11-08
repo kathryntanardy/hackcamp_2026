@@ -1,0 +1,1 @@
+just another tab besides agent process, if user goes to that tab gemini will run to scan it, if there's advisories, gemini will recommend the fixes for the advisory. If no advisory, gemini will scan the whole codebase and find vulnerabilities with the recommended fixes or workarounds. Fix the backend first then push, after that do the front end and integration

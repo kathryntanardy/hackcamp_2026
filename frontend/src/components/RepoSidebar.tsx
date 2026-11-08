@@ -38,6 +38,18 @@ export type AdvisoryView = {
   publishedAt: string
 }
 
+/** GitHub Advisory Database page for a GHSA or CVE id. */
+function githubAdvisoryUrl(id: string): string {
+  return `https://github.com/advisories/${encodeURIComponent(id.trim())}`
+}
+
+/** Mitre CWE definition page from labels like "CWE-25" or "25". */
+function cweUrl(cwe: string): string | null {
+  const match = cwe.trim().match(/^(?:CWE-)?(\d+)$/i)
+  if (!match) return null
+  return `https://cwe.mitre.org/data/definitions/${match[1]}.html`
+}
+
 export type RepoSidebarProps = {
   language?: string
   starsLabel?: string
@@ -456,13 +468,55 @@ export function RepoSidebar({
                           {a.cvss != null ? <span className="advisory-card__cvss">CVSS {a.cvss}</span> : null}
                         </div>
                         <p className="advisory-card__ids">
-                          {a.ghsaId}
-                          {a.cveId ? ` · ${a.cveId}` : ''}
+                          {a.ghsaId ? (
+                            <a
+                              className="advisory-card__link"
+                              href={githubAdvisoryUrl(a.ghsaId)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {a.ghsaId}
+                            </a>
+                          ) : null}
+                          {a.cveId ? (
+                            <>
+                              {' · '}
+                              <a
+                                className="advisory-card__link"
+                                href={githubAdvisoryUrl(a.cveId)}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {a.cveId}
+                              </a>
+                            </>
+                          ) : null}
                           {a.publishedAt !== '—' ? ` · ${a.publishedAt}` : ''}
                         </p>
                         <p className="advisory-card__summary">{a.summary || 'No summary.'}</p>
                         {a.cwes.length > 0 ? (
-                          <p className="advisory-card__cwes">{a.cwes.join(', ')}</p>
+                          <p className="advisory-card__cwes">
+                            {a.cwes.map((cwe, index) => {
+                              const href = cweUrl(cwe)
+                              return (
+                                <span key={`${a.ghsaId}-${cwe}`}>
+                                  {index > 0 ? ', ' : null}
+                                  {href ? (
+                                    <a
+                                      className="advisory-card__link"
+                                      href={href}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {cwe}
+                                    </a>
+                                  ) : (
+                                    cwe
+                                  )}
+                                </span>
+                              )
+                            })}
+                          </p>
                         ) : null}
                       </li>
                     ))}
@@ -520,27 +574,27 @@ export function RepoSidebar({
               ) : null}
             </section>
 
-            <section className="section" aria-labelledby="alternatives-heading">
-              <div className="section-heading-row">
-                <h2 id="alternatives-heading" className="section-heading">Alternatives</h2>
-                <button
-                  type="button"
-                  className="section-meta"
-                  aria-expanded={altsOpen}
-                  onClick={() => setAltsOpen((v) => !v)}
-                >
-                  {alternatives.length} options
-                  <img
-                    src={chevronUpIcon}
-                    alt=""
-                    width={24}
-                    height={24}
-                    className={altsOpen ? undefined : 'is-collapsed'}
-                  />
-                </button>
-              </div>
-              {altsOpen ? (
-                alternatives.length > 0 ? (
+            {alternatives.length > 0 ? (
+              <section className="section" aria-labelledby="alternatives-heading">
+                <div className="section-heading-row">
+                  <h2 id="alternatives-heading" className="section-heading">Alternatives</h2>
+                  <button
+                    type="button"
+                    className="section-meta"
+                    aria-expanded={altsOpen}
+                    onClick={() => setAltsOpen((v) => !v)}
+                  >
+                    {alternatives.length} options
+                    <img
+                      src={chevronUpIcon}
+                      alt=""
+                      width={24}
+                      height={24}
+                      className={altsOpen ? undefined : 'is-collapsed'}
+                    />
+                  </button>
+                </div>
+                {altsOpen ? (
                   <ul className="alt-list">
                     {alternatives.map((alt) => (
                       <li key={alt}>
@@ -550,11 +604,9 @@ export function RepoSidebar({
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p className="empty-note">No alternatives recorded for this finding.</p>
-                )
-              ) : null}
-            </section>
+                ) : null}
+              </section>
+            ) : null}
           </>
         ) : (
           <>

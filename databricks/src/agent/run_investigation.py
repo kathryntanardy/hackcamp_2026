@@ -43,6 +43,7 @@ dbutils.widgets.text("max_tool_calls", "8")
 dbutils.widgets.text("repo_timeout_sec", "180")
 dbutils.widgets.text("experiment_path", "")
 dbutils.widgets.text("uninvestigated_only", "false")
+dbutils.widgets.text("status_filter", "")
 dbutils.widgets.text("coverage_id", "")
 
 BUDGET_N = int(dbutils.widgets.get("budget_n"))
@@ -52,6 +53,7 @@ REPO_TIMEOUT_SEC = int(dbutils.widgets.get("repo_timeout_sec"))
 EXPERIMENT_PATH = dbutils.widgets.get("experiment_path").strip() or f"/Users/{WorkspaceClient().current_user.me().user_name}/hackcamp-agent"
 RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8]
 UNINVESTIGATED_ONLY = dbutils.widgets.get("uninvestigated_only").lower() == "true"
+STATUS_FILTER = dbutils.widgets.get("status_filter").strip() or None
 COVERAGE_ID = dbutils.widgets.get("coverage_id").strip()
 if BUDGET_N == 0 and COVERAGE_ID and UNINVESTIGATED_ONLY:
     assert COVERAGE_ID.isdigit()
@@ -63,6 +65,7 @@ if COVERAGE_ID:
 
 print(
     f"run_id={RUN_ID} model={MODEL} budget_n={BUDGET_N} "
+    f"status_filter={STATUS_FILTER or '*'} "
     f"max_tool_calls={MAX_TOOL_CALLS} repo_timeout_sec={REPO_TIMEOUT_SEC}"
 )
 
@@ -100,7 +103,7 @@ parked = ignored_gold.union(prev_ignored).distinct()
 parked_n = parked.count()
 print(f"triage: skipping {parked_n} ignored/deprecated repo(s)")
 
-candidates = spark.sql(triage_sql(BUDGET_N, UNINVESTIGATED_ONLY))
+candidates = spark.sql(triage_sql(BUDGET_N, UNINVESTIGATED_ONLY, status_filter=STATUS_FILTER))
 
 triage_rows = candidates.collect()
 if COVERAGE_ID:

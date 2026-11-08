@@ -3,6 +3,7 @@
 import ast
 import json
 import os
+import re
 from pathlib import Path
 
 import httpx
@@ -109,10 +110,28 @@ def _as_str_list(value) -> list[str]:
     return [str(value)]
 
 
+def _repo_id_list(value) -> list[str]:
+    """Keep only org/repo ids; drop mangled empties like '[]'."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in _as_str_list(value):
+        text = item.strip()
+        if text in {"[]", "null", "None"}:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", text):
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
+
+
 def _finding(row: dict) -> dict:
     row = dict(row)
     row["evidence"] = json.loads(row["evidence"]) if row.get("evidence") else []
-    row["alternatives"] = _as_str_list(row.get("alternatives"))
+    row["alternatives"] = _repo_id_list(row.get("alternatives"))
     return row
 
 

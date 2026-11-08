@@ -32,6 +32,11 @@ def test_coverage_skips_existing_case_insensitively_and_parks_ignored():
     assert selected(True) == ['new/high', 'new/low']
     assert selected(False)[0] == 'existing/repo'  # normal memory/revisit behavior preserved
     assert selected(True, 1) == ['new/high']
+    at_risk = [r[0] for r in db.execute(
+        m.triage_sql(50, False, status_filter="at_risk", gold_table="gold", findings_table="findings"))]
+    assert at_risk == ['existing/repo', 'new/high']
+    with pytest.raises(ValueError):
+        m.triage_sql(10, False, status_filter="bogus")
 
 
 def test_invalid_budget_and_false_coverage_are_rejected():

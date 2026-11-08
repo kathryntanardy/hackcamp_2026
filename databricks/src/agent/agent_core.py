@@ -78,6 +78,10 @@ llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints", max_re
 
 # COMMAND ----------
 
+# MAGIC %run ./find_alternatives
+
+# COMMAND ----------
+
 # MAGIC %run ./trace_steps
 
 # COMMAND ----------
@@ -130,6 +134,13 @@ LIVE_TOOLS = {
         "description": (
             "Scan the README/repo for deprecated, unmaintained, archived, or "
             "'use X instead' signals. Read-only. Results are cached in Delta."
+        ),
+    },
+    "find_alternatives": {
+        "description": (
+            "Vector Search over eligible repos: return up to 3 similar *healthy* "
+            "packages as remediation alternatives for an at-risk repo. Do not use "
+            "for healthy controls. Excludes the query repo."
         ),
     },
 }
@@ -225,6 +236,21 @@ OPENAI_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_alternatives",
+            "description": LIVE_TOOLS["find_alternatives"]["description"],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "org/repo under investigation"},
+                    "k": {"type": "integer", "default": 3, "description": "Max alternatives (1–3)"},
+                },
+                "required": ["repo"],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """You are a maintainer-risk analyst for open-source packages.
@@ -236,6 +262,8 @@ Do not claim weekly history, inter-release gaps, contributor concentration, or u
 Contributor concentration is disabled until measured history exists.
 Only get_previous_finding may return historical verdicts; distinguish their date from the current snapshot.
 Prefer UC metric tools; use fetch_recent_issues / fetch_readme_signals when you need live GitHub evidence.
+When leaning at_risk (remediation), call find_alternatives and put up to 3 healthy similar repos in alternatives.
+Leave alternatives empty for healthy verdicts; never invent repo ids that the tool did not return.
 When requesting tools, provide a brief public decision summary in assistant content when possible.
 Do not provide private chain-of-thought; final explanations should summarize the evidence.
 Never open issues or post comments — tools are read-only.
@@ -328,6 +356,9 @@ def execute_tool(name: str, args: dict[str, Any], allowed_repo: str) -> str:
                 return json.dumps(fetch_recent_issues(repo, n=n))
             if name == "fetch_readme_signals":
                 return json.dumps(fetch_readme_signals(repo))
+            if name == "find_alternatives":
+                k = int(args.get("k", 3))
+                return json.dumps(find_alternatives(repo, k=k))
         except Exception as e:
             return json.dumps({"error": f"{type(e).__name__}: {e}", "tool": name})
 
@@ -366,11 +397,33 @@ def validate_verdict(
     raw = dict(raw)
     raw["repo_id"] = repo_id
     raw["tool_calls"] = tool_calls
+    raw["alternatives"] = sanitize_alternatives(raw.get("alternatives"))
     verdict = Verdict.model_validate(raw)
     kept = [e for e in verdict.evidence if e.tool in called_tools]
     verdict.evidence = kept
     if verdict.confidence >= 0.7 and len(kept) == 0 and called_tools:
         verdict.confidence = min(verdict.confidence, 0.69)
+    if verdict.risk_level == "healthy":
+        verdict.alternatives = []
+    return verdict
+
+
+def ensure_alternatives(verdict: Verdict) -> Verdict:
+    """For at_risk findings, backfill alternatives from Vector Search when missing."""
+    if verdict.risk_level != "at_risk":
+        verdict.alternatives = sanitize_alternatives(verdict.alternatives)
+        if verdict.risk_level == "healthy":
+            verdict.alternatives = []
+        return verdict
+    cleaned = sanitize_alternatives(verdict.alternatives)
+    if cleaned:
+        verdict.alternatives = cleaned
+        return verdict
+    try:
+        payload = find_alternatives(verdict.repo_id, k=3)
+        verdict.alternatives = sanitize_alternatives(payload.get("alternatives"))
+    except Exception:
+        verdict.alternatives = []
     return verdict
 
 
@@ -561,5 +614,6 @@ def investigate_repo(repo_id: str, triage_reason: str, previous: dict | None = N
             else:
                 verdict = inconclusive(repo_id, tool_calls, f"Investigation failed: {type(exc).__name__}: {str(exc)[:300]}")
         verdict = apply_memory(verdict, previous if use_memory else None)
+        verdict = ensure_alternatives(verdict)
         root.set_outputs(verdict.model_dump())
     return verdict, trace_id

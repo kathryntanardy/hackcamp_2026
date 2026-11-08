@@ -8,6 +8,8 @@ resources:
           default: "10"
         - name: uninvestigated_only
           default: "false"
+        - name: status_filter
+          default: ""
         - name: model_endpoint
           default: databricks-meta-llama-3-3-70b-instruct
         - name: max_tool_calls
@@ -32,6 +34,7 @@ resources:
             base_parameters:
               budget_n: "{{job.parameters.budget_n}}"
               uninvestigated_only: "{{job.parameters.uninvestigated_only}}"
+              status_filter: "{{job.parameters.status_filter}}"
               model_endpoint: "{{job.parameters.model_endpoint}}"
               max_tool_calls: "{{job.parameters.max_tool_calls}}"
               repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"

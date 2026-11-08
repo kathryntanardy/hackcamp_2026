@@ -2278,6 +2278,16 @@ img {
   color: var(--color-text-muted);
 }
 
+.advisory-card__link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.advisory-card__link:hover {
+  color: var(--color-accent-underline);
+}
+
 .advisory-card__summary {
   margin: 0;
   font-size: var(--text-sm);

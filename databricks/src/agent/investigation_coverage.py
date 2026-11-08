@@ -14,15 +14,23 @@ def coverage_plan(available, requested="500"):
     return target, [max(0, min(50, target - i * 50)) for i in range(10)]
 
 
-def triage_sql(budget, uninvestigated_only=False, *, gold_table="hackcamp.gold.repo_health",
+def triage_sql(budget, uninvestigated_only=False, *, status_filter=None,
+               gold_table="hackcamp.gold.repo_health",
                findings_table="hackcamp.agent.findings"):
     if type(budget) is not int or not 1 <= budget <= 500:
         raise ValueError("Investigation budget must be between 1 and 500")
+    allowed = {None, "", "at_risk", "watchlist", "healthy", "inconclusive"}
+    if status_filter not in allowed:
+        raise ValueError(f"status_filter must be one of {sorted(s for s in allowed if s)}")
     unseen = f"AND NOT EXISTS (SELECT 1 FROM {findings_table} f WHERE lower(f.repo_id)=lower(g.repo_id))" if uninvestigated_only else ""
+    status_clause = (
+        f"AND g.status = '{status_filter}'" if status_filter else "AND g.status <> 'ignored'"
+    )
     return f"""SELECT g.repo_id, g.language, g.health_score, g.status, g.importance,
         g.importance * (100.0 - coalesce(g.health_score, 50.0)) AS priority,
         g.days_since_release, g.commit_trend_pct
-        FROM {gold_table} g WHERE g.status <> 'ignored'
+        FROM {gold_table} g WHERE 1=1
+        {status_clause}
         AND NOT EXISTS (SELECT 1 FROM {findings_table} f
                         WHERE lower(f.repo_id)=lower(g.repo_id) AND f.risk_level='ignored')
         {unseen}

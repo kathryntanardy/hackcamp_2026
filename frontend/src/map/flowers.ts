@@ -58,6 +58,7 @@ export function primaryBucket(repo: Pick<MapRepo, 'vulnBuckets'>): string {
 }
 
 export type MapLayoutMode = 'flowers' | 'language' | 'category'
+export type FlowerGrouping = 'vulnerabilities' | 'category'
 
 /**
  * Language / category cluster scatter using gold `x,y` or `cat_x,cat_y`.
@@ -92,27 +93,50 @@ export function layoutMapRepos(
 }
 
 /**
- * Place repos into vulnerability-bucket flowers.
+ * Place repos into category or vulnerability-bucket flowers.
  * Each node keeps identity; `x`/`y` become flower-layout display coords.
  */
-export function layoutFlowerMap(repos: MapRepo[]): {
+export function layoutFlowerMap(
+  repos: MapRepo[],
+  preferredIds: ReadonlySet<string> | null = null,
+  grouping: FlowerGrouping = 'vulnerabilities',
+): {
   repos: MapRepo[]
   flowers: FlowerCluster[]
 } {
   if (repos.length === 0) return { repos: [], flowers: [] }
 
+  const groupLabel = (repo: MapRepo) => grouping === 'category'
+    ? repo.category?.trim() || 'other'
+    : primaryBucket(repo)
   const groups = new Map<string, MapRepo[]>()
   for (const repo of repos) {
-    const key = primaryBucket(repo)
+    const key = groupLabel(repo)
     const list = groups.get(key)
     if (list) list.push(repo)
     else groups.set(key, [repo])
   }
 
-  // Show the eight largest clusters; keep smaller groups in the source data.
+  // Keep the eight-slot artwork, but bring a searched/selected rare bucket into
+  // view instead of silently dropping its matches from the map.
   const keys = [...groups.keys()]
     .sort((a, b) => groups.get(b)!.length - groups.get(a)!.length || a.localeCompare(b))
     .slice(0, FLOWER_SLOTS.length)
+  if (preferredIds?.size) {
+    const byId = new Map(repos.map((repo) => [repo.id, repo]))
+    const required = [...new Set([...preferredIds].flatMap((id) => {
+      const repo = byId.get(id)
+      return repo ? [groupLabel(repo)] : []
+    }))].slice(0, FLOWER_SLOTS.length)
+    for (const bucket of required) {
+      if (keys.includes(bucket)) continue
+      let replacement = -1
+      for (let i = keys.length - 1; i >= 0; i--) {
+        if (!required.includes(keys[i])) { replacement = i; break }
+      }
+      if (replacement >= 0) keys[replacement] = bucket
+    }
+  }
   const flowers: FlowerCluster[] = []
   const positioned: MapRepo[] = []
 
@@ -159,9 +183,9 @@ export function layoutFlowerMap(repos: MapRepo[]): {
 export function flowerWorldBounds(flower: FlowerCluster) {
   const slot = FLOWER_SLOTS[flower.colorIndex]
   return {
-    minX: Math.min(slot.bounds.x, slot.label.x),
-    maxX: Math.max(slot.bounds.x + slot.bounds.width, slot.label.x + slot.label.width),
+    minX: Math.min(slot.bounds.x, slot.label.x, slot.center.x - slot.label.width / 2),
+    maxX: Math.max(slot.bounds.x + slot.bounds.width, slot.label.x + slot.label.width, slot.center.x + slot.label.width / 2),
     minY: slot.bounds.y,
-    maxY: Math.max(slot.bounds.y + slot.bounds.height, slot.label.y + 63),
+    maxY: Math.max(slot.bounds.y + slot.bounds.height + 77, slot.label.y + 63),
   }
 }

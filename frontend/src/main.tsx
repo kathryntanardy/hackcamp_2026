@@ -1,6 +1,6 @@
 import { FLOWER_SCENE } from './map/flowerScene'
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { fetchFindings, type FindingsSort } from './api/findings'
 import { mapRepoToListItem } from './api/mapRepoToListItem'
 import { mapRepoToMapPoint } from './api/mapRepoToMapPoint'
@@ -32,6 +32,7 @@ import {
 } from './map/flowers'
 import type { MapRepo, WorldBounds } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
+import { localSearchIds, mergeSearchIds, searchResultItems } from './map/search'
 import './styles.css'
 
 const FINDINGS_PAGE_SIZE = 50
@@ -56,44 +57,6 @@ function searchViewBounds(matches: Pick<MapRepo, 'x' | 'y'>[]): WorldBounds | nu
   }
 }
 
-function localSearchIds(
-  needle: string,
-  mapRepos: MapRepo[],
-  listRepos: RepoListItem[],
-  scope: MapSearchScope,
-): string[] {
-  const q = needle.toLowerCase()
-  const listById = new Map(listRepos.map((repo) => [repo.id, repo]))
-  const ids: string[] = []
-  for (const repo of mapRepos) {
-    const name = repo.name.toLowerCase()
-    const language = (repo.language || '').toLowerCase()
-    const overview = repo.overview.toLowerCase()
-    const list = listById.get(repo.id)
-    const category = (repo.category || list?.category || '').toLowerCase()
-    const description = (list?.description || '').toLowerCase()
-    const buckets = repo.vulnBuckets.map((bucket) => bucket.toLowerCase()).join(' ')
-    let hit = false
-    if (scope === 'name') {
-      hit = name.includes(q) || repo.id.toLowerCase().includes(q)
-    } else if (scope === 'category') {
-      hit = category.includes(q)
-    } else if (scope === 'vulnerabilities') {
-      hit = buckets.includes(q)
-    } else {
-      hit =
-        name.includes(q) ||
-        language.includes(q) ||
-        overview.includes(q) ||
-        category.includes(q) ||
-        description.includes(q) ||
-        buckets.includes(q) ||
-        repo.id.toLowerCase().includes(q)
-    }
-    if (hit) ids.push(repo.id)
-  }
-  return ids
-}
 
 function App() {
   const [repos, setRepos] = useState<RepoListItem[]>([])
@@ -176,6 +139,7 @@ function App() {
       controller.signal,
     )
       .then((page) => {
+        if (controller.signal.aborted) return
         setFindings(page.items)
         setFindingsTotal(page.total)
         setFindingsLoading(false)
@@ -212,6 +176,7 @@ function App() {
     setDetailError(null)
     fetchRepo(selectedId, controller.signal)
       .then((repo) => {
+        if (controller.signal.aborted) return
         setDetail(mapRepoToSidebar(repo))
         setDetailLoading(false)
       })
@@ -225,15 +190,25 @@ function App() {
     return () => controller.abort()
   }, [selectedId])
 
-  // Search dims non-matches instead of removing them from the galaxy.
+  // Preserve the scene, bringing rare buckets into its slots for search and selection.
+  const flowerGrouping = searchScope === 'category' ? 'category' : 'vulnerabilities'
+  const layoutPriority = useMemo(() => {
+    if (selectedId) return new Set([selectedId, ...(searchMatchIds ?? [])])
+    return searchMatchIds?.length ? new Set(searchMatchIds) : null
+  }, [selectedId, searchMatchIds])
   const flowerLayout = useMemo(
-    () => layoutFlowerMap(rawMapRepos),
-    [rawMapRepos],
+    () => layoutFlowerMap(rawMapRepos, layoutPriority, flowerGrouping),
+    [rawMapRepos, layoutPriority, flowerGrouping],
   )
 
-  const mapFitPoints = useMemo(() => flowerLayout.flowers.length > 0 ? [
+  const hasMapRepos = rawMapRepos.length > 0
+  const mapFitPoints = useMemo(() => hasMapRepos ? [
     { x: 0, y: 0 }, { x: FLOWER_SCENE.width, y: FLOWER_SCENE.height },
-  ] : [], [flowerLayout.flowers])
+  ] : [], [hasMapRepos])
+  const searchResults = useMemo(
+    () => searchResultItems(repos, searchMatchIds),
+    [repos, searchMatchIds],
+  )
 
   const severityMatchedIds = useMemo(() => {
     if (!severityFocus) return null
@@ -298,6 +273,7 @@ function App() {
     zoomByFactor,
     focusOnPoint,
     camera,
+    maxScale,
   } = mapCamera
 
   useEffect(() => {
@@ -305,13 +281,10 @@ function App() {
     fitToRepos(mapFitPoints, true, 0)
   }, [mapFitPoints, fitToRepos])
 
-  const lastWindowSize = useRef({ width: window.innerWidth, height: window.innerHeight })
   const handleViewportChange = useCallback(
     (width: number, height: number) => {
-      const windowChanged = lastWindowSize.current.width !== window.innerWidth || lastWindowSize.current.height !== window.innerHeight
-      lastWindowSize.current = { width: window.innerWidth, height: window.innerHeight }
       setViewportSize(width, height)
-      if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints, windowChanged, 0)
+      if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints, false, 0)
     },
     [fitToRepos, mapFitPoints, setViewportSize],
   )
@@ -352,7 +325,7 @@ function App() {
       const matches = flowerLayout.repos.filter((repo) => idSet.has(repo.id))
       if (matches.length === 0) return
       const view = searchViewBounds(matches)
-      if (matches.length === 1) {
+      if (ids.length === 1 && matches.length === 1) {
         const point = matches[0]
         setSelectedId(point.id)
         setSidebarOpen(true)
@@ -361,7 +334,10 @@ function App() {
         setSeverityFocus(null)
         setTab('map')
         setView('detail')
-        if (view) {
+        const flower = flowerLayout.flowers.find((flower) => flower.id === point.flowerId)
+        if (flower) {
+          fitToBoundsAnimated(flowerWorldBounds(flower), 56, sidebarFocusInsets())
+        } else if (view) {
           fitToBoundsAnimated(view, SEARCH_FIT_PADDING, sidebarFocusInsets())
         }
         return
@@ -372,88 +348,68 @@ function App() {
         fitToBoundsAnimated(view, SEARCH_FIT_PADDING, sidebarFocusInsets())
       }
     },
-    [fitToBoundsAnimated, flowerLayout.repos, sidebarFocusInsets],
+    [fitToBoundsAnimated, flowerLayout.repos, flowerLayout.flowers, sidebarFocusInsets],
   )
 
+  // Fetch only when the query, scope, or corpus changes. Opening a drawer must
+  // not restart the request or replace semantic matches with local matches.
   useEffect(() => {
     const trimmed = searchQuery.trim()
     if (!trimmed) {
       setSearchMatchIds(null)
       setSearchLoading(false)
       setSearchError(null)
-      if (searchAppliedKey.current != null) {
-        searchAppliedKey.current = null
-        if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints, true, 0)
-      }
       return
     }
-
     const localIds = localSearchIds(trimmed, rawMapRepos, repos, searchScope)
     setSearchMatchIds(localIds)
     setSearchError(null)
-
-    // Field scopes stay local only (debounced so camera framing settles with typing).
-    if (searchScope !== 'all') {
+    if (searchScope !== 'all' || trimmed.length < SEARCH_VS_MIN_CHARS) {
       setSearchLoading(false)
-      const timer = window.setTimeout(() => {
-        applySearchHits(
-          localIds,
-          `${searchScope}:${trimmed}:${[...localIds].sort().join(',')}`,
-        )
-      }, SEARCH_DEBOUNCE_MS)
-      return () => window.clearTimeout(timer)
+      return
     }
-
-    // Short "All" queries: local only after debounce.
-    if (trimmed.length < SEARCH_VS_MIN_CHARS) {
-      setSearchLoading(false)
-      const timer = window.setTimeout(() => {
-        applySearchHits(
-          localIds,
-          `all-local:${trimmed}:${[...localIds].sort().join(',')}`,
-        )
-      }, SEARCH_DEBOUNCE_MS)
-      return () => window.clearTimeout(timer)
-    }
-
-    // Refine with Vector Search after debounce; keep local results visible meanwhile.
     setSearchLoading(true)
     const controller = new AbortController()
-    const corpusIds = new Set(rawMapRepos.map((repo) => repo.id))
     const timer = window.setTimeout(() => {
       fetchSearch({ q: trimmed }, controller.signal)
         .then((res) => {
-          const ranked = res.repo_ids.length > 0 ? res.repo_ids : localIds
-          const ids = ranked.filter((id) => corpusIds.has(id))
-          setSearchMatchIds(ids)
+          if (controller.signal.aborted) return
+          setSearchMatchIds(mergeSearchIds(trimmed, rawMapRepos, localIds, res.repo_ids))
           setSearchLoading(false)
-          applySearchHits(ids, `all:${trimmed}:${ids.join(',')}`)
         })
         .catch((err: unknown) => {
           if (controller.signal.aborted) return
           setSearchLoading(false)
           setSearchError(err instanceof Error ? err.message : 'Search failed')
-          applySearchHits(
-            localIds,
-            `all-fallback:${trimmed}:${[...localIds].sort().join(',')}`,
-          )
         })
     }, SEARCH_DEBOUNCE_MS)
-
     return () => {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [
-    applySearchHits,
-    fitToRepos,
-    flowerLayout.repos,
-    mapFitPoints,
-    rawMapRepos,
-    repos,
-    searchQuery,
-    searchScope,
-  ])
+  }, [rawMapRepos, repos, searchQuery, searchScope])
+
+  // Apply camera framing after matching repos have been placed into the scene.
+  useEffect(() => {
+    const trimmed = searchQuery.trim()
+    if (!trimmed) {
+      if (searchAppliedKey.current != null) {
+        searchAppliedKey.current = null
+        setSelectedId(null)
+        setView('list')
+        fitToRepos(mapFitPoints, true, 0)
+      }
+      return
+    }
+    if (tab !== 'map' || searchLoading || searchMatchIds == null) return
+    const delay = searchScope === 'all' && trimmed.length >= SEARCH_VS_MIN_CHARS
+      ? 0 : SEARCH_DEBOUNCE_MS
+    const timer = window.setTimeout(() => {
+      applySearchHits(searchMatchIds, `${searchScope}:${trimmed}:${searchMatchIds.join(',')}`)
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [applySearchHits, fitToRepos, mapFitPoints, searchQuery, searchScope,
+      searchLoading, searchMatchIds, tab])
 
   const handleBackgroundClick = useCallback(() => {
     setSidebarOpen(false)
@@ -529,9 +485,14 @@ function App() {
       setSeverityFocus(null)
       if (listMode === 'saved') setListMode('browse')
     }
-    const point = flowerLayout.repos.find((repo) => repo.id === id)
+    const focusedLayout = flowerLayout.repos.some((repo) => repo.id === id)
+      ? flowerLayout
+      : layoutFlowerMap(rawMapRepos, new Set([id, ...(searchMatchIds ?? [])]), flowerGrouping)
+    const point = focusedLayout.repos.find((repo) => repo.id === id)
     if (point) {
-      focusOnPoint({ x: point.x, y: point.y }, point.importance, insets)
+      const flower = focusedLayout.flowers.find((flower) => flower.id === point.flowerId)
+      if (flower) fitToBoundsAnimated(flowerWorldBounds(flower), 56, insets)
+      else focusOnPoint({ x: point.x, y: point.y }, insets)
     }
   }
 
@@ -701,6 +662,7 @@ function App() {
             repos={flowerLayout.repos}
             flowers={flowerLayout.flowers}
             camera={camera}
+            maxScale={maxScale}
             selectedId={selectedId}
             matchIds={searchMatchSet}
             pinnedSeverity={severityFocus}
@@ -715,11 +677,22 @@ function App() {
           <MapSearchBar
             query={searchQuery}
             scope={searchScope}
-            results={filteredRepos}
+            results={searchResults}
             loading={searchLoading}
             error={searchError}
-            onQueryChange={setSearchQuery}
-            onScopeChange={setSearchScope}
+            onQueryChange={(query) => {
+              setSearchQuery(query)
+              setSeverityFocus(null)
+              setTab('map')
+              setListMode('browse')
+            }}
+            onScopeChange={(scope) => {
+              setSearchScope(scope)
+              setSeverityFocus(null)
+              setSelectedId(null)
+              searchAppliedKey.current = null
+              fitToRepos(mapFitPoints, true, 0)
+            }}
             onSelectResult={handleSelectRepo}
             onZoomIn={() => zoomIn()}
             onZoomOut={() => zoomOut()}
@@ -747,6 +720,10 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
+// Keep one app root across Vite updates so old map animation loops are cleaned up.
+const root = (import.meta.hot?.data.root as Root | undefined)
+  ?? createRoot(document.getElementById('root')!)
+if (import.meta.hot) import.meta.hot.data.root = root
+root.render(
   <StrictMode><App /></StrictMode>,
 )

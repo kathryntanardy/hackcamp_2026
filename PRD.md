@@ -87,13 +87,14 @@ One map screen plus slide-out drawers. Built in React with a canvas map.
 **Galaxy Map (`/`)**: the hero screen
 
 - Full-screen map of vulnerability-bucket flowers. Repos that share a CWE vulnerability bucket sit on one flower; nodes are uniform in that flower's colour until a severity level is focused.
-- Node size = importance, the log of dependents (or stars if dependents are missing). A pulsing ring marks eligible repos the agent investigated in the latest run. Deprecated repos are absent, including when historical rows still exist.
+- Node size = importance, the log of dependents (or stars if dependents are missing). Nodes remain steady after investigation. Deprecated repos are absent, including when historical rows still exist.
 - Each flower label lists **High / Med / Low** counts from **maintainer health status**, not GitHub advisory severity: High = `at_risk`, Med = `watchlist`, Low = `healthy`. Hovering a level highlights matching nodes on that flower; clicking a level zooms so the whole flower fits the viewport and opens the drawer filtered to that band. Clicking the category name opens the drawer filtered to the whole flower. Users looking for vulnerable packages use High.
 - Advisory severity and CVSS stay on the repo drawer and Findings sorts; they do not drive the map High / Med / Low chips.
 - The drawer starts closed. Click a node to slide it open on that repo and center the star in the remaining map (not under the drawer); click a flower to open a filtered list and frame that flower the same way. Click empty map whitespace to close it (a pan/drag does not close). The Findings tab keeps the map visible and opens the Findings drawer by default.
 - Map facet bar (F15): category and vulnerability-bucket filters, plus a cluster toggle for vulnerability flowers vs language (`x`,`y`) vs category (`cat_x`,`cat_y`) scatter. No corpus totals chrome; the navbar stays brand and page tabs only. Deprecated repos stay out of the map and list by serving rules, with no Ignored tab, chip or opt-in display.
 - Search box (F14): a natural-language query zooms to the repos Vector Search matches (one star: zoom and open the drawer; several: zoom to fit, dim the rest). It is a search, not a chatbot.
-- Hover shows a tooltip with the name, score and status. Click opens that repo in the drawer.
+- Hover shows a tooltip with the name, score and status. Click selects the x and opens that repo in the drawer; selection is indicated by the x itself, without an enclosing circle.
+- Manual zoom, node selection, flower focus and search share a maximum scale based on the Figma **Zoomed in** design, reduced to fit the actual map viewport beside the drawer. Selecting a repo frames its whole flower and label; repeated selection cannot zoom further. Flower labels stay compact and move below the flower as the map zooms in. The drawer uses compact spacing and text in smaller windows.
 
 **Findings drawer**: the agent's output over the map
 
@@ -393,7 +394,7 @@ Record a backup video of the full demo by hour 19 in case the venue's wifi or th
 | Eval numbers come out bad | Low–Medium | Medium | Report them honestly next to the formula baseline, and show one fix made because of them |
 | GitHub advisory coverage is partial | High | Medium | Label the gap as "No GitHub advisories", never "safe"; package matching against the global advisory database stays a stretch |
 | Advisory pass slows the scrape (1,000 extra calls) | Medium | Medium | Separate pass with bounded retries; keep the previous snapshot if it fails |
-| Map is slow with 1,000 glowing points | Low | Low | Custom canvas renderer; simplify bloom/glow drawing past 300 points |
+| Map is slow with 1,000 points | Low | Low | Custom canvas renderer; cache flower artwork and draw only visible points |
 | Running out of the 20 hours | High | High | Cut in this order: F13, F12, F11, Model Serving, F10. Never cut traces or eval |
 
 ## Open questions

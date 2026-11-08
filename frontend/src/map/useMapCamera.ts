@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   MAX_SCALE,
-  MIN_SCALE,
   ZOOM_STEP,
   boundsOf,
   clampScale,
@@ -9,6 +8,7 @@ import {
   fitBounds,
   focusOn,
   lerpCamera,
+  maxScaleForViewport,
   panBy,
   zoomAt,
   type ViewInsets,
@@ -19,15 +19,15 @@ export type { ViewInsets }
 
 export { worldToScreen, screenToWorld } from './camera'
 
-const DEFAULT_CAMERA: MapCamera = { scale: 4, offsetX: 0, offsetY: 0 }
+const DEFAULT_CAMERA: MapCamera = { scale: 1, offsetX: 0, offsetY: 0 }
 const FOCUS_DURATION_MS = 450
-/** Aim for ~this many pixels of glyph when focusing a node. */
-const FOCUS_GLYPH_PX = 52
 
 export function useMapCamera() {
   const [camera, setCamera] = useState<MapCamera>(DEFAULT_CAMERA)
   const fittedKey = useRef<string | null>(null)
   const viewport = useRef({ width: 1, height: 1 })
+  const [viewportSize, setViewportState] = useState(viewport.current)
+  const framing = useRef<{ bounds: WorldBounds; padding: number } | null>(null)
   const cameraRef = useRef(camera)
   cameraRef.current = camera
 
@@ -47,18 +47,28 @@ export function useMapCamera() {
 
   useEffect(() => () => stopAnim(), [stopAnim])
 
+  // Also bring an already-open preview within the cap after a renderer update.
+  useEffect(() => {
+    const { width, height } = viewport.current
+    if (width > 1 && height > 1) {
+      setCamera((prev) => zoomAt(prev, contentCenter(width, height), prev.scale, maxScaleForViewport(width, height)))
+    }
+  }, [])
+
   const runAnim = useCallback(() => {
     const step = (now: number) => {
       const current = anim.current
       if (!current) return
       const t = (now - current.start) / current.duration
+      const { width, height } = viewport.current
+      const ceiling = maxScaleForViewport(width, height)
       if (t >= 1) {
-        setCamera(current.to)
+        setCamera(zoomAt(current.to, contentCenter(width, height), current.to.scale, ceiling))
         anim.current = null
         raf.current = 0
         return
       }
-      setCamera(lerpCamera(current.from, current.to, t))
+      setCamera(lerpCamera(current.from, current.to, t, ceiling))
       raf.current = requestAnimationFrame(step)
     }
     if (raf.current) cancelAnimationFrame(raf.current)
@@ -69,7 +79,7 @@ export function useMapCamera() {
     (to: MapCamera, duration = FOCUS_DURATION_MS) => {
       anim.current = {
         from: { ...cameraRef.current },
-        to,
+        to: { ...to, scale: clampScale(to.scale, maxScaleForViewport(viewport.current.width, viewport.current.height)) },
         start: performance.now(),
         duration,
       }
@@ -79,7 +89,25 @@ export function useMapCamera() {
   )
 
   const setViewportSize = useCallback((width: number, height: number) => {
+    if (viewport.current.width === width && viewport.current.height === height) return
+    const previous = viewport.current
     viewport.current = { width: Math.max(1, width), height: Math.max(1, height) }
+    setViewportState(viewport.current)
+    setCamera((prev) => {
+      const ceiling = maxScaleForViewport(width, height)
+      const frame = framing.current
+      if (frame) {
+        const target = fitBounds(frame.bounds, width, height, frame.padding)
+        if (anim.current) {
+          anim.current.to = target
+          return zoomAt(prev, contentCenter(width, height), prev.scale, ceiling)
+        }
+        return target
+      }
+      const center = contentCenter(previous.width, previous.height)
+      const resized = zoomAt(prev, center, prev.scale, ceiling)
+      return panBy(resized, (width - previous.width) / 2, (height - previous.height) / 2)
+    })
   }, [])
 
   const fitToRepos = useCallback(
@@ -88,11 +116,12 @@ export function useMapCamera() {
       if (width <= 1 || height <= 1) return
       const bounds = boundsOf(repos)
       if (!bounds) return
-      // Key ignores viewport size so sidebar resize updates layout metrics
-      // without reframing the camera.
+      // Resizing uses the stored framing; don't replace a focused flower with
+      // the overview just because the observer reported a different viewport.
       const key = `${repos.length}:${bounds.minX}:${bounds.maxX}:${bounds.minY}:${bounds.maxY}`
       if (!force && fittedKey.current === key) return
       fittedKey.current = key
+      framing.current = { bounds, padding }
       stopAnim()
       setCamera(fitBounds(bounds, width, height, padding))
     },
@@ -102,10 +131,11 @@ export function useMapCamera() {
   const zoomIn = useCallback(
     (anchor?: Point) => {
       stopAnim()
+      framing.current = null
       setCamera((prev) => {
         const { width, height } = viewport.current
         const screen = anchor ?? contentCenter(width, height)
-        return zoomAt(prev, screen, prev.scale * ZOOM_STEP)
+        return zoomAt(prev, screen, prev.scale * ZOOM_STEP, maxScaleForViewport(width, height))
       })
     },
     [stopAnim],
@@ -114,10 +144,11 @@ export function useMapCamera() {
   const zoomOut = useCallback(
     (anchor?: Point) => {
       stopAnim()
+      framing.current = null
       setCamera((prev) => {
         const { width, height } = viewport.current
         const screen = anchor ?? contentCenter(width, height)
-        return zoomAt(prev, screen, prev.scale / ZOOM_STEP)
+        return zoomAt(prev, screen, prev.scale / ZOOM_STEP, maxScaleForViewport(width, height))
       })
     },
     [stopAnim],
@@ -126,7 +157,9 @@ export function useMapCamera() {
   const zoomByFactor = useCallback(
     (factor: number, anchor: Point) => {
       stopAnim()
-      setCamera((prev) => zoomAt(prev, anchor, clampScale(prev.scale * factor)))
+      framing.current = null
+      setCamera((prev) => zoomAt(prev, anchor, prev.scale * factor,
+        maxScaleForViewport(viewport.current.width, viewport.current.height)))
     },
     [stopAnim],
   )
@@ -134,6 +167,7 @@ export function useMapCamera() {
   const pan = useCallback(
     (dx: number, dy: number) => {
       stopAnim()
+      framing.current = null
       setCamera((prev) => panBy(prev, dx, dy))
     },
     [stopAnim],
@@ -145,25 +179,13 @@ export function useMapCamera() {
    * in the remaining map, not under the panel.
    */
   const focusOnPoint = useCallback(
-    (point: Point, importance = 1, insets?: ViewInsets) => {
+    (point: Point, insets?: ViewInsets) => {
       const { width, height } = viewport.current
       if (width <= 1 || height <= 1) return
 
-      const worldSize = 2.6 + Math.min(3.4, Math.max(0, importance) * 0.7)
-      const glyphScale = FOCUS_GLYPH_PX / worldSize
-      const prev = cameraRef.current
-      // Always zoom in at least a bit; never zoom out when focusing.
-      const targetScale = clampScale(
-        Math.max(prev.scale * 1.15, Math.min(MAX_SCALE * 0.55, Math.max(glyphScale, prev.scale))),
-      )
-      // If already very zoomed, still re-center at a modest bump.
-      const scale =
-        targetScale <= prev.scale * 1.02
-          ? clampScale(Math.min(MAX_SCALE, prev.scale * 1.6))
-          : targetScale
-
+      framing.current = null
       animateTo(
-        focusOn(point, width, height, Math.max(scale, MIN_SCALE * 4), insets),
+        focusOn(point, width, height, MAX_SCALE, insets),
       )
     },
     [animateTo],
@@ -174,6 +196,7 @@ export function useMapCamera() {
     (bounds: WorldBounds, padding = 72, insets?: ViewInsets) => {
       const { width, height } = viewport.current
       if (width <= 1 || height <= 1) return
+      framing.current = { bounds, padding }
       animateTo(fitBounds(bounds, width, height, padding, insets), 520)
     },
     [animateTo],
@@ -182,6 +205,7 @@ export function useMapCamera() {
   return useMemo(
     () => ({
       camera,
+      maxScale: maxScaleForViewport(viewportSize.width, viewportSize.height),
       setCamera,
       setViewportSize,
       fitToRepos,
@@ -194,6 +218,7 @@ export function useMapCamera() {
     }),
     [
       camera,
+      viewportSize,
       fitToBoundsAnimated,
       fitToRepos,
       focusOnPoint,

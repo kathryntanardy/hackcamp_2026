@@ -1,4 +1,5 @@
 import type { MapRepo, MapStatus } from '../map/types'
+import { healthTone } from '../map/health'
 import type { RepoListEntry } from './types'
 
 function normalizeStatus(status: string | null | undefined): MapStatus {
@@ -15,14 +16,6 @@ function formatScore(maxCvss: number | null | undefined): string {
   const rounded = Math.round(maxCvss * 10) / 10
   const display = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1)
   return `${display}/10`
-}
-
-/** Map High/Med/Low to maintainer risk so "High" = most vulnerable (at risk). */
-function severityTone(status: MapStatus): MapRepo['vulnerabilityTone'] {
-  if (status === 'at_risk') return 'high'
-  if (status === 'watchlist') return 'medium'
-  if (status === 'healthy') return 'low'
-  return 'none'
 }
 
 /** Normalize UC / mangled array payloads into clean bucket names. */
@@ -82,7 +75,7 @@ export function mapRepoToMapPoint(repo: RepoListEntry): MapRepo | null {
     catX: repo.cat_x ?? repo.x,
     catY: repo.cat_y ?? repo.y,
     vulnerabilityScore: formatScore(repo.max_cvss),
-    vulnerabilityTone: severityTone(normalizeStatus(repo.status)),
+    vulnerabilityTone: healthTone(repo.health_score),
     vulnBuckets: normalizeVulnBuckets(repo.vuln_buckets),
     investigated: Boolean(repo.investigated),
     investigatedInLatestRun: Boolean(repo.investigated_in_latest_run),

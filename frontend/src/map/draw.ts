@@ -1,13 +1,13 @@
-import { worldToScreen } from './camera'
+import { MAX_SCALE, worldToScreen } from './camera'
 import { drawFlowerBloom, drawFlowerBranches } from './flowerBloom'
 import {
   FLOWER_PALETTE,
   SEVERITY_GLYPH,
-  SEVERITY_HIGHLIGHT,
   type FlowerCluster,
   type SeverityFocus,
 } from './flowers'
 import { dispersePoint, growFactor } from './hoverAnim'
+import { healthTone } from './health'
 import type { MapCamera, MapRepo, MapStatus } from './types'
 
 const STATUS_FILL: Record<MapStatus, string> = {
@@ -18,8 +18,11 @@ const STATUS_FILL: Record<MapStatus, string> = {
   unknown: '#8a8a8a',
 }
 
-/** Soft glow is disabled once this many points are on screen. */
-export const GLOW_POINT_LIMIT = 300
+/** Reveal health colors at medium zoom; overview stars stay white in all states. */
+export const HEALTH_COLOR_MIN_SCALE = 1
+
+/** Largest x cell in the Figma zoomed-in reference, including hover growth. */
+export const MAX_GLYPH_PX = 25.58018684387207
 
 export function statusColor(status: MapStatus): string {
   return STATUS_FILL[status]
@@ -32,7 +35,7 @@ export function worldGlyphSize(importance: number): number {
 
 export function xFontSize(importance: number, scale: number, grow = 1, glyphSize?: number): number {
   const px = (glyphSize ?? worldGlyphSize(importance)) * scale * grow
-  return Math.min(110, Math.max(glyphSize == null ? 4 : 0.75, px))
+  return Math.min(MAX_GLYPH_PX, Math.max(glyphSize == null ? 4 : 0.75, px))
 }
 
 export function pointRadius(importance: number, scale: number, grow = 1, glyphSize?: number): number {
@@ -53,30 +56,16 @@ function isOnScreen(
   )
 }
 
-function flowerById(
-  flowers: FlowerCluster[],
-  id: string | undefined,
-): FlowerCluster | null {
-  if (!id) return null
-  return flowers.find((f) => f.id === id) ?? null
-}
-
 function glyphColor(
   repo: MapRepo,
-  flowers: FlowerCluster[],
+  scale: number,
   severityFocus: SeverityFocus | null,
   matchIds: ReadonlySet<string> | null,
+  maxScale: number,
 ): { fill: string; dim: boolean; lit: boolean } {
-  const tone = repo.vulnerabilityTone
-  let base = SEVERITY_GLYPH.none
-  if (tone === 'high' || tone === 'medium' || tone === 'low') {
-    base = SEVERITY_GLYPH[tone]
-  } else {
-    const flower = flowerById(flowers, repo.flowerId)
-    if (flower) {
-      base = FLOWER_PALETTE[flower.colorIndex % FLOWER_PALETTE.length].glyph
-    }
-  }
+  const base = scale < Math.min(HEALTH_COLOR_MIN_SCALE, maxScale / 2)
+    ? '#ffffff'
+    : SEVERITY_GLYPH[healthTone(repo.healthScore)]
 
   let dim = false
   let lit = false
@@ -88,7 +77,6 @@ function glyphColor(
     } else if (severityFocus.tone == null) {
       dim = false
     } else if (repo.vulnerabilityTone === severityFocus.tone) {
-      base = SEVERITY_HIGHLIGHT
       lit = true
     } else {
       dim = true
@@ -101,6 +89,9 @@ function glyphColor(
     else dim = true
   }
 
+  if (severityFocus?.tone != null && dim) {
+    return { fill: '#ffffff', dim: false, lit: false }
+  }
   return { fill: base, dim, lit }
 }
 
@@ -114,9 +105,9 @@ export function drawMap(
   hoverAmount: number,
   width: number,
   height: number,
-  nowMs = 0,
   severityFocus: SeverityFocus | null = null,
   matchIds: ReadonlySet<string> | null = null,
+  maxScale = MAX_SCALE,
 ): void {
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = '#f8f8f8'
@@ -126,7 +117,7 @@ export function drawMap(
   const selectedRepo = selectedId
     ? repos.find((r) => r.id === selectedId) ?? null
     : null
-  // Selection holds a disperse ring; hover temporarily takes over the epicenter.
+  // Selection keeps neighbours slightly displaced; hover takes over the focus.
   const focusRepo = hoverRepo ?? selectedRepo
   const amount = focusRepo ? hoverAmount : 0
 
@@ -155,12 +146,10 @@ export function drawMap(
     return rank(a.id) - rank(b.id)
   })
 
-  let visibleCount = 0
   const screens: {
     repo: MapRepo
     screen: { x: number; y: number }
     size: number
-    grow: number
     fill: string
     dim: boolean
     lit: boolean
@@ -170,16 +159,12 @@ export function drawMap(
     const screen = worldToScreen(world, camera)
     const isSelected = repo.id === selectedId
     const isHovered = repo.id === hoveredId
-    const { fill, dim, lit } = glyphColor(repo, flowers, severityFocus, matchIds)
+    const { fill, dim, lit } = glyphColor(repo, camera.scale, severityFocus, matchIds, maxScale)
     const grow = growFactor(isHovered, isSelected, amount) * (lit ? 1.12 : 1)
     const size = xFontSize(repo.importance, camera.scale, grow, repo.glyphSize)
     if (!isOnScreen(screen, size, width, height)) continue
-    visibleCount += 1
-    screens.push({ repo, screen, size, grow, fill, dim, lit })
+    screens.push({ repo, screen, size, fill, dim, lit })
   }
-
-  const allowGlow = visibleCount <= GLOW_POINT_LIMIT
-  const pulse = 0.55 + 0.45 * Math.sin((nowMs / 1000) * Math.PI * 2)
 
   for (const { repo, screen, size, fill, dim, lit } of screens) {
     const isSelected = repo.id === selectedId
@@ -190,45 +175,7 @@ export function drawMap(
 
     ctx.font = `${isHovered || isSelected || lit ? 800 : 700} ${size}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
 
-    if (isSelected && !isHovered) {
-      ctx.beginPath()
-      ctx.arc(screen.x, screen.y, size * 0.62, 0, Math.PI * 2)
-      ctx.strokeStyle = SEVERITY_HIGHLIGHT
-      ctx.lineWidth = Math.max(1.5, camera.scale * 0.06)
-      ctx.stroke()
-    }
-
-    if (repo.investigatedInLatestRun && !isHovered) {
-      const ringR = size * (0.55 + 0.12 * pulse)
-      if (allowGlow) {
-        const glow = ctx.createRadialGradient(
-          screen.x,
-          screen.y,
-          size * 0.2,
-          screen.x,
-          screen.y,
-          size * (0.95 + 0.25 * pulse),
-        )
-        glow.addColorStop(0, `rgba(252, 82, 57, ${0.22 + 0.18 * pulse})`)
-        glow.addColorStop(1, 'rgba(252, 82, 57, 0)')
-        ctx.beginPath()
-        ctx.fillStyle = glow
-        ctx.arc(screen.x, screen.y, size * (0.95 + 0.25 * pulse), 0, Math.PI * 2)
-        ctx.fill()
-      }
-      ctx.beginPath()
-      ctx.arc(screen.x, screen.y, ringR, 0, Math.PI * 2)
-      ctx.strokeStyle = `rgba(252, 82, 57, ${0.35 + 0.45 * pulse})`
-      ctx.lineWidth = Math.max(1.2, camera.scale * 0.05)
-      ctx.stroke()
-    }
-
-    if (lit) {
-      ctx.shadowColor = 'rgba(252, 82, 57, 0.55)'
-      ctx.shadowBlur = Math.max(4, size * 0.35)
-    }
-
-    ctx.fillStyle = camera.scale < 6 && !isHovered && !isSelected && !lit ? '#ffffff' : fill
+    ctx.fillStyle = fill
     ctx.fillText('x', screen.x, screen.y + size * 0.04)
     ctx.restore()
   }

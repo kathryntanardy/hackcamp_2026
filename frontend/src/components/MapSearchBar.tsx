@@ -46,6 +46,7 @@ export function MapSearchBar({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const menuId = useId()
   const resultsId = useId()
+  const inputId = useId()
   const trimmed = query.trim()
   const visibleResults = results.slice(0, MAX_VISIBLE_RESULTS)
   const showResults = resultsOpen && trimmed.length > 0
@@ -150,9 +151,10 @@ export function MapSearchBar({
         </div>
 
         <div className="map-search__field-wrap">
-          <label className="map-search__field">
-            <span className="visually-hidden">Search repositories</span>
+          <div className="map-search__field">
+            <label className="visually-hidden" htmlFor={inputId}>Search repositories</label>
             <input
+              id={inputId}
               type="search"
               value={query}
               placeholder="Search..."
@@ -168,8 +170,10 @@ export function MapSearchBar({
                 setMenuOpen(false)
               }}
             />
-            <img src={searchIcon} alt="" width={15} height={15} />
-          </label>
+            <button type="submit" className="map-search__submit" aria-label="Search">
+              <img src={searchIcon} alt="" width={15} height={15} />
+            </button>
+          </div>
 
           {showResults ? (
             <ul className="map-search__results" id={resultsId} role="listbox" aria-label="Search results">
@@ -208,7 +212,7 @@ export function MapSearchBar({
               ) : null}
               {!loading && !error && results.length > MAX_VISIBLE_RESULTS ? (
                 <li className="map-search__results-more">
-                  +{results.length - MAX_VISIBLE_RESULTS} more on the map
+                  +{results.length - MAX_VISIBLE_RESULTS} more results
                 </li>
               ) : null}
             </ul>

@@ -14,7 +14,9 @@ positions. `flowerBloom.ts` composes these layers once into cached canvases,
 then scales the entire scene uniformly when fitting or zooming. SVG intrinsic
 sizes, blur extents, reflections, and rotations are preserved.
 
-The map displays the eight largest vulnerability clusters, with ties ordered
-alphabetically. Filtering retains their original scene slots. Smaller groups
-remain in the backend and repository list; their data is not deleted.
+The overview displays the eight largest vulnerability clusters, with ties ordered
+alphabetically. Search and repository selection bring a matching smaller group
+into an existing scene slot, retaining the positions of other visible groups.
+Clearing the search restores the overview; smaller groups remain searchable and
+selectable from Findings even when absent from the overview.
 No temporary Figma asset URL is needed at runtime.

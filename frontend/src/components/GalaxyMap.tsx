@@ -1,4 +1,3 @@
-import { FLOWER_SLOTS } from '../map/flowerScene'
 import {
   useEffect,
   useRef,
@@ -6,7 +5,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react'
-import { worldToScreen } from '../map/camera'
+import { flowerLabelLayout } from '../map/flowerLabels'
+import { MAX_SCALE } from '../map/camera'
 import { drawMap, hitTest } from '../map/draw'
 import { prefetchFlowerBloom } from '../map/flowerBloom'
 import type {
@@ -22,6 +22,7 @@ export type GalaxyMapProps = {
   repos: MapRepo[]
   flowers: FlowerCluster[]
   camera: MapCamera
+  maxScale?: number
   selectedId?: string | null
   /** When set, non-matching nodes (and empty flowers) are dimmed. */
   matchIds?: ReadonlySet<string> | null
@@ -49,6 +50,7 @@ export function GalaxyMap({
   repos,
   flowers,
   camera,
+  maxScale = MAX_SCALE,
   selectedId = null,
   matchIds = null,
   pinnedSeverity = null,
@@ -70,12 +72,14 @@ export function GalaxyMap({
   const reposRef = useRef(repos)
   const flowersRef = useRef(flowers)
   const cameraRef = useRef(camera)
+  const maxScaleRef = useRef(maxScale)
   const selectedRef = useRef(selectedId)
   const matchIdsRef = useRef(matchIds)
   const severityRef = useRef(severityFocus)
   reposRef.current = repos
   flowersRef.current = flowers
   cameraRef.current = camera
+  maxScaleRef.current = maxScale
   selectedRef.current = selectedId
   matchIdsRef.current = matchIds
   severityRef.current = severityFocus
@@ -161,9 +165,9 @@ export function GalaxyMap({
             hoverAmount.current,
             width,
             height,
-            now,
             severityRef.current,
             matchIdsRef.current,
+            maxScaleRef.current,
           )
         }
       }
@@ -173,7 +177,7 @@ export function GalaxyMap({
 
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [drawMap])
 
   function localPoint(event: { clientX: number; clientY: number }) {
     const el = containerRef.current
@@ -285,16 +289,15 @@ export function GalaxyMap({
         draggable={false}
       />
       {flowers.map((flower) => {
-        const slot = FLOWER_SLOTS[flower.colorIndex]
-        const labelPosition = worldToScreen(slot.label, camera)
+        const label = flowerLabelLayout(flower, camera, maxScale)
         return (
           <FlowerLabel
             key={flower.id}
             flower={flower}
-            x={labelPosition.x}
-            y={labelPosition.y}
-            scale={Math.min(1, camera.scale)}
-            width={slot.label.width}
+            x={label.x}
+            y={label.y}
+            scale={label.scale}
+            width={label.width}
             activeTone={
               severityFocus?.flowerId === flower.id ? severityFocus.tone : null
             }

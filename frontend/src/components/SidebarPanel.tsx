@@ -8,7 +8,7 @@ import {
 } from 'react'
 
 const DEFAULT_WIDTH = 580
-const MIN_WIDTH = 400
+const MIN_WIDTH = 320
 const MAX_WIDTH = 800
 
 export type SidebarPanelProps = {
@@ -19,7 +19,7 @@ export type SidebarPanelProps = {
 }
 
 function clampWidth(width: number, viewport = window.innerWidth): number {
-  const max = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.floor(viewport * 0.72)))
+  const max = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.floor(viewport * 0.46)))
   return Math.min(max, Math.max(MIN_WIDTH, Math.round(width)))
 }
 
@@ -46,6 +46,7 @@ export function SidebarPanel({
 
   useEffect(() => {
     const onResize = () => setWidth(width)
+    onResize()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [setWidth, width])
@@ -87,8 +88,8 @@ export function SidebarPanel({
         .filter(Boolean)
         .join(' ')}
       style={{
-        ['--sidebar-panel-width' as string]: `${width}px`,
-        ['--sidebar-panel-open-width' as string]: `${width}px`,
+        ['--sidebar-panel-width' as string]: `${clampWidth(width)}px`,
+        ['--sidebar-panel-open-width' as string]: `${clampWidth(width)}px`,
       }}
       aria-hidden={!open}
     >

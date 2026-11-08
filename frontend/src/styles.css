@@ -86,6 +86,7 @@ img {
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  container: map-shell / inline-size;
 }
 
 /* ——— Resizable sidebar shell ——— */
@@ -121,6 +122,7 @@ img {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  container: repo-panel / inline-size;
 }
 
 .sidebar-panel.is-closed .sidebar-panel__inner {
@@ -314,10 +316,10 @@ img {
 .flower-label__count {
   font-size: 13px;
   font-weight: 400;
-  line-height: 1.2;
+  line-height: 16px;
   color: var(--color-text-muted);
   border-radius: 4px;
-  padding: 2px 2px;
+  padding: 0;
   transition: color 120ms ease;
 }
 
@@ -435,6 +437,7 @@ img {
   position: absolute;
   top: 13px;
   left: 13px;
+  right: 13px;
   z-index: 2;
   display: flex;
   align-items: flex-start;
@@ -446,6 +449,7 @@ img {
   flex-direction: column;
   align-items: center;
   width: 42px;
+  flex-shrink: 0;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-bg);
@@ -478,7 +482,8 @@ img {
 .map-search {
   display: flex;
   align-items: stretch;
-  width: min(469px, calc(100vw - 80px));
+  width: min(469px, calc(100% - 50px));
+  min-width: 0;
   min-height: 40px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
@@ -526,7 +531,7 @@ img {
   left: -1px;
   z-index: 5;
   min-width: calc(100% + 1px);
-  max-height: 120px;
+  max-height: min(280px, 45vh);
   overflow-y: auto;
   margin: 0;
   padding: 0;
@@ -592,6 +597,17 @@ img {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
+}
+
+.map-search__submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .map-search__results {
@@ -2535,4 +2551,46 @@ img {
   font-size: var(--text-sm);
   line-height: 1.4;
   color: var(--color-text);
+}
+
+/* Keep the navigation usable when the drawer narrows the map. */
+@container map-shell (max-width: 720px) {
+  .top-navbar { height: auto; min-height: 64px; padding: 10px 12px; }
+  .top-navbar__left { flex-wrap: wrap; gap: 8px; }
+  .top-navbar__brand { font-size: 15px; text-align: left; }
+  .top-navbar__tabs { gap: 6px; }
+  .top-navbar__tab { font-size: 14px; padding: 5px 8px; }
+  .top-navbar__tab img { width: 18px; height: 18px; }
+  .map-search__scope-btn { min-width: 0; padding: 8px; font-size: 14px; }
+  .map-search__category-name { width: 74px; }
+  .flower-label__title { font-size: 14px; }
+  .flower-label__count { font-size: 11px; }
+}
+
+/* Compact the drawer itself, independent of the browser's viewport width. */
+@container repo-panel (max-width: 480px) {
+  .repo-sidebar,
+  .repo-list-sidebar,
+  .findings-view,
+  .favourites-sidebar {
+    --text-xs: 12px;
+    --text-sm: 14px;
+    --text-md: 16px;
+    --text-lg: 18px;
+    --text-xl: 20px;
+    --text-display: 26px;
+    --space-7: 20px;
+    --space-8: 24px;
+    --space-9: 28px;
+  }
+  .signal-card { padding: 14px; gap: 12px; }
+  .signal-label { font-size: 14px; gap: 6px; }
+  .signal-label img { width: 18px; height: 18px; }
+  .signal-value { line-height: 28px; }
+  .repo-sidebar__name-row { flex-wrap: wrap; }
+  .repo-sidebar__repo-id { overflow-wrap: anywhere; }
+}
+
+@container repo-panel (max-width: 360px) {
+  .signal-grid { grid-template-columns: 1fr; }
 }

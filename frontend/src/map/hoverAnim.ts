@@ -26,7 +26,7 @@ export function dispersePoint(
   const dist = Math.hypot(dx, dy) || 0.0001
   // Soft falloff — nearby x's move more, far ones barely twitch.
   const influence = Math.exp(-dist / 34)
-  const push = 20 * easeOutCubic(amount) * influence
+  const push = 3 * easeOutCubic(amount) * influence
   return {
     x: repo.x + (dx / dist) * push,
     y: repo.y + (dy / dist) * push,

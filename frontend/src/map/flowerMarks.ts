@@ -1,8 +1,10 @@
 import type { Point } from './types'
 
-// Figma's x cells are 4.727px with a 0.788px gap between cells.
-const CELL_STEP = 5.515
-const GLYPH_RATIO = 4.727 / CELL_STEP
+// Prefer marks 25% larger, keeping the original gap. Dense flowers scale down
+// below this preferred size so the complete grid still fits its available area.
+const GLYPH_SIZE = 4.727 * 1.25
+const CELL_STEP = GLYPH_SIZE + 0.788
+const GLYPH_RATIO = GLYPH_SIZE / CELL_STEP
 
 /** Fill the middle row first, then balanced pairs of rows above and below it. */
 export function layoutFlowerMarks(count: number, center: Point, width: number, height: number): { points: Point[]; glyphSize: number } {

@@ -1,7 +1,10 @@
 import type { MapCamera, MapRepo, Point, WorldBounds } from './types'
+import { FLOWER_SCENE } from './flowerScene'
 
 export const MIN_SCALE = 0.1
-export const MAX_SCALE = 120
+// Figma "Zoomed in" (64:31629): the 269.309px flower becomes 909.212px.
+// Every manual and programmatic camera operation shares this ceiling.
+export const MAX_SCALE = 909.211669921875 / 269.30877685546875
 export const ZOOM_STEP = 1.35
 export const FIT_PADDING = 56
 
@@ -61,6 +64,16 @@ function resolveInsets(insets?: ViewInsets) {
   }
 }
 
+/** Preserve the reference's framing in smaller windows and beside the drawer. */
+export function maxScaleForViewport(width: number, height: number, insets?: ViewInsets): number {
+  const i = resolveInsets(insets)
+  const ratio = Math.min(1,
+    Math.max(1, width - i.left - i.right) / FLOWER_SCENE.width,
+    Math.max(1, height - i.top - i.bottom) / FLOWER_SCENE.height,
+  )
+  return Math.max(MIN_SCALE, MAX_SCALE * ratio)
+}
+
 /** Center of the content box after subtracting insets. */
 export function contentCenter(
   width: number,
@@ -86,7 +99,7 @@ export function fitBounds(
   const worldH = bounds.maxY - bounds.minY
   const availW = Math.max(1, width - i.left - i.right - padding * 2)
   const availH = Math.max(1, height - i.top - i.bottom - padding * 2)
-  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.min(availW / worldW, availH / worldH)))
+  const scale = clampScale(Math.min(availW / worldW, availH / worldH), maxScaleForViewport(width, height, insets))
   const cx = (bounds.minX + bounds.maxX) / 2
   const cy = (bounds.minY + bounds.maxY) / 2
   const screen = contentCenter(width, height, i)
@@ -97,8 +110,8 @@ export function fitBounds(
   }
 }
 
-export function clampScale(scale: number): number {
-  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))
+export function clampScale(scale: number, ceiling = MAX_SCALE): number {
+  return Math.min(ceiling, Math.max(MIN_SCALE, scale))
 }
 
 /** Zoom keeping the given screen point fixed in world space. */
@@ -106,8 +119,9 @@ export function zoomAt(
   camera: MapCamera,
   screen: Point,
   nextScale: number,
+  ceiling = MAX_SCALE,
 ): MapCamera {
-  const scale = clampScale(nextScale)
+  const scale = clampScale(nextScale, ceiling)
   if (scale === camera.scale) return camera
   const world = screenToWorld(screen, camera)
   return {
@@ -133,7 +147,7 @@ export function focusOn(
   scale: number,
   insets?: ViewInsets,
 ): MapCamera {
-  const s = clampScale(scale)
+  const s = clampScale(scale, maxScaleForViewport(width, height, insets))
   const screen = contentCenter(width, height, insets)
   return {
     scale: s,
@@ -142,12 +156,12 @@ export function focusOn(
   }
 }
 
-export function lerpCamera(from: MapCamera, to: MapCamera, t: number): MapCamera {
+export function lerpCamera(from: MapCamera, to: MapCamera, t: number, ceiling = MAX_SCALE): MapCamera {
   const u = Math.min(1, Math.max(0, t))
   // Ease-out cubic.
   const e = 1 - (1 - u) ** 3
   return {
-    scale: from.scale + (to.scale - from.scale) * e,
+    scale: clampScale(from.scale + (to.scale - from.scale) * e, ceiling),
     offsetX: from.offsetX + (to.offsetX - from.offsetX) * e,
     offsetY: from.offsetY + (to.offsetY - from.offsetY) * e,
   }

@@ -2,11 +2,13 @@
 
 import ast
 import json
+import os
 from pathlib import Path
 
 import httpx
 from dotenv import find_dotenv, load_dotenv
-from fastapi import FastAPI, HTTPException
+from databricks.sdk import WorkspaceClient
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -265,6 +267,51 @@ def run_scan(repo_id: str) -> dict:
     query("""INSERT INTO hackcamp.agent.code_scans
 VALUES (:repo_id, :commit_sha, :model, :files, :summary, :findings, current_timestamp())""", row)
     return get_scan(repo_id)
+
+
+SEARCH_INDEX = os.environ.get("SEARCH_INDEX", "hackcamp.gold.repo_search_index")
+# Calibrated on gte-large scores: gibberish/off-topic queries top out ~0.54, real ones start
+# ~0.6 with a tail down to ~0.55. Floor gives "no matches"; window trims the weak tail (#30).
+SEARCH_MIN_SCORE = float(os.environ.get("SEARCH_MIN_SCORE", "0.56"))
+SEARCH_SCORE_WINDOW = float(os.environ.get("SEARCH_SCORE_WINDOW", "0.06"))
+SEARCH_MAX_RESULTS = 25
+
+
+def vector_search(text: str, filters: dict, k: int) -> list[tuple[str, float]]:
+    """(repo_id, score) pairs from the Delta Sync index, best first."""
+    res = WorkspaceClient().vector_search_indexes.query_index(
+        SEARCH_INDEX, columns=["repo_id"], query_text=text, num_results=k,
+        filters_json=json.dumps(filters) if filters else None)
+    return [(row[0], float(row[-1])) for row in (res.result.data_array or [])]
+
+
+@app.get("/api/search")
+def search(q: str = Query(min_length=1), language: str | None = None, category: str | None = None,
+           status: str | None = None, vuln_bucket: str | None = None,
+           investigated_only: bool = False) -> dict:
+    """Natural-language map search (F14): query + active map filters in, matching repo IDs out."""
+    filters = {k: v for k, v in {"language": language, "category": category, "status": status}.items() if v}
+    try:
+        hits = vector_search(q.strip(), filters, SEARCH_MAX_RESULTS)
+    except Exception as e:  # SDK raises many types; surface as upstream failure
+        raise HTTPException(502, f"vector search failed: {e}")
+    cutoff = max(SEARCH_MIN_SCORE, (hits[0][1] - SEARCH_SCORE_WINDOW) if hits else 0)
+    ranked = [rid for rid, score in hits if score >= cutoff]
+    if not ranked:
+        return {"query": q, "repo_ids": []}
+    # Re-check against live gold: drops stale index rows for excluded repos, applies the
+    # filters Vector Search can't (array bucket, investigated flag).
+    rows = query(f"""
+WITH {GOLD}, {LATEST_FINDING}
+SELECT g.repo_id FROM gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id
+WHERE array_contains(from_json(:ids, 'array<string>'), g.repo_id)
+  AND g.status <> 'ignored'
+  AND (:vuln_bucket IS NULL OR array_contains(g.vuln_buckets, cast(:vuln_bucket AS STRING)))
+  AND (NOT :investigated_only OR f.repo_id IS NOT NULL)""",
+                 {"ids": json.dumps(ranked), "vuln_bucket": vuln_bucket,
+                  "investigated_only": investigated_only})
+    keep = {r["repo_id"] for r in rows}
+    return {"query": q, "repo_ids": [rid for rid in ranked if rid in keep]}
 
 
 # Serve the React build from the same origin as /api (required on Databricks Apps).

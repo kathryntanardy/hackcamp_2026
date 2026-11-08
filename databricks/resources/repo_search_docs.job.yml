@@ -1,0 +1,16 @@
+resources:
+  jobs:
+    repo_search_docs:
+      name: hackcamp-repo-search-docs
+      description: >
+        Ticket #30: refresh gold.repo_search_docs (eligible-only, CDF on), the source of the
+        hackcamp.gold.repo_search_index Vector Search index. After it runs, sync the index with
+        databricks/src/search/setup_vector_index.py.
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: build_search_docs
+          sql_task:
+            file:
+              path: ../src/search/build_search_docs.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}

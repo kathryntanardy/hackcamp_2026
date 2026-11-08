@@ -143,7 +143,7 @@ Rules:
   an empty string. Never invent code you were not shown.
 - Prefer one of these CWE ids when it fits: {preferred_cwes}.
 - If nothing real stands out, return an empty findings list and say so in the summary.
-- Summary: 2-3 sentences on the overall security posture of these files.
+- Summary: one short sentence on the overall security posture of these files.
 
 {files}"""
 
@@ -186,7 +186,7 @@ Rules:
 - If you can locate the vulnerable code in the files shown, give its file path and line number
   (from the line prefixes). Otherwise leave file and line out. Never invent a location.
 - severity: reuse the advisory's severity. cwe: the advisory's CWE id like "CWE-79" if it has one.
-- Summary: 2-3 sentences on how urgent these advisories are overall and what to do first.
+- Summary: one short sentence on how urgent these advisories are and what to do first.
 
 ADVISORIES:
 {advisories}
@@ -431,6 +431,12 @@ def _strip_echo(value):
     return value[:i].rstrip() if i >= 0 and '"findings"' in value[i:] else value
 
 
+def first_sentences(text: str, n: int) -> str:
+    """The first n sentences of text (keeps the scan summary short)."""
+    ends = list(re.finditer(r"(?<!e\.g)(?<!i\.e)[.!?](?=\s|$)", text.strip()))
+    return text.strip()[:ends[n - 1].end()] if len(ends) >= n else text.strip()
+
+
 def first_sentence(text: str) -> str:
     """Workarounds as one short action. Keeps the first sentence, drops ", or <alternative>" tails,
     and drops junk Gemini sometimes glues on (e.g. "settings.functionality.word.count.check:11...")."""
@@ -510,5 +516,5 @@ def scan_repo(repo_id: str) -> dict:
         # A code finding can't claim an advisory id; that would hide it in the advisory list.
         findings += [{k: v for k, v in f.items() if k != "ghsa_id"} for f in code.get("findings", [])]
         summaries.append(code.get("summary", ""))
-    return {**base, "summary": " ".join(x.strip() for x in summaries if x and x.strip()),
+    return {**base, "summary": " ".join(first_sentences(x, 1) for x in summaries if x and x.strip()),
             "findings": [{**f, "report_url": report} for f in findings]}

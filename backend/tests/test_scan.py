@@ -249,7 +249,7 @@ def test_scan_repo_runs_advisory_fixes_and_code_review(monkeypatch):
     assert adv["patched_versions"] == "2.29.4" and adv["cwe"] == "CWE-1333"
     assert adv["advisory_url"].endswith("GHSA-aaaa-bbbb-cccc")
     assert "ghsa_id" not in code and code["code_fix"] == DIFF  # code findings never claim an advisory
-    assert out["summary"] == "Upgrade. One bug."
+    assert out["summary"] == "Upgrade. One bug."  # one sentence from each call
 
 
 def test_scan_repo_keeps_advisory_fixes_if_code_review_fails(monkeypatch):
@@ -396,3 +396,12 @@ def test_quota_message():
     assert scan.quota_message(httpx.Response(429, json=body)) == (
         "Gemini quota exceeded (GenerateContentInputTokensPerModelPerMinute-FreeTier). Retry in about 41s.")
     assert scan.quota_message(httpx.Response(429, text="nope")) == "Gemini quota exceeded. Try again later."
+
+
+def test_first_sentences():
+    text = "Upgrade Echo to v4.16.1 now. Proxy bypass is critical. The code looks sound. No issues found."
+    assert scan.first_sentences(text, 2) == "Upgrade Echo to v4.16.1 now. Proxy bypass is critical."
+    assert scan.first_sentences(text, 1) == "Upgrade Echo to v4.16.1 now."
+    assert scan.first_sentences("Use e.g. a limit. Then more.", 1) == "Use e.g. a limit."
+    assert scan.first_sentences("No period here", 2) == "No period here"
+    assert scan.first_sentences("", 2) == ""

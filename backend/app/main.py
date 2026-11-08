@@ -306,6 +306,8 @@ SCANS_DDL = f"""CREATE TABLE IF NOT EXISTS {SCANS_TABLE} (
 def _scan_row(r: dict) -> dict:
     return {**r, "files": json.loads(r["files"] or "[]"),
             "advisory_ids": json.loads(r["advisory_ids"] or "[]"),
+            # One sentence per part (advisories, code review); trims older, longer summaries too.
+            "summary": scan.first_sentences(r["summary"] or "", 2),
             "findings": scan.enrich(json.loads(r["findings"] or "[]"), r["repo_id"], r["commit_sha"])}
 
 

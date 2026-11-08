@@ -1,5 +1,7 @@
-# Databricks Apps config. Add a SQL warehouse resource named "sql-warehouse" to the app.
-command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Databricks Apps config. Bind the warehouse resource named "sql-warehouse".
+command:
+  - python
+  - run.py
 env:
   - name: DATABRICKS_WAREHOUSE_ID
     valueFrom: sql-warehouse

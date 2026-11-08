@@ -1,13 +1,18 @@
 """HTTP API for the Open-Source Corpus Explorer."""
 
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.db import query
 
 app = FastAPI(title="Open-Source Corpus Explorer API", version="0.1.0")
+
+# Vite build output copied here before Databricks Apps deploy (`frontend/dist` → `static`).
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 GOLD = """gold AS (
   SELECT * FROM hackcamp.gold.repo_health
@@ -184,3 +189,8 @@ FROM hackcamp.agent.runs ORDER BY started_at DESC LIMIT 1""")
     if not rows:
         raise HTTPException(404, "no agent runs yet")
     return rows[0]
+
+
+# Serve the React build from the same origin as /api (required on Databricks Apps).
+if STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -45,8 +45,8 @@ function App() {
           <p>Could not load {SELECTED_REPO_ID}.</p>
           <p className="repo-sidebar__error-detail">{error}</p>
           <p className="repo-sidebar__error-hint">
-            Start the backend (`uvicorn app.main:app --reload` in `backend/`) so
-            Vite can proxy `/api`.
+            Check that the API is reachable on this origin (`/api/health`).
+            Locally: run uvicorn in `backend/` so Vite can proxy `/api`.
           </p>
         </aside>
       ) : sidebar ? (

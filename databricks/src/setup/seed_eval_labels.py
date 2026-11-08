@@ -70,7 +70,7 @@ LABELS = [
         "Recent releases; Encode project actively maintained.",
     ),
     Row(
-        "tiangolo/fastapi",
+        "fastapi/fastapi",
         "healthy",
         "https://github.com/tiangolo/fastapi/releases",
         "High activity, frequent releases, broad maintainer/contributor base.",
@@ -88,7 +88,7 @@ LABELS = [
         "Active scientific Python project with recent releases.",
     ),
     Row(
-        "facebook/react",
+        "react/react",
         "healthy",
         "https://github.com/facebook/react/releases",
         "Meta-maintained; frequent releases and many active maintainers.",
@@ -214,7 +214,7 @@ LABELS = [
         "Google-maintained; continued releases.",
     ),
     Row(
-        "junit-team/junit5",
+        "junit-team/junit-framework",
         "healthy",
         "https://github.com/junit-team/junit5/releases",
         "Active JUnit team releases.",
@@ -232,7 +232,7 @@ LABELS = [
         "Active Netty project releases.",
     ),
     Row(
-        "square/okhttp",
+        "lysine-dev/okhttp",
         "healthy",
         "https://github.com/square/okhttp/releases",
         "Square-maintained; recent releases.",

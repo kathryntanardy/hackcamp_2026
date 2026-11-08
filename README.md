@@ -63,6 +63,25 @@ databricks bundle run agent_run -t dev --profile school
 databricks bundle run scheduled_autonomy -t dev --profile school
 ```
 
+For ticket #14, run the labelled evaluation with the current agent:
+
+```sh
+databricks bundle run eval_run -t dev --profile school
+```
+
+This evaluates all 50 current labels and compares the agent with the frozen gold
+formula. MLflow retains labels, per-repository results, a weight comparison, timing,
+and the prompt fingerprint/retry configuration. The grounding judge must cover
+every case; only failed judge calls are retried, preserving valid negative scores.
+The verification task reconciles the metrics and saved `agent.runs.eval_score`.
+Evaluation writes no production findings. Its score is a labelled-set model
+benchmark, not accuracy measured on an unlabelled production batch.
+
+Summaries and verification are saved under
+`/Volumes/hackcamp/raw/github/evaluations/<eval-run-id>/`. Binary accuracy treats
+both `at_risk` and `ignored` as flagged; `verdict_accuracy` separately penalizes
+abstentions and wrong risk bins. See [the rerun report](.docs/TICKET14_REDO_RUN.md).
+
 See [PRD.md](PRD.md) for the product requirements.
 
 ## Scheduled autonomy (ticket #15)

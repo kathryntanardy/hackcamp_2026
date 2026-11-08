@@ -40,8 +40,46 @@ def score(rows):
         "inconclusive_rate": _safe_div(
             sum(1 for r in rows if r["pred"] == "inconclusive"), len(rows)
         ),
+        # Keep the documented binary metric, but also expose whether parked
+        # projects were classified correctly and abstentions were real decisions.
+        "verdict_accuracy": _safe_div(sum(
+            r["pred"] in ({"healthy", "watchlist"} if r["label"] == "hard_case" else {r["label"]})
+            for r in rows
+        ), len(rows)),
+        "living_at_risk_recall": _safe_div(
+            sum(r["label"] == "at_risk" and r["pred"] == "at_risk" for r in rows),
+            sum(r["label"] == "at_risk" for r in rows),
+        ),
+        "ignored_recall": _safe_div(
+            sum(r["label"] == "ignored" and r["pred"] == "ignored" for r in rows),
+            sum(r["label"] == "ignored" for r in rows),
+        ),
     }
     calls = [r["tool_calls"] for r in rows if r.get("tool_calls") is not None]
     if calls:
         out["median_tool_calls"] = float(median(calls))
     return out
+
+
+def baseline_prediction(row, weights=(30, 25, 10)):
+    """Reproduce the MVP formula for a bounded, offline weight sensitivity check."""
+    if row.get("formula_status") == "ignored":
+        return "ignored"
+    def clamp(value):
+        return max(0.0, min(1.0, value))
+    release, ratio, push = (row.get(k) for k in ("days_since_release", "commit_ratio", "days_since_push"))
+    signals = [None if release is None else clamp((540 - release) / 450),
+               None if ratio is None else clamp((ratio - .2) / .8),
+               None if push is None else clamp((365 - push) / 335)]
+    present = [(w, s) for w, s in zip(weights, signals) if s is not None]
+    health = round(100 * sum(w * s for w, s in present) / sum(w for w, s in present), 2) if present else None
+    return "watchlist" if health is None else "healthy" if health >= 70 else "watchlist" if health >= 40 else "at_risk"
+
+
+def weight_sensitivity(rows):
+    """Exploratory training-set comparison; never silently tune production on test labels."""
+    rows = list(rows)
+    candidates = [(30, 25, 10), (20, 35, 10), (40, 15, 10), (25, 20, 20), (15, 25, 25)]
+    return [{"weights": dict(zip(("release", "commits", "activity"), weights)),
+             **score({"label": r["label"], "pred": baseline_prediction(r, weights)} for r in rows)}
+            for weights in candidates]

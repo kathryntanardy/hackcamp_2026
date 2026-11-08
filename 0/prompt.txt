@@ -1,0 +1,69 @@
+Yes, run it live
+
+---
+
+<task-notification>
+<task-id>b64t5j32o</task-id>
+<tool-use-id>toolu_015wkcyQNEXqDi3niWHHSPfL</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-verrill-Documents-Nerding-Hackathon-hackcamp-2026-hackcamp-2026/87a4385f-f203-4271-8eb1-14ee3bb812be/tasks/b64t5j32o.output</output-file>
+<status>completed</status>
+<summary>Background command "Run agent job once with a small budget" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+explain budget_n
+
+---
+
+explain briefly about the run
+
+---
+
+whate is rate limited
+
+---
+
+try again
+
+---
+
+<task-notification>
+<task-id>bb0k8lk7h</task-id>
+<tool-use-id>toolu_01TgzBLSDkcoLqpX3ukRmbnU</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-verrill-Documents-Nerding-Hackathon-hackcamp-2026-hackcamp-2026/87a4385f-f203-4271-8eb1-14ee3bb812be/tasks/bb0k8lk7h.output</output-file>
+<status>completed</status>
+<summary>Background command "Rerun agent job with a small budget" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+so all good?
+
+---
+
+test it first before pushing
+
+---
+
+<task-notification>
+<task-id>bzjazvspd</task-id>
+<tool-use-id>toolu_018CDCrL4ZJ4dWyBhUmQw8db</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-verrill-Documents-Nerding-Hackathon-hackcamp-2026-hackcamp-2026/87a4385f-f203-4271-8eb1-14ee3bb812be/tasks/bzjazvspd.output</output-file>
+<status>completed</status>
+<summary>Background command "Run agent job to catch a verdict change" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+Yes, add retries
+
+---
+
+<task-notification>
+<task-id>broocivaz</task-id>
+<tool-use-id>toolu_01RUNnW4oyUuXq5uyGJf49vn</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-verrill-Documents-Nerding-Hackathon-hackcamp-2026-hackcamp-2026/87a4385f-f203-4271-8eb1-14ee3bb812be/tasks/broocivaz.output</output-file>
+<status>completed</status>
+<summary>Background command "Live agent run with retries enabled" completed (exit code 0)</summary>
+</task-notification>

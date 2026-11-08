@@ -104,6 +104,25 @@ function severityClass(severity: string | null | undefined): string {
   return 'is-low'
 }
 
+function stepTitle(step: { kind: string; tool_name: string | null }): string {
+  if (step.kind === 'decision') return 'Model decision'
+  if (step.tool_name) return step.tool_name
+  return step.kind || 'Step'
+}
+
+function hasInputs(inputs: Record<string, unknown> | null | undefined): boolean {
+  if (!inputs || typeof inputs !== 'object') return false
+  return Object.keys(inputs).length > 0
+}
+
+function formatStepInputs(inputs: Record<string, unknown>): string {
+  try {
+    return JSON.stringify(inputs, null, 2)
+  } catch {
+    return String(inputs)
+  }
+}
+
 export function RepoSidebar({
   language = '—',
   starsLabel = '—',
@@ -576,32 +595,68 @@ export function RepoSidebar({
                 </p>
               ) : null}
               {trace && !traceLoading ? (
-                <>
-                  <p className="section-subline">
-                    {trace.status}
-                    {trace.trace_id ? ` · ${trace.trace_id}` : ''}
-                    {` · ${trace.steps?.length ?? 0} steps`}
+                trace.status === 'not_ready' || !(trace.steps?.length > 0) ? (
+                  <p className="empty-note">
+                    Trace steps are not ready for this finding yet — re-run the agent to export an
+                    ordered decision trail.
                   </p>
-                  {trace.explanation ? (
-                    <p className="repo-sidebar__summary">{trace.explanation}</p>
-                  ) : null}
-                  <ol className="trace-list">
-                    {(trace.steps || []).map((step) => (
-                      <li className="trace-step" key={`${step.order}-${step.span_id ?? step.tool_name}`}>
-                        <div className="trace-step__head">
-                          <span className="trace-step__order">{step.order}</span>
-                          <strong>{step.tool_name || step.kind}</strong>
-                          {step.status ? <span className="chip chip--quiet">{step.status}</span> : null}
-                        </div>
-                        {step.result_summary ? (
-                          <p className="trace-step__summary">{step.result_summary}</p>
-                        ) : (
-                          <p className="trace-step__summary is-muted">No public decision summary.</p>
-                        )}
-                      </li>
-                    ))}
-                  </ol>
-                </>
+                ) : (
+                  <>
+                    <p className="section-subline">
+                      {trace.status}
+                      {trace.trace_id ? ` · ${trace.trace_id}` : ''}
+                      {` · ${trace.steps.length} steps`}
+                    </p>
+                    {trace.explanation ? (
+                      <p className="repo-sidebar__summary">{trace.explanation}</p>
+                    ) : null}
+                    <ol className="trace-list">
+                      {trace.steps.map((step) => (
+                        <li
+                          className="trace-step"
+                          key={`${step.order}-${step.span_id ?? step.tool_name ?? step.kind}`}
+                        >
+                          <div className="trace-step__head">
+                            <span className="trace-step__order">{step.order}</span>
+                            <strong>{stepTitle(step)}</strong>
+                            {step.phase ? (
+                              <span className="chip chip--quiet">{step.phase}</span>
+                            ) : null}
+                            {step.status ? (
+                              <span className="chip chip--quiet">{step.status}</span>
+                            ) : null}
+                          </div>
+                          {hasInputs(step.inputs) ? (
+                            <div className="trace-step__block">
+                              <p className="trace-step__label">Inputs</p>
+                              <pre className="trace-step__inputs">
+                                {formatStepInputs(step.inputs as Record<string, unknown>)}
+                              </pre>
+                            </div>
+                          ) : null}
+                          <div className="trace-step__block">
+                            <p className="trace-step__label">Result</p>
+                            {step.result_summary ? (
+                              <p className="trace-step__summary">{step.result_summary}</p>
+                            ) : (
+                              <p className="trace-step__summary is-muted">No result summary.</p>
+                            )}
+                          </div>
+                          <div className="trace-step__block">
+                            <p className="trace-step__label">Reasoning</p>
+                            {step.reasoning ? (
+                              <p className="trace-step__reasoning">{step.reasoning}</p>
+                            ) : (
+                              <p className="trace-step__summary is-muted">
+                                No public decision summary.
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </>
+                )
               ) : null}
             </section>
           </>

@@ -2,6 +2,14 @@ import type { MapSearchScope } from '../components/MapSearchBar'
 import type { RepoListItem } from '../components/RepoListSidebar'
 import type { MapRepo } from './types'
 
+/** Short queries stay local — VS embedding latency isn't worth it for 1–2 chars. */
+const SEARCH_VS_MIN_CHARS = 3
+
+/** Every scope gets semantic hits; the scope only changes which local fields match. */
+export function usesVectorSearch(needle: string): boolean {
+  return needle.trim().length >= SEARCH_VS_MIN_CHARS
+}
+
 /** Search repo names in every grouping, with the selected field as an extra match. */
 export function localSearchIds(
   needle: string,

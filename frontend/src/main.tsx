@@ -33,14 +33,12 @@ import {
 } from './map/flowers'
 import type { MapRepo, WorldBounds } from './map/types'
 import { useMapCamera } from './map/useMapCamera'
-import { localSearchIds, mergeSearchIds, searchResultItems } from './map/search'
+import { localSearchIds, mergeSearchIds, searchResultItems, usesVectorSearch } from './map/search'
 import './styles.css'
 
 const FINDINGS_PAGE_SIZE = 50
 /** Wait for typing to settle before hitting Vector Search (local matches show instantly). */
 const SEARCH_DEBOUNCE_MS = 450
-/** Short queries stay local — VS embedding latency isn't worth it for 1–2 chars. */
-const SEARCH_VS_MIN_CHARS = 3
 /** Screen padding when framing search hits (wider than flower zoom). */
 const SEARCH_FIT_PADDING = 180
 
@@ -360,7 +358,7 @@ function App() {
     const localIds = localSearchIds(trimmed, rawMapRepos, repos, searchScope)
     setSearchMatchIds(localIds)
     setSearchError(null)
-    if (searchScope !== 'all' || trimmed.length < SEARCH_VS_MIN_CHARS) {
+    if (!usesVectorSearch(trimmed)) {
       setSearchLoading(false)
       return
     }
@@ -398,8 +396,7 @@ function App() {
       return
     }
     if (tab !== 'map' || searchLoading || searchMatchIds == null) return
-    const delay = searchScope === 'all' && trimmed.length >= SEARCH_VS_MIN_CHARS
-      ? 0 : SEARCH_DEBOUNCE_MS
+    const delay = usesVectorSearch(trimmed) ? 0 : SEARCH_DEBOUNCE_MS
     const timer = window.setTimeout(() => {
       applySearchHits(searchMatchIds, `${searchScope}:${trimmed}:${searchMatchIds.join(',')}`)
     }, delay)

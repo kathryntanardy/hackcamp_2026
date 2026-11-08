@@ -11,7 +11,7 @@ require.extensions['.ts'] = (module, filename) => {
   module._compile(outputText, filename)
 }
 
-const { localSearchIds, mergeSearchIds, searchResultItems } = require('../src/map/search.ts')
+const { localSearchIds, mergeSearchIds, searchResultItems, usesVectorSearch } = require('../src/map/search.ts')
 const { layoutFlowerMap } = require('../src/map/flowers.ts')
 const { fetchFindings } = require('../src/api/findings.ts')
 const { fetchSearch } = require('../src/api/search.ts')
@@ -138,4 +138,10 @@ test('natural-language search still uses the incoming API with its abort signal'
     }
     assert.deepEqual((await fetchSearch({ q: 'python HTTP clients' }, controller.signal)).repo_ids, ['owner/http'])
   } finally { global.fetch = original }
+})
+
+test('vector search runs for any query of 3+ chars, regardless of scope', () => {
+  assert.equal(usesVectorSearch('lo'), false)
+  assert.equal(usesVectorSearch('  go  '), false)
+  assert.equal(usesVectorSearch('logging library for go'), true)
 })

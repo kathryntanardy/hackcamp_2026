@@ -253,3 +253,32 @@ def test_pick_files_skips_docs_src_and_scripts():
             {"type": "blob", "path": "scripts/playwright/sql/image01.py", "size": 5000},
             {"type": "blob", "path": "fastapi/security/oauth2.py", "size": 5000}]
     assert scan.pick_files(tree) == ["fastapi/security/oauth2.py"]
+
+
+def test_first_sentence():
+    assert scan.first_sentence("Disable BodyDump on uploads. It buffers everything.") == "Disable BodyDump on uploads."
+    assert scan.first_sentence("Pin to v4.16.1 or later") == "Pin to v4.16.1 or later."
+    assert scan.first_sentence("Validate input, e.g. reject long strings. More.") == \
+        "Validate input, e.g. reject long strings."
+    junk = "Enforce auth before routing.functionality.text.word.count.check:11.words.ok.done"
+    assert scan.first_sentence(junk) == "Enforce auth before routing."
+    assert scan.first_sentence("Restrict static files.\u5de7\u5999,") == "Restrict static files."
+    assert scan.first_sentence("Disable BodyDump on affected routes, or set the limit higher.") == \
+        "Disable BodyDump on affected routes."
+    assert scan.first_sentence("Reject requests before proxy routes or enforce auth upstream.") == \
+        "Reject requests before proxy routes or enforce auth upstream."  # no comma: ambiguous, keep
+    assert scan.first_sentence("Limit bodies; log failures.") == "Limit bodies."
+    assert scan.first_sentence("Reject inputs of 1,000 or more characters.") == \
+        "Reject inputs of 1,000 or more characters."
+    assert scan.first_sentence("") == ""
+    long = ("Keep protected files outside the static serving directory or enforce authorization "
+            "before static route matching decisions occur switch to default routing configurations")
+    assert scan.first_sentence(long) == "Keep protected files outside the static serving directory."
+
+
+def test_dedupes_and_trims_workaround_on_read():
+    a = scan.normalize_advisory(ADVISORY)
+    out = scan.attach_advisories([{"ghsa_id": a["ghsa_id"], "workaround": "Limit input. Then log it."},
+                                  {"ghsa_id": a["ghsa_id"], "workaround": "dupe"}], [a])
+    assert len(out) == 1
+    assert scan.enrich(out, "a/b", "abc")[0]["workaround"] == "Limit input."

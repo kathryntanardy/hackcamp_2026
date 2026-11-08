@@ -79,7 +79,9 @@ def code_url(repo_id: str, commit_sha: str, file: str, line: int | None) -> str:
 def enrich(findings: list[dict], repo_id: str, commit_sha: str) -> list[dict]:
     """Fields added after Gemini answers, so they cost no tokens."""
     return [{**f, "vuln_bucket": bucket_for_cwe(f.get("cwe")),
-             "code_url": code_url(repo_id, commit_sha, f["file"], f.get("line")) if f.get("file") else None}
+             "code_url": code_url(repo_id, commit_sha, f["file"], f.get("line")) if f.get("file") else None,
+             # Trimmed on read so older stored scans get short workarounds too.
+             "workaround": first_sentence(f.get("workaround") or "")}
             for f in findings]
 
 
@@ -149,8 +151,9 @@ Rules:
 - recommendation: the fix. If a patched version exists, say which version to upgrade to first.
   If none exists, give a concrete code-level fix (a patch to the library code, as code) based on
   the source files shown.
-- workaround: how to stay safe without changing the library (e.g. validate input before calling
-  the vulnerable function, disable an option). Empty string if there is no sensible workaround.
+- workaround: how to stay safe without changing the library, written as a terse checklist item
+  with a single action, e.g. "Reject inputs over 1,000 characters before calling parse()."
+  Empty string if there is no sensible workaround.
 - If you can locate the vulnerable code in the files shown, give its file path and line number
   (from the line prefixes). Otherwise leave file and line out. Never invent a location.
 - severity: reuse the advisory's severity. cwe: the advisory's CWE id like "CWE-79" if it has one.
@@ -317,11 +320,28 @@ def _strip_echo(value):
     return value[:i].rstrip() if i >= 0 and '"findings"' in value[i:] else value
 
 
+def first_sentence(text: str) -> str:
+    """Workarounds as one short action. Keeps the first sentence, drops ", or <alternative>" tails,
+    and drops junk Gemini sometimes glues on (e.g. "settings.functionality.word.count.check:11...")."""
+    junk = re.search(r"\S{40,}", text)
+    if junk:
+        text = text[:junk.start()] + junk.group().split(".")[0] + "."
+    end = re.search(r"(?<!e\.g)(?<!i\.e)[.!?](?=\s|$|[^\x00-\x7F])", text)
+    text = text[:end.start()] if end else text
+    text = re.split(r", or |; ", text.strip(), maxsplit=1)[0].rstrip(" ,;")
+    if len(text.split()) > 15:  # long run-on: keep the first alternative ("A or B" -> "A")
+        text = re.split(r" or ", text, maxsplit=1)[0]
+    return f"{text}." if text else ""
+
+
 def attach_advisories(findings: list[dict], advisories: list[dict]) -> list[dict]:
     """Add the advisory's link and versions from GitHub data rather than trusting the model."""
     by_id = {a["ghsa_id"]: a for a in advisories}
-    out = []
+    out, seen = [], set()
     for f in findings:
+        if f.get("ghsa_id") in seen:  # Gemini occasionally answers the same advisory twice
+            continue
+        seen.add(f.get("ghsa_id"))
         a = by_id.get(f.get("ghsa_id"))
         if a:
             f = {**f, "advisory_url": a["html_url"], "cve_id": a["cve_id"],

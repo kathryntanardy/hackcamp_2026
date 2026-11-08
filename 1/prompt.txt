@@ -1,0 +1,50 @@
+https://www.figma.com/slides/SoZPT1XXFEImwbWNq7cXbJ/Untitled?node-id=1-42&t=ftgyTQEwukuUwHmE-0
+
+can you access this?
+
+---
+
+for a hackathon, what contents do we need
+
+---
+
+<pasted_content id="a2bf">
+```
+claude plugin marketplace add 23jmo/jmo-skills
+
+```
+</pasted_content id="a2bf">
+
+---
+
+```
+claude plugin install jmo-workflow@jmo-skills
+```
+
+---
+
+/jmo-workflow:interview Help me create the contents for the slides per slide for the hackathon pitch
+
+---
+
+Build in Figma
+
+---
+
+Build on https://www.figma.com/slides/SoZPT1XXFEImwbWNq7cXbJ/Untitled?node-id=1-42&t=ftgyTQEwukuUwHmE-0
+
+---
+
+Make a new Slides file
+
+---
+
+I'll fix access
+
+---
+
+go
+
+---
+
+Yes, use Personal

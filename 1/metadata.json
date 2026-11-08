@@ -1,0 +1,69 @@
+{
+  "cli_version": "0.13.1",
+  "checkpoint_id": "01M6WJVXBZV8KYVY7NH6V5WMPP",
+  "session_id": "d91afa6a-bf1f-462a-81b2-73f7ec9dd7a2",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-08T03:22:40.78658Z",
+  "branch": "main",
+  "checkpoints_count": 9,
+  "save_step_count": 5,
+  "files_touched": [
+    "backend/app/main.py",
+    "backend/app/scan.py",
+    "backend/requirements.txt",
+    "databricks/src/setup/create_uc.sql"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5-5",
+  "turn_id": "f5c5cf06993d",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 132,
+    "cache_creation_tokens": 130179,
+    "cache_read_tokens": 6700494,
+    "output_tokens": 43807,
+    "api_call_count": 54
+  },
+  "redaction": {
+    "replacements": 2489,
+    "layers": {
+      "betterleaks": 4,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 0,
+      "credentialed_uri": 0,
+      "entropy": 3620,
+      "key_context": 31,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-jmo-workflow:interview-2026-11-08T01:26:37.460923Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "jmo-workflow:interview"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "3f46b798f450",
+      "timestamp": "2026-11-08T01:26:37.460923Z",
+      "native": {
+        "command": "/jmo-workflow:interview"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/jmo-workflow:interview",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 9
+  }
+}

@@ -1,11 +1,11 @@
 import { worldToScreen } from './camera'
+import { drawFlowerBloom } from './flowerBloom'
 import {
   FLOWER_PALETTE,
+  SEVERITY_GLYPH,
   SEVERITY_HIGHLIGHT,
-  drawFlowerPetals,
   type FlowerCluster,
   type SeverityFocus,
-  type VulnEdge,
 } from './flowers'
 import { dispersePoint, growFactor } from './hoverAnim'
 import type { MapCamera, MapRepo, MapStatus } from './types'
@@ -66,10 +66,16 @@ function glyphColor(
   flowers: FlowerCluster[],
   severityFocus: SeverityFocus | null,
 ): { fill: string; dim: boolean; lit: boolean } {
-  const flower = flowerById(flowers, repo.flowerId)
-  const base = flower
-    ? FLOWER_PALETTE[flower.colorIndex % FLOWER_PALETTE.length].glyph
-    : '#8a8a8a'
+  const tone = repo.vulnerabilityTone
+  let base = SEVERITY_GLYPH.none
+  if (tone === 'high' || tone === 'medium' || tone === 'low') {
+    base = SEVERITY_GLYPH[tone]
+  } else {
+    const flower = flowerById(flowers, repo.flowerId)
+    if (flower) {
+      base = FLOWER_PALETTE[flower.colorIndex % FLOWER_PALETTE.length].glyph
+    }
+  }
 
   if (!severityFocus) return { fill: base, dim: false, lit: false }
 
@@ -85,7 +91,6 @@ export function drawMap(
   ctx: CanvasRenderingContext2D,
   repos: MapRepo[],
   flowers: FlowerCluster[],
-  edges: VulnEdge[],
   camera: MapCamera,
   selectedId: string | null,
   hoveredId: string | null,
@@ -100,53 +105,31 @@ export function drawMap(
   ctx.fillRect(0, 0, width, height)
 
   const hoverRepo = hoveredId ? repos.find((r) => r.id === hoveredId) ?? null : null
-  const amount = hoverRepo ? hoverAmount : 0
+  const selectedRepo = selectedId
+    ? repos.find((r) => r.id === selectedId) ?? null
+    : null
+  // Selection holds a disperse ring; hover temporarily takes over the epicenter.
+  const focusRepo = hoverRepo ?? selectedRepo
+  const amount = focusRepo ? hoverAmount : 0
 
   const placed = new Map<string, { x: number; y: number }>()
   for (const repo of repos) {
-    placed.set(repo.id, dispersePoint(repo, hoverRepo, amount))
+    placed.set(repo.id, dispersePoint(repo, focusRepo, amount))
   }
 
   for (const flower of flowers) {
     const center = worldToScreen(flower.center, camera)
     const dimOutside =
       severityFocus != null && severityFocus.flowerId !== flower.id
-    ctx.save()
-    if (dimOutside) ctx.globalAlpha = 0.45
-    drawFlowerPetals(ctx, center, flower.radius, flower.colorIndex, camera.scale)
-    ctx.restore()
+    drawFlowerBloom(
+      ctx,
+      center,
+      flower.radius,
+      flower.colorIndex,
+      camera.scale,
+      dimOutside ? 0.4 : 1,
+    )
   }
-
-  ctx.save()
-  ctx.lineWidth = Math.max(1, camera.scale * 0.04)
-  for (const edge of edges) {
-    const a = placed.get(edge.a)
-    const b = placed.get(edge.b)
-    if (!a || !b) continue
-    const sa = worldToScreen(a, camera)
-    const sb = worldToScreen(b, camera)
-    if (
-      (sa.x < -80 && sb.x < -80) ||
-      (sa.y < -80 && sb.y < -80) ||
-      (sa.x > width + 80 && sb.x > width + 80) ||
-      (sa.y > height + 80 && sb.y > height + 80)
-    ) {
-      continue
-    }
-    const highlight =
-      edge.a === selectedId ||
-      edge.b === selectedId ||
-      edge.a === hoveredId ||
-      edge.b === hoveredId
-    ctx.strokeStyle = highlight
-      ? `rgba(252, 82, 57, ${0.28 + 0.35 * amount})`
-      : 'rgba(30, 30, 30, 0.14)'
-    ctx.beginPath()
-    ctx.moveTo(sa.x, sa.y)
-    ctx.lineTo(sb.x, sb.y)
-    ctx.stroke()
-  }
-  ctx.restore()
 
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'

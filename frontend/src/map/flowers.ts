@@ -1,6 +1,6 @@
 import type { MapRepo, Point } from './types'
 
-/** Soft petal fills matching Figma flower palette (40:13967). */
+/** Soft petal fills matching Figma flower palette (40:17144 bloom). */
 export const FLOWER_PALETTE = [
   { fill: 'rgba(57, 145, 252, 0.55)', core: 'rgba(57, 145, 252, 0.78)', glyph: '#3991fc', chipBg: '#ebf4ff' },
   { fill: 'rgba(57, 90, 252, 0.5)', core: 'rgba(57, 90, 252, 0.72)', glyph: '#395afc', chipBg: '#eef0ff' },
@@ -11,10 +11,18 @@ export const FLOWER_PALETTE = [
   { fill: 'rgba(90, 100, 120, 0.45)', core: 'rgba(50, 55, 70, 0.6)', glyph: '#4a5160', chipBg: '#f0f1f3' },
 ] as const
 
+export type VulnSeverity = 'high' | 'medium' | 'low'
+
 /** Severity highlight when hovering High / Med / Low on a flower label. */
 export const SEVERITY_HIGHLIGHT = '#fc5239'
 
-export type VulnSeverity = 'high' | 'medium' | 'low'
+/** Glyph fills matching Figma zoomed map (40:17030). */
+export const SEVERITY_GLYPH: Record<VulnSeverity | 'none', string> = {
+  high: '#fc5239',
+  medium: '#e0a21a',
+  low: '#2f9e6b',
+  none: '#8a8a8a',
+}
 
 export type FlowerCluster = {
   id: string
@@ -29,12 +37,6 @@ export type FlowerCluster = {
 export type SeverityFocus = {
   flowerId: string
   tone: VulnSeverity
-}
-
-export type VulnEdge = {
-  a: string
-  b: string
-  bucket: string
 }
 
 const NONE = 'No GitHub advisories'
@@ -69,9 +71,8 @@ function petalRadius(theta: number, petals: number, base: number): number {
 export function layoutFlowerMap(repos: MapRepo[]): {
   repos: MapRepo[]
   flowers: FlowerCluster[]
-  edges: VulnEdge[]
 } {
-  if (repos.length === 0) return { repos: [], flowers: [], edges: [] }
+  if (repos.length === 0) return { repos: [], flowers: [] }
 
   const groups = new Map<string, MapRepo[]>()
   for (const repo of repos) {
@@ -159,107 +160,26 @@ export function layoutFlowerMap(repos: MapRepo[]): {
     })
   })
 
-  return { repos: positioned, flowers, edges: buildVulnEdges(positioned) }
+  return { repos: positioned, flowers }
 }
 
-/** Connect repos that share a vulnerability bucket via nearest-neighbour chains. */
-function buildVulnEdges(repos: MapRepo[]): VulnEdge[] {
-  const byBucket = new Map<string, MapRepo[]>()
-  for (const repo of repos) {
-    const buckets = repo.vulnBuckets.length > 0 ? repo.vulnBuckets : [NONE]
-    for (const bucket of buckets) {
-      if (!bucket || bucket === NONE) continue
-      const list = byBucket.get(bucket)
-      if (list) list.push(repo)
-      else byBucket.set(bucket, [repo])
-    }
-  }
-
-  const seen = new Set<string>()
-  const edges: VulnEdge[] = []
-
-  for (const [bucket, members] of byBucket) {
-    if (members.length < 2) continue
-    // Cap fan-out: each node links to up to 2 nearest co-bucket neighbours.
-    for (const a of members) {
-      const nearest = members
-        .filter((b) => b.id !== a.id)
-        .map((b) => ({
-          b,
-          d: (a.x - b.x) ** 2 + (a.y - b.y) ** 2,
-        }))
-        .sort((u, v) => u.d - v.d)
-        .slice(0, 2)
-
-      for (const { b } of nearest) {
-        const key = a.id < b.id ? `${a.id}|${b.id}|${bucket}` : `${b.id}|${a.id}|${bucket}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        edges.push({ a: a.id, b: b.id, bucket })
-      }
-    }
-  }
-
-  return edges
-}
-
-export function drawFlowerPetals(
-  ctx: CanvasRenderingContext2D,
-  center: Point,
-  radius: number,
-  colorIndex: number,
-  scale: number,
-): void {
-  const palette = FLOWER_PALETTE[colorIndex % FLOWER_PALETTE.length]
-  const petals = 7
-  const screenR = radius * scale
-
-  ctx.save()
-  for (let i = 0; i < petals; i++) {
-    const angle = (i / petals) * Math.PI * 2
-    const px = center.x + Math.cos(angle) * screenR * 0.35
-    const py = center.y + Math.sin(angle) * screenR * 0.35
-    const grad = ctx.createRadialGradient(px, py, screenR * 0.05, px, py, screenR * 0.85)
-    grad.addColorStop(0, palette.core)
-    grad.addColorStop(0.55, palette.fill)
-    grad.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.beginPath()
-    ctx.ellipse(
-      px,
-      py,
-      screenR * 0.72,
-      screenR * 0.48,
-      angle,
-      0,
-      Math.PI * 2,
-    )
-    ctx.fillStyle = grad
-    ctx.fill()
-  }
-
-  // Soft core bloom.
-  const core = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, screenR * 0.45)
-  core.addColorStop(0, palette.core)
-  core.addColorStop(1, 'rgba(255,255,255,0)')
-  ctx.beginPath()
-  ctx.arc(center.x, center.y, screenR * 0.45, 0, Math.PI * 2)
-  ctx.fillStyle = core
-  ctx.fill()
-  ctx.restore()
-}
-
-/** World bounds that frame an entire flower (petals + label breathing room). */
+/**
+ * World bounds that frame an entire flower bloom + label.
+ * Matches flowerBloom draw size (height ≈ radius·2.55, aspect 1033/771).
+ */
 export function flowerWorldBounds(flower: FlowerCluster): {
   minX: number
   maxX: number
   minY: number
   maxY: number
 } {
-  const pad = flower.radius * 1.35
+  const halfH = flower.radius * 1.35
+  const halfW = halfH * (1033 / 771)
+  const labelRoom = flower.radius * 0.7
   return {
-    minX: flower.center.x - pad,
-    maxX: flower.center.x + pad,
-    minY: flower.center.y - pad,
-    maxY: flower.center.y + pad + flower.radius * 0.35,
+    minX: flower.center.x - halfW,
+    maxX: flower.center.x + halfW,
+    minY: flower.center.y - halfH,
+    maxY: flower.center.y + halfH + labelRoom,
   }
 }

@@ -229,11 +229,19 @@ img {
   justify-content: center;
   gap: 6px;
   width: 100%;
+  margin: 0;
   padding: 6px 8px;
+  border: 0;
   border-radius: 4px;
+  font: inherit;
   font-size: 16px;
   font-weight: 500;
   line-height: 1.2;
+  cursor: pointer;
+}
+
+.flower-label__title:hover {
+  filter: brightness(0.97);
 }
 
 .flower-label__swatch {

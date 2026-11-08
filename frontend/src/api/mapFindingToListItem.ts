@@ -1,21 +1,23 @@
 import type { RepoListItem } from '../components/RepoListSidebar'
 import type { FindingListEntry } from './types'
 
+/** Live risk_level values: at_risk | watchlist | healthy | inconclusive (| ignored, filtered in API). */
 function riskTone(risk: string | null | undefined): RepoListItem['vulnerabilityTone'] {
   const r = (risk || '').toLowerCase()
   if (r === 'at_risk') return 'high'
   if (r === 'watchlist') return 'medium'
-  if (r === 'inconclusive') return 'low'
-  if (r === 'healthy') return 'none'
-  return 'low'
+  if (r === 'healthy') return 'low'
+  if (r === 'inconclusive') return 'none'
+  return 'none'
 }
 
 function riskLabel(risk: string | null | undefined): string {
   const r = (risk || '').toLowerCase()
   if (r === 'at_risk') return 'At risk'
   if (r === 'watchlist') return 'Watchlist'
-  if (r === 'inconclusive') return 'Inconclusive'
   if (r === 'healthy') return 'Healthy'
+  if (r === 'inconclusive') return 'Inconclusive'
+  if (r === 'ignored') return 'Excluded'
   return risk?.replaceAll('_', ' ') || 'Unknown'
 }
 
@@ -27,7 +29,7 @@ export function mapFindingToListItem(finding: FindingListEntry): RepoListItem {
     name: finding.name || finding.repo_id,
     description: finding.headline || finding.explanation || '',
     vulnerabilityLabel: riskLabel(finding.risk_level),
-    vulnerabilityTone: tone === 'none' ? 'low' : tone,
+    vulnerabilityTone: tone,
     vulnerabilityScore: `${confidence}%`,
     category: finding.category?.trim() || finding.language || '—',
   }

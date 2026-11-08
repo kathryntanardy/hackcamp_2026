@@ -225,7 +225,9 @@ function App() {
 
   const handleZoomToFlower = useCallback(
     (flower: (typeof flowerLayout.flowers)[number]) => {
-      fitToBoundsAnimated(flowerWorldBounds(flower), 64)
+      setSelectedId(null)
+      // Generous padding so the bloom + label sit centered with white margin.
+      fitToBoundsAnimated(flowerWorldBounds(flower), 96)
     },
     [fitToBoundsAnimated],
   )
@@ -399,7 +401,6 @@ function App() {
             <GalaxyMap
               repos={flowerLayout.repos}
               flowers={flowerLayout.flowers}
-              edges={flowerLayout.edges}
               camera={camera}
               selectedId={selectedId}
               pinnedSeverity={severityFocus}

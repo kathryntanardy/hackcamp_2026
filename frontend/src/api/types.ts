@@ -46,10 +46,11 @@ export type RepoListEntry = {
   cat_y: number | null
 }
 
+/** Matches hackcamp.agent.findings.evidence struct (value is STRING in UC). */
 export type EvidenceItem = {
   signal: string
   tool: string
-  value: string | number | null
+  value: string | null
 }
 
 export type Verdict = {

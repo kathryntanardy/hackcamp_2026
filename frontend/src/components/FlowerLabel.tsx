@@ -7,6 +7,7 @@ export type FlowerLabelProps = {
   activeTone?: VulnSeverity | null
   onHoverTone?: (tone: VulnSeverity | null) => void
   onSelectTone?: (tone: VulnSeverity) => void
+  onFocusFlower?: () => void
 }
 
 const TONES: { tone: VulnSeverity; short: string; countKey: 'high' | 'medium' | 'low' }[] = [
@@ -22,6 +23,7 @@ export function FlowerLabel({
   activeTone = null,
   onHoverTone,
   onSelectTone,
+  onFocusFlower,
 }: FlowerLabelProps) {
   const palette = FLOWER_PALETTE[flower.colorIndex % FLOWER_PALETTE.length]
   const title = flower.label === 'No GitHub advisories' ? 'No advisories' : flower.label
@@ -32,9 +34,12 @@ export function FlowerLabel({
       style={{ left: x, top: y }}
       onPointerLeave={() => onHoverTone?.(null)}
     >
-      <div
+      <button
+        type="button"
         className="flower-label__title"
         style={{ background: palette.chipBg, color: palette.glyph }}
+        aria-label={`Show entire ${title} flower`}
+        onClick={() => onFocusFlower?.()}
       >
         <span
           className="flower-label__swatch"
@@ -42,7 +47,7 @@ export function FlowerLabel({
           aria-hidden="true"
         />
         <span className="flower-label__name">{title}</span>
-      </div>
+      </button>
       <div className="flower-label__counts" role="group" aria-label={`${title} severity counts`}>
         {TONES.map(({ tone, short, countKey }, index) => {
           const count = flower.counts[countKey]

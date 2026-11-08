@@ -24,8 +24,10 @@ GOLD = """gold AS (
   SELECT * FROM hackcamp.gold.repo_health
   QUALIFY row_number() OVER (PARTITION BY repo_id ORDER BY scored_at DESC) = 1
 )"""
+# Live UC schema: risk_level includes legacy 'ignored' rows; product surfaces exclude them.
 LATEST_FINDING = """latest_finding AS (
   SELECT * FROM hackcamp.agent.findings
+  WHERE coalesce(risk_level, '') <> 'ignored'
   QUALIFY row_number() OVER (PARTITION BY repo_id ORDER BY investigated_at DESC) = 1
 )"""
 LATEST_RUN = """latest_run AS (
@@ -35,7 +37,7 @@ FINDING_COLS = """f.run_id, f.risk_level, f.confidence, f.headline, f.explanatio
   to_json(f.evidence) AS evidence, f.changed_since_last, f.alternatives,
   f.tool_calls, f.trace_id, f.investigated_at"""
 SEVERITY = """CASE f.risk_level WHEN 'at_risk' THEN 0 WHEN 'watchlist' THEN 1
-  WHEN 'inconclusive' THEN 2 ELSE 3 END"""
+  WHEN 'inconclusive' THEN 2 WHEN 'healthy' THEN 3 ELSE 4 END"""
 
 
 def _as_str_list(value) -> list[str]:
@@ -125,7 +127,8 @@ WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
     r = rows[0]
     verdicts = [_finding(v) for v in query(f"""
 SELECT {FINDING_COLS} FROM hackcamp.agent.findings f
-WHERE f.repo_id = :repo_id ORDER BY f.investigated_at DESC LIMIT 2""", {"repo_id": repo_id})]
+WHERE f.repo_id = :repo_id AND coalesce(f.risk_level, '') <> 'ignored'
+ORDER BY f.investigated_at DESC LIMIT 2""", {"repo_id": repo_id})]
     advisories = query("""
 SELECT ghsa_id, cve_id, severity, cvss_score, cwes, vuln_bucket, summary, published_at
 FROM hackcamp.silver.repo_advisories
@@ -156,7 +159,8 @@ SELECT f.repo_id, g.name, g.language, g.importance, g.health_score,
   g.category, g.vuln_buckets, {FINDING_COLS},
   f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run
 FROM latest_finding f LEFT JOIN gold g ON g.repo_id = f.repo_id
-WHERE (:language IS NULL OR g.language = :language)
+WHERE coalesce(f.risk_level, '') <> 'ignored'
+  AND (:language IS NULL OR g.language = :language)
   AND (:risk IS NULL OR f.risk_level = :risk)
 ORDER BY {SEVERITY}, g.importance DESC""", {"language": language, "risk": risk})
     out = []

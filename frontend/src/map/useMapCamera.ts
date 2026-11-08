@@ -84,7 +84,9 @@ export function useMapCamera() {
       if (width <= 1 || height <= 1) return
       const bounds = boundsOf(repos)
       if (!bounds) return
-      const key = `${repos.length}:${bounds.minX}:${bounds.maxX}:${bounds.minY}:${bounds.maxY}:${width}x${height}`
+      // Key ignores viewport size so sidebar resize updates layout metrics
+      // without reframing the camera.
+      const key = `${repos.length}:${bounds.minX}:${bounds.maxX}:${bounds.minY}:${bounds.maxY}`
       if (!force && fittedKey.current === key) return
       fittedKey.current = key
       stopAnim()

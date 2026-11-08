@@ -1,0 +1,21 @@
+find backend tickets to do
+
+---
+
+whats #21?
+
+---
+
+whats it for?
+
+---
+
+whats #18 for?
+
+---
+
+any other backend stuffs?
+
+---
+
+/prd_editor update the prd according to how the code is right now, for features thats on the prd and not on the code, just leave it

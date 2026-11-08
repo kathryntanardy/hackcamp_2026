@@ -290,7 +290,7 @@ export function GalaxyMap({
   }
 
   return (
-    <div className="galaxy-map" ref={containerRef} aria-label="Repository galaxy map">
+    <div className="galaxy-map" ref={containerRef} aria-label="Repository map">
       <canvas
         ref={canvasRef}
         className="galaxy-map__canvas"

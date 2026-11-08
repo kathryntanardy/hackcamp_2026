@@ -1,4 +1,6 @@
-# Open-Source Corpus Explorer
+# Open Commitment Issues
+
+Interactive map of maintainer risk across ~1,000 GitHub repositories, clustered by vulnerability. A Databricks agent investigates flagged packages and shows evidence plus security advisories.
 
 React + TypeScript + Vite frontend and Python FastAPI backend.
 
@@ -37,19 +39,17 @@ Vite proxies `/api`, `/openapi.json`, `/docs`, and `/redoc` to `http://127.0.0.1
 
 ### SEO / AEO boilerplate
 
-Static discovery files live in `frontend/public/` and ship with the Vite build:
+Static discovery files live in `frontend/public/` and ship with the Vite build (no extra React routes):
 
 | Path | Purpose |
 | --- | --- |
 | `/robots.txt` | Crawler allow list + sitemap pointer |
 | `/sitemap.xml` | Core URLs for search engines |
-| `/llms.txt` | Short machine-readable product + API map for AI agents |
-| `/llms-full.txt` | Longer agent context |
+| `/llms.txt` | AEO product facts, FAQs, and API map for AI agents |
+| `/llms-full.txt` | Longer agent context + evidence notes |
 | `/site.webmanifest` | PWA/manifest metadata |
 
-The homepage is plain HTML in `frontend/index.html` (no CSS). React under `frontend/src/` is still available for the map later.
-
-Before production, replace every `https://REPLACE_WITH_SITE_ORIGIN` placeholder in those files and in `frontend/index.html` with your real deployed origin (for example your Databricks Apps URL). Keep `lastmod` / "Last updated" dates fresh when claims change.
+`frontend/index.html` holds Open Commitment Issues meta tags plus WebSite / SoftwareApplication / FAQPage JSON-LD. Canonical origin is `https://www.opencommitmentissues.work`. Refresh `lastmod` / "Last updated" when claims change.
 
 ## Production build
 

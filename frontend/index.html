@@ -10,24 +10,117 @@
       content="Open Commitment Issues maps maintainer risk across 1,000 GitHub repositories. A Databricks agent investigates flagged packages and shows evidence plus security advisories."
     />
     <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://REPLACE_WITH_SITE_ORIGIN/" />
+    <link rel="canonical" href="https://www.opencommitmentissues.work/" />
     <link rel="llms" href="/llms.txt" type="text/plain" />
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Open Commitment Issues" />
     <meta
       property="og:description"
-      content="Galaxy map of open-source maintainer risk with Databricks agent verdicts and GitHub security advisories."
+      content="Interactive map of open-source maintainer risk with Databricks agent verdicts and GitHub security advisories."
     />
-    <meta property="og:url" content="https://REPLACE_WITH_SITE_ORIGIN/" />
+    <meta property="og:url" content="https://www.opencommitmentissues.work/" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Open Commitment Issues",
-        "url": "https://REPLACE_WITH_SITE_ORIGIN/",
-        "description": "Maps maintainer risk across 1,000 public GitHub repositories.",
-        "dateModified": "2026-11-07"
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "Open Commitment Issues",
+            "url": "https://www.opencommitmentissues.work/",
+            "description": "Open Commitment Issues maps maintainer risk across 1,000 public GitHub repositories.",
+            "dateModified": "2026-11-08",
+            "publisher": {
+              "@type": "Organization",
+              "name": "Open Commitment Issues"
+            }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Open Commitment Issues",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Web",
+            "url": "https://www.opencommitmentissues.work/",
+            "description": "Interactive repository map of GitHub maintainer risk powered by a Databricks investigation agent.",
+            "dateModified": "2026-11-08",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            }
+          },
+          {
+            "@type": "FAQPage",
+            "datePublished": "2026-11-08",
+            "dateModified": "2026-11-08",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Open Commitment Issues?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Open Commitment Issues is an interactive map of GitHub maintainer risk. Repos cluster by vulnerability bucket; a Databricks agent investigates worrying packages and shows evidence humans can act on."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How many repositories does Open Commitment Issues track?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Open Commitment Issues tracks a frozen corpus of about 1,000 unique eligible public GitHub repositories across core languages after confirmed deprecation exclusions."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Are vulnerability buckets the same as agent verdicts?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Vulnerability buckets on Open Commitment Issues come from GitHub security advisory CWEs. Agent risk_level is maintainer-risk and is scored separately from advisory severity."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does Open Commitment Issues include a chatbot?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Open Commitment Issues is a map-and-findings product. Natural-language map search zooms to matching repos via Vector Search; it is search, not a chat interface."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does Open Commitment Issues replace Dependabot or CodeQL?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Open Commitment Issues tracks maintainer abandonment risk with agent evidence. It does not replace Dependabot, CodeQL, or a full SAST scanner."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Where do security advisories come from?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Open Commitment Issues loads GitHub Security Advisories (GHSA/CVE) per repository. An empty successful fetch shows No GitHub advisories, never safe."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What platform powers Open Commitment Issues?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Open Commitment Issues runs ingestion, Unity Catalog governance, agent tools, Vector Search, evaluation, and scheduling on Databricks."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Are deprecated packages shown on the map?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Confirmed deprecated repositories are excluded from the Open Commitment Issues map and serving path, even when historical rows exist."
+                }
+              }
+            ]
+          }
+        ]
       }
     </script>
   </head>

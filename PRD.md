@@ -1,14 +1,14 @@
-# Open-Source Corpus Explorer PRD
+# Open Commitment Issues PRD
 
-Nov 6, 2026 · @Hi · Updated Nov 7, 2026
+Nov 6, 2026 · @Hi · Updated Nov 8, 2026
 
-An interactive galaxy map of GitHub repositories where an autonomous Databricks agent finds critical open-source packages that are quietly dying, investigates them with governed tools, and shows its evidence. Built in 20 hours for HackCamp, targeting the Best Use of Databricks track.
+**Open Commitment Issues** is an interactive map of GitHub repositories—clustered by vulnerability bucket—where an autonomous Databricks agent finds critical open-source packages that are quietly dying, investigates them with governed tools, and shows its evidence. Built in 20 hours for HackCamp, targeting the Best Use of Databricks track.
 
 ## Problem and goal
 
 The question: **which open-source packages that many people depend on are losing their maintainers?** GitHub shows stars and commits per repo, but nobody watches thousands of repos for the slow signs of abandonment: releases stopping, issues piling up, one maintainer left.
 
-**Product goal:** an AI agent that watches a corpus of repos on its own, picks which ones look worrying, investigates them with real tools, and records a verdict with evidence. People explore the results on a galaxy map, with no chatbot.
+**Product goal:** an AI agent that watches a corpus of repos on its own, picks which ones look worrying, investigates them with real tools, and records a verdict with evidence. People explore the results on an interactive repository map and findings list, with no chatbot.
 
 **Hackathon goal:** win Best Use of Databricks. That means Databricks has to be the engine of the product, not just hosting: ingestion, governance, the agent's tools, tracing, evaluation and scheduling all run on the platform, and the demo shows each of them working.
 

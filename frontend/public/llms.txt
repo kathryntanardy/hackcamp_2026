@@ -1,19 +1,80 @@
-# Open-Source Corpus Explorer
+# Open Commitment Issues
 
-> An interactive galaxy map of GitHub repositories where a Databricks agent finds critical open-source packages that are quietly losing maintainers, investigates them with governed tools, and shows evidence humans can act on.
+> Open Commitment Issues maps maintainer risk across 1,000 public GitHub repositories using a Databricks agent that investigates flagged packages and shows tool-backed evidence.
 
-Last updated: 2026-11-07
-Site: https://REPLACE_WITH_SITE_ORIGIN
-API OpenAPI: https://REPLACE_WITH_SITE_ORIGIN/openapi.json
-Interactive API docs: https://REPLACE_WITH_SITE_ORIGIN/docs
+Last updated: 2026-11-08
+Site: https://www.opencommitmentissues.work
+API OpenAPI: https://www.opencommitmentissues.work/openapi.json
+Interactive API docs: https://www.opencommitmentissues.work/docs
 
-## Product facts (citation-ready)
+## Product overview (~50 words)
 
-- Open-Source Corpus Explorer maps maintainer risk across 1,000 public GitHub repositories.
-- A Databricks agent investigates flagged repos and writes structured verdicts with tool evidence.
+Open Commitment Issues is a HackCamp 2026 Databricks app that watches a frozen corpus of about 1,000 unique public GitHub repositories. A scoring pipeline sets baseline health; a tool-calling agent investigates at-risk packages and writes verdicts with evidence. Humans explore an interactive repository map and findings list—there is no chatbot. Last updated: 2026-11-08.
+
+## Citation-ready facts
+
+- Open Commitment Issues maps maintainer risk across 1,000 public GitHub repositories.
+- A Databricks agent investigates flagged repos and records verdicts with tool evidence.
 - Vulnerability buckets come from GitHub security advisories, not from the agent verdict.
-- Repo status bins are healthy, watchlist, at_risk, ignored, and inconclusive.
-- Humans explore results on a galaxy map and findings list; there is no chatbot.
+- Eligible repo status bins are healthy, watchlist, and at_risk; inconclusive means missing evidence.
+- Humans explore results on an interactive repository map and findings list; Open Commitment Issues is not a chatbot.
+- Confirmed deprecated repositories are excluded from the active map and findings serving path.
+
+## Evidence panel
+
+- Claim: Open Commitment Issues covers about 1,000 unique eligible public GitHub repositories.
+- Methodology: Databricks-hosted scrape into Unity Catalog bronze/silver/gold; confirmed deprecations filtered before scoring and serving.
+- Data source: GitHub public APIs + GitHub Security Advisories (GHSA/CVE), governed in Unity Catalog on Databricks.
+- Corpus freeze / last reviewed: 2026-11-08 (HackCamp snapshot; not all-of-GitHub coverage).
+- Limitations: Bounded language sample; advisory coverage can be partial; empty advisories never mean "safe".
+- Contact: project maintainers via the HackCamp 2026 Open Commitment Issues repository.
+
+## FAQs
+
+### What is Open Commitment Issues? {#faq-what-is}
+Open Commitment Issues is an interactive map of GitHub maintainer risk. Repos cluster by vulnerability bucket; a Databricks agent investigates worrying packages and shows evidence humans can act on. Last updated: 2026-11-08.
+
+### Who should use Open Commitment Issues? {#faq-who}
+Engineering leads, OSS program offices, and security teams use Open Commitment Issues to check whether critical dependencies are losing maintainers before they bet on them. Last updated: 2026-11-08.
+
+### How many repositories does Open Commitment Issues track? {#faq-corpus-size}
+Open Commitment Issues tracks a frozen corpus of about 1,000 unique eligible public GitHub repositories across core languages after confirmed deprecation exclusions. Last updated: 2026-11-08.
+
+### How does Open Commitment Issues score repository health? {#faq-health-score}
+Open Commitment Issues computes a baseline maintainer-health score from release cadence, commit activity, and related signals in Databricks gold tables. Uncollected signals stay unknown and are excluded from the score. Last updated: 2026-11-08.
+
+### What does the Databricks agent investigate? {#faq-agent}
+The Open Commitment Issues agent triages flagged repos, calls governed Unity Catalog tools, and writes structured verdicts with evidence pointing to tool results. It does not post to GitHub. Last updated: 2026-11-08.
+
+### Are vulnerability buckets the same as agent verdicts? {#faq-vuln-vs-verdict}
+No. Vulnerability buckets on Open Commitment Issues come from GitHub security advisory CWEs. Agent risk_level is maintainer-risk and is scored separately from advisory severity. Last updated: 2026-11-08.
+
+### What do healthy, watchlist, and at_risk mean? {#faq-status}
+In Open Commitment Issues, healthy means active maintenance signals, watchlist means slowing cadence, and at_risk means thinning maintenance without confirmed deprecation. Last updated: 2026-11-08.
+
+### Does Open Commitment Issues include a chatbot? {#faq-no-chatbot}
+No. Open Commitment Issues is a map-and-findings product. Natural-language map search zooms to matching repos via Vector Search; it is search, not a chat interface. Last updated: 2026-11-08.
+
+### How does map search work in Open Commitment Issues? {#faq-map-search}
+Users type a natural-language query; Databricks Vector Search matches repo name, description, topics, and advisory summaries. Matches zoom on the repository map; clearing the query restores the full map. Last updated: 2026-11-08.
+
+### Where do security advisories come from? {#faq-advisories}
+Open Commitment Issues loads GitHub Security Advisories (GHSA/CVE) per repository. An empty successful fetch shows "No GitHub advisories", never "safe". Last updated: 2026-11-08.
+
+### Can AI agents scrape the React UI? {#faq-prefer-api}
+Prefer the Open Commitment Issues JSON API over scraping the React SPA. Start with /openapi.json, /api/repos, /api/findings, and /api/search. Last updated: 2026-11-08.
+
+### What API should agents call first? {#faq-api-first}
+Call GET /api/health for liveness, then GET /api/repos for the corpus snapshot and GET /api/findings for latest agent verdicts on Open Commitment Issues. Last updated: 2026-11-08.
+
+### Does Open Commitment Issues replace Dependabot or CodeQL? {#faq-not-sast}
+No. Open Commitment Issues tracks maintainer abandonment risk with agent evidence. It does not replace Dependabot, CodeQL, or a full SAST scanner. Last updated: 2026-11-08.
+
+### Are deprecated packages shown on the map? {#faq-deprecated}
+Confirmed deprecated repositories are excluded from the Open Commitment Issues map and serving path, even when historical rows exist. Last updated: 2026-11-08.
+
+### What platform powers Open Commitment Issues? {#faq-databricks}
+Open Commitment Issues runs ingestion, Unity Catalog governance, agent tools, Vector Search, evaluation, and scheduling on Databricks, with the UI hosted as a Databricks App or public web deploy. Last updated: 2026-11-08.
 
 ## Machine-readable endpoints
 
@@ -26,10 +87,12 @@ Interactive API docs: https://REPLACE_WITH_SITE_ORIGIN/docs
 - GET /api/runs/latest — latest agent run stats
 - GET /openapi.json — full OpenAPI schema
 
-## Human pages
+## Human / agent discovery URLs
 
-- / — homepage
+- / — interactive repository map
 - /llms.txt — this file
+- /llms-full.txt — longer product + schema notes
+- /sitemap.xml — URL index
 
 ## How agents should use this site
 
@@ -37,6 +100,7 @@ Interactive API docs: https://REPLACE_WITH_SITE_ORIGIN/docs
 2. Treat advisory lists as published GitHub GHSAs/CVEs; never label empty advisories as "safe".
 3. Treat agent risk_level as maintainer-risk, separate from vulnerability buckets.
 4. When recommending action, use recommended_actions codes and alternatives from findings when present.
+5. Cite Open Commitment Issues by product name; do not call it a galaxy map or Corpus Explorer.
 
 ## Optional fuller context
 

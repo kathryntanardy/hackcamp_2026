@@ -34,19 +34,24 @@ export type FlowerCluster = {
   counts: { high: number; medium: number; low: number }
 }
 
+/** Map list filter: whole flower category, or one High/Med/Low band within it. */
 export type SeverityFocus = {
   flowerId: string
-  tone: VulnSeverity
+  tone: VulnSeverity | null
 }
 
 const NONE = 'No GitHub advisories'
 const OTHER = 'Other / unclassified'
 
 export function primaryBucket(repo: Pick<MapRepo, 'vulnBuckets'>): string {
-  const buckets = repo.vulnBuckets.filter(Boolean)
+  const buckets = repo.vulnBuckets.map((b) => b.trim()).filter(Boolean)
   if (buckets.length === 0) return NONE
-  const meaningful = buckets.find((b) => b !== NONE)
-  return meaningful ?? buckets[0] ?? NONE
+  // Prefer a concrete CWE bucket over "Other" / "No advisories".
+  const concrete = buckets.find((b) => b !== NONE && b !== OTHER)
+  if (concrete) return concrete
+  if (buckets.includes(OTHER)) return OTHER
+  if (buckets.includes(NONE)) return NONE
+  return buckets[0] ?? NONE
 }
 
 function hashSeed(text: string): number {

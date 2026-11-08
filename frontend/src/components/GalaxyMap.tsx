@@ -25,10 +25,12 @@ export type GalaxyMapProps = {
   pinnedSeverity?: SeverityFocus | null
   onSelectRepo?: (id: string) => void
   onPinnedSeverityChange?: (focus: SeverityFocus | null) => void
+  /** Empty-map click (not a drag). Parent should close the sidebar. */
+  onBackgroundClick?: () => void
   onViewportChange?: (width: number, height: number) => void
   onPan?: (dx: number, dy: number) => void
   onZoomByFactor?: (factor: number, anchor: { x: number; y: number }) => void
-  onZoomToFlower?: (flower: FlowerCluster, tone?: VulnSeverity) => void
+  onZoomToFlower?: (flower: FlowerCluster, tone?: VulnSeverity | null) => void
 }
 
 type HoverCard = {
@@ -48,6 +50,7 @@ export function GalaxyMap({
   pinnedSeverity = null,
   onSelectRepo,
   onPinnedSeverityChange,
+  onBackgroundClick,
   onViewportChange,
   onPan,
   onZoomByFactor,
@@ -237,12 +240,14 @@ export function GalaxyMap({
       const point = localPoint(event)
       const hit = hitTest(reposRef.current, cameraRef.current, point.x, point.y)
       if (hit) {
-        onPinnedSeverityChange?.(null)
         setHoverSeverity(null)
         onSelectRepo?.(hit.id)
       } else {
-        onPinnedSeverityChange?.(null)
+        // Click empty map: clear filters and let parent close the sidebar.
+        // Drags never reach here (active.moved).
         setHoverSeverity(null)
+        onPinnedSeverityChange?.(null)
+        onBackgroundClick?.()
       }
     }
     drag.current = null
@@ -281,13 +286,21 @@ export function GalaxyMap({
             activeTone={
               severityFocus?.flowerId === flower.id ? severityFocus.tone : null
             }
+            categoryActive={
+              pinnedSeverity?.flowerId === flower.id && pinnedSeverity.tone == null
+            }
             onHoverTone={(tone) => {
               setHoverSeverity(tone ? { flowerId: flower.id, tone } : null)
             }}
             onFocusFlower={() => {
-              onPinnedSeverityChange?.(null)
+              const same =
+                pinnedSeverity?.flowerId === flower.id && pinnedSeverity.tone == null
+              const next: SeverityFocus | null = same
+                ? null
+                : { flowerId: flower.id, tone: null }
               setHoverSeverity(null)
-              onZoomToFlower?.(flower)
+              onPinnedSeverityChange?.(next)
+              if (next) onZoomToFlower?.(flower, null)
             }}
             onSelectTone={(tone) => {
               const same =

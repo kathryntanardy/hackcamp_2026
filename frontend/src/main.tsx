@@ -47,6 +47,7 @@ function App() {
   const [riskFilter, setRiskFilter] = useState<FindingsRiskFilter>('all')
 
   const [tab, setTab] = useState<TopNavbarTab>('map')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(580)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchScope, setSearchScope] = useState<MapSearchScope>('all')
@@ -163,10 +164,8 @@ function App() {
     if (!severityFocus) return null
     const ids = new Set<string>()
     for (const repo of flowerLayout.repos) {
-      if (
-        repo.flowerId === severityFocus.flowerId &&
-        repo.vulnerabilityTone === severityFocus.tone
-      ) {
+      if (repo.flowerId !== severityFocus.flowerId) continue
+      if (severityFocus.tone == null || repo.vulnerabilityTone === severityFocus.tone) {
         ids.add(repo.id)
       }
     }
@@ -185,16 +184,17 @@ function App() {
   const severityFocusLabel = useMemo(() => {
     if (!severityFocus) return null
     const flower = flowerLayout.flowers.find((f) => f.id === severityFocus.flowerId)
+    const bucket =
+      flower?.label === 'No GitHub advisories'
+        ? 'No advisories'
+        : flower?.label ?? severityFocus.flowerId
+    if (severityFocus.tone == null) return bucket
     const toneLabel =
       severityFocus.tone === 'high'
         ? 'High'
         : severityFocus.tone === 'medium'
           ? 'Med'
           : 'Low'
-    const bucket =
-      flower?.label === 'No GitHub advisories'
-        ? 'No advisories'
-        : flower?.label ?? severityFocus.flowerId
     return `${toneLabel} · ${bucket}`
   }, [severityFocus, flowerLayout.flowers])
 
@@ -223,18 +223,37 @@ function App() {
     [fitToRepos, flowerLayout.repos, setViewportSize],
   )
 
+  /** When the sidebar is closed, reserve its width so focus lands in the map that remains. */
+  const sidebarFocusInsets = useCallback((): { right?: number; bottom?: number } => {
+    if (sidebarOpen) return {}
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches) {
+      // Mobile uses a bottom sheet; keep vertical framing for now.
+      return {}
+    }
+    return { right: sidebarWidth }
+  }, [sidebarOpen, sidebarWidth])
+
   const handleZoomToFlower = useCallback(
     (flower: (typeof flowerLayout.flowers)[number]) => {
       setSelectedId(null)
       // Generous padding so the bloom + label sit centered with white margin.
-      fitToBoundsAnimated(flowerWorldBounds(flower), 96)
+      fitToBoundsAnimated(flowerWorldBounds(flower), 96, sidebarFocusInsets())
     },
-    [fitToBoundsAnimated],
+    [fitToBoundsAnimated, sidebarFocusInsets],
   )
 
   const handlePinnedSeverityChange = useCallback((focus: SeverityFocus | null) => {
     setSeverityFocus(focus)
     setSelectedId(null)
+    setListMode('browse')
+    setView('list')
+    setSidebarOpen(focus != null)
+  }, [])
+
+  const handleBackgroundClick = useCallback(() => {
+    setSidebarOpen(false)
+    setSelectedId(null)
+    setSeverityFocus(null)
     setListMode('browse')
     setView('list')
   }, [])
@@ -251,14 +270,21 @@ function App() {
   function handleBack() {
     if (selectedId && severityFocus) {
       setSelectedId(null)
+      setView('list')
       return
     }
     if (severityFocus) {
       setSeverityFocus(null)
       setSelectedId(null)
+      setSidebarOpen(false)
       return
     }
-    setSelectedId(null)
+    if (selectedId) {
+      setSelectedId(null)
+      setSidebarOpen(false)
+      return
+    }
+    setSidebarOpen(false)
   }
 
   function handleViewSaved() {
@@ -266,16 +292,19 @@ function App() {
     setSeverityFocus(null)
     setListMode('saved')
     setView('list')
+    setSidebarOpen(true)
   }
 
   function handleSelectRepo(id: string) {
+    const insets = sidebarFocusInsets()
     setSelectedId(id)
+    setSidebarOpen(true)
     const point = flowerLayout.repos.find((repo) => repo.id === id)
       ?? filteredMapRepos.find((repo) => repo.id === id)
       ?? rawMapRepos.find((repo) => repo.id === id)
     if (point) {
       if (tab !== 'map') setTab('map')
-      focusOnPoint({ x: point.x, y: point.y }, point.importance)
+      focusOnPoint({ x: point.x, y: point.y }, point.importance, insets)
     }
   }
 
@@ -284,6 +313,9 @@ function App() {
     setSelectedId(null)
     setSeverityFocus(null)
     setListMode('browse')
+    // Map starts closed; Findings opens the list sidebar.
+    setSidebarOpen(next === 'findings')
+    setView('list')
   }
 
   let detailPane = null
@@ -371,12 +403,9 @@ function App() {
         selectedId={selectedId}
         onViewSaved={handleViewSaved}
         onSelectRepo={handleSelectRepo}
-        onClearFilter={
-          severityFocus ? () => handlePinnedSeverityChange(null) : undefined
-        }
         countLabel={
           severityFocus || searchQuery.trim()
-            ? `${filteredRepos.length} of ${repos.length} repositories`
+            ? `${filteredRepos.length} ${filteredRepos.length === 1 ? 'repository' : 'repositories'} found`
             : undefined
         }
       />
@@ -406,6 +435,7 @@ function App() {
               pinnedSeverity={severityFocus}
               onSelectRepo={handleSelectRepo}
               onPinnedSeverityChange={handlePinnedSeverityChange}
+              onBackgroundClick={handleBackgroundClick}
               onViewportChange={handleViewportChange}
               onPan={pan}
               onZoomByFactor={zoomByFactor}
@@ -424,7 +454,11 @@ function App() {
           </main>
         )}
       </div>
-      <SidebarPanel width={sidebarWidth} onWidthChange={setSidebarWidth}>
+      <SidebarPanel
+        open={sidebarOpen}
+        width={sidebarWidth}
+        onWidthChange={setSidebarWidth}
+      >
         <div
           className={`sidebar-stack${view === 'detail' ? ' is-detail' : ' is-list'}`}
           aria-live="polite"

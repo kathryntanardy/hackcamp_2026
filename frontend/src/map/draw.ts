@@ -82,6 +82,11 @@ function glyphColor(
   const onFocusedFlower = repo.flowerId === severityFocus.flowerId
   if (!onFocusedFlower) return { fill: base, dim: true, lit: false }
 
+  // Whole-category focus: keep every node on that flower visible.
+  if (severityFocus.tone == null) {
+    return { fill: base, dim: false, lit: false }
+  }
+
   const matches = repo.vulnerabilityTone === severityFocus.tone
   if (matches) return { fill: SEVERITY_HIGHLIGHT, dim: false, lit: true }
   return { fill: base, dim: true, lit: false }

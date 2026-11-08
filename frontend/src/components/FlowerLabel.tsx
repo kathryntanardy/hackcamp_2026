@@ -5,6 +5,8 @@ export type FlowerLabelProps = {
   x: number
   y: number
   activeTone?: VulnSeverity | null
+  /** True when this whole category (not a High/Med/Low band) is the list filter. */
+  categoryActive?: boolean
   onHoverTone?: (tone: VulnSeverity | null) => void
   onSelectTone?: (tone: VulnSeverity) => void
   onFocusFlower?: () => void
@@ -21,6 +23,7 @@ export function FlowerLabel({
   x,
   y,
   activeTone = null,
+  categoryActive = false,
   onHoverTone,
   onSelectTone,
   onFocusFlower,
@@ -36,9 +39,10 @@ export function FlowerLabel({
     >
       <button
         type="button"
-        className="flower-label__title"
+        className={`flower-label__title${categoryActive ? ' is-active' : ''}`}
         style={{ background: palette.chipBg, color: palette.glyph }}
-        aria-label={`Show entire ${title} flower`}
+        aria-label={`Show ${title} repositories`}
+        aria-pressed={categoryActive}
         onClick={() => onFocusFlower?.()}
       >
         <span

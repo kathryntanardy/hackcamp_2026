@@ -13,6 +13,7 @@ const MAX_WIDTH = 800
 
 export type SidebarPanelProps = {
   children: ReactNode
+  open?: boolean
   width?: number
   onWidthChange?: (width: number) => void
 }
@@ -24,6 +25,7 @@ function clampWidth(width: number, viewport = window.innerWidth): number {
 
 export function SidebarPanel({
   children,
+  open = true,
   width: controlledWidth,
   onWidthChange,
 }: SidebarPanelProps) {
@@ -56,6 +58,7 @@ export function SidebarPanel({
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!open) return
     event.preventDefault()
     dragStartX.current = event.clientX
     dragStartWidth.current = width
@@ -76,38 +79,50 @@ export function SidebarPanel({
 
   return (
     <aside
-      className={['sidebar-panel', dragging ? 'is-dragging' : ''].filter(Boolean).join(' ')}
-      style={{ ['--sidebar-panel-width' as string]: `${width}px` }}
+      className={[
+        'sidebar-panel',
+        open ? 'is-open' : 'is-closed',
+        dragging ? 'is-dragging' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={{
+        ['--sidebar-panel-width' as string]: `${width}px`,
+        ['--sidebar-panel-open-width' as string]: `${width}px`,
+      }}
+      aria-hidden={!open}
     >
-      <div
-        className="sidebar-panel__handle"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        aria-valuenow={width}
-        aria-valuemin={MIN_WIDTH}
-        aria-valuemax={MAX_WIDTH}
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') {
-            event.preventDefault()
-            setWidth(width + 24)
-          } else if (event.key === 'ArrowRight') {
-            event.preventDefault()
-            setWidth(width - 24)
-          } else if (event.key === 'Home') {
-            event.preventDefault()
-            setWidth(MIN_WIDTH)
-          } else if (event.key === 'End') {
-            event.preventDefault()
-            setWidth(MAX_WIDTH)
-          }
-        }}
-      />
+      {open ? (
+        <div
+          className="sidebar-panel__handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuenow={width}
+          aria-valuemin={MIN_WIDTH}
+          aria-valuemax={MAX_WIDTH}
+          tabIndex={0}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault()
+              setWidth(width + 24)
+            } else if (event.key === 'ArrowRight') {
+              event.preventDefault()
+              setWidth(width - 24)
+            } else if (event.key === 'Home') {
+              event.preventDefault()
+              setWidth(MIN_WIDTH)
+            } else if (event.key === 'End') {
+              event.preventDefault()
+              setWidth(MAX_WIDTH)
+            }
+          }}
+        />
+      ) : null}
       <div className="sidebar-panel__inner">{children}</div>
     </aside>
   )

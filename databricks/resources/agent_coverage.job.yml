@@ -1,0 +1,223 @@
+resources:
+  jobs:
+    agent_coverage:
+      name: hackcamp-agent-coverage-500
+      description: Investigate up to 500 additional eligible repositories in saved batches of at most 50.
+      max_concurrent_runs: 1
+      timeout_seconds: 21600
+      parameters:
+        - name: coverage_target
+          default: "500"
+        - name: model_endpoint
+          default: databricks-meta-llama-3-3-70b-instruct
+        - name: max_tool_calls
+          default: "8"
+        - name: repo_timeout_sec
+          default: "180"
+        - name: experiment_path
+          default: /Users/${workspace.current_user.userName}/hackcamp-agent
+      tasks:
+        - task_key: prepare_trace_steps
+          sql_task:
+            file:
+              path: ../src/setup/create_trace_steps.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+        - task_key: prepare_coverage
+          depends_on:
+            - task_key: prepare_trace_steps
+          notebook_task:
+            notebook_path: ../src/agent/prepare_coverage.py
+            source: WORKSPACE
+            base_parameters:
+              coverage_id: "{{job.run_id}}"
+              coverage_target: "{{job.parameters.coverage_target}}"
+          environment_key: agent_env
+        - task_key: batch_01
+          depends_on:
+            - task_key: prepare_coverage
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_01_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_02
+          depends_on:
+            - task_key: batch_01
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_02_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_03
+          depends_on:
+            - task_key: batch_02
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_03_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_04
+          depends_on:
+            - task_key: batch_03
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_04_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_05
+          depends_on:
+            - task_key: batch_04
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_05_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_06
+          depends_on:
+            - task_key: batch_05
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_06_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_07
+          depends_on:
+            - task_key: batch_06
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_07_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_08
+          depends_on:
+            - task_key: batch_07
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_08_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_09
+          depends_on:
+            - task_key: batch_08
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_09_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: batch_10
+          depends_on:
+            - task_key: batch_09
+          max_retries: 0
+          timeout_seconds: 7200
+          notebook_task:
+            notebook_path: ../src/agent/run_investigation.py
+            source: WORKSPACE
+            base_parameters:
+              budget_n: "{{tasks.prepare_coverage.values.batch_10_budget}}"
+              uninvestigated_only: "true"
+              coverage_id: "{{job.run_id}}"
+              model_endpoint: "{{job.parameters.model_endpoint}}"
+              max_tool_calls: "{{job.parameters.max_tool_calls}}"
+              repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"
+              experiment_path: "{{job.parameters.experiment_path}}"
+          environment_key: agent_env
+        - task_key: verify_coverage
+          depends_on:
+            - task_key: batch_10
+          notebook_task:
+            notebook_path: ../src/agent/verify_coverage.py
+            source: WORKSPACE
+            base_parameters:
+              coverage_id: "{{job.run_id}}"
+          environment_key: agent_env
+      environments:
+        - environment_key: agent_env
+          spec:
+            environment_version: "4"
+            dependencies:
+              - "mlflow[databricks]>=3.1.0"
+              - "openai>=1.40.0"
+              - "pydantic>=2.0"
+              - "databricks-sdk>=0.36.0"

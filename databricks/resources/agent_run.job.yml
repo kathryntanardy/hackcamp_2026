@@ -6,6 +6,8 @@ resources:
       parameters:
         - name: budget_n
           default: "10"
+        - name: uninvestigated_only
+          default: "false"
         - name: model_endpoint
           default: databricks-meta-llama-3-3-70b-instruct
         - name: max_tool_calls
@@ -29,6 +31,7 @@ resources:
             source: WORKSPACE
             base_parameters:
               budget_n: "{{job.parameters.budget_n}}"
+              uninvestigated_only: "{{job.parameters.uninvestigated_only}}"
               model_endpoint: "{{job.parameters.model_endpoint}}"
               max_tool_calls: "{{job.parameters.max_tool_calls}}"
               repo_timeout_sec: "{{job.parameters.repo_timeout_sec}}"

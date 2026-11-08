@@ -42,6 +42,8 @@ dbutils.widgets.text("model_endpoint", "databricks-meta-llama-3-3-70b-instruct")
 dbutils.widgets.text("max_tool_calls", "8")
 dbutils.widgets.text("repo_timeout_sec", "180")
 dbutils.widgets.text("experiment_path", "")
+dbutils.widgets.text("uninvestigated_only", "false")
+dbutils.widgets.text("coverage_id", "")
 
 BUDGET_N = int(dbutils.widgets.get("budget_n"))
 MODEL = dbutils.widgets.get("model_endpoint")
@@ -49,6 +51,15 @@ MAX_TOOL_CALLS = int(dbutils.widgets.get("max_tool_calls"))
 REPO_TIMEOUT_SEC = int(dbutils.widgets.get("repo_timeout_sec"))
 EXPERIMENT_PATH = dbutils.widgets.get("experiment_path").strip() or f"/Users/{WorkspaceClient().current_user.me().user_name}/hackcamp-agent"
 RUN_ID = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + uuid.uuid4().hex[:8]
+UNINVESTIGATED_ONLY = dbutils.widgets.get("uninvestigated_only").lower() == "true"
+COVERAGE_ID = dbutils.widgets.get("coverage_id").strip()
+if BUDGET_N == 0 and COVERAGE_ID and UNINVESTIGATED_ONLY:
+    assert COVERAGE_ID.isdigit()
+    dbutils.notebook.exit("Coverage target already filled; this batch has no remaining work.")
+if COVERAGE_ID:
+    assert re.fullmatch(r"[0-9]+", COVERAGE_ID), "coverage_id must be the numeric parent job run ID"
+    assert UNINVESTIGATED_ONLY, "Coverage runs must select uninvestigated repositories"
+    RUN_ID = f"coverage-{COVERAGE_ID}-{RUN_ID}"
 
 print(
     f"run_id={RUN_ID} model={MODEL} budget_n={BUDGET_N} "
@@ -58,6 +69,13 @@ print(
 # COMMAND ----------
 
 # MAGIC %run ./agent_core
+
+# COMMAND ----------
+
+import os
+import sys
+sys.path.insert(0, os.getcwd())
+from investigation_coverage import triage_sql
 
 # COMMAND ----------
 
@@ -82,30 +100,13 @@ parked = ignored_gold.union(prev_ignored).distinct()
 parked_n = parked.count()
 print(f"triage: skipping {parked_n} ignored/deprecated repo(s)")
 
-candidates = (
-    spark.table("hackcamp.gold.repo_health")
-    .filter(F.col("status") != "ignored")
-    .join(parked, on="repo_id", how="left_anti")
-    .withColumn(
-        "priority",
-        F.col("importance")
-        * (F.lit(100.0) - F.coalesce(F.col("health_score"), F.lit(50.0))),
-    )
-    .orderBy(F.col("priority").desc())
-    .limit(BUDGET_N)
-    .select(
-        "repo_id",
-        "language",
-        "health_score",
-        "status",
-        "importance",
-        "priority",
-        "days_since_release",
-        "commit_trend_pct",
-    )
-)
+candidates = spark.sql(triage_sql(BUDGET_N, UNINVESTIGATED_ONLY))
 
 triage_rows = candidates.collect()
+if COVERAGE_ID:
+    assert len(triage_rows) == BUDGET_N, "Not enough uninvestigated repositories to fill this coverage batch"
+    dbutils.fs.put(f"/Volumes/hackcamp/raw/github/coverage/{COVERAGE_ID}/selection_{RUN_ID}.json",
+                   json.dumps([r.asDict() for r in triage_rows], default=str), overwrite=True)
 triage = []
 for r in triage_rows:
     reason = (

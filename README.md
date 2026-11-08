@@ -100,6 +100,43 @@ abstentions and wrong risk bins. See [the rerun report](.docs/TICKET14_REDO_RUN.
 
 See [PRD.md](PRD.md) for the product requirements.
 
+## Expand production agent coverage
+
+`agent_coverage` investigates **500 additional eligible repositories** in ten
+sequential batches of 50, skipping repositories with any saved finding and
+parking gold/prior ignored repositories. It uses the current model and tools;
+normal `agent_run` retains its existing revisit/memory behavior by default.
+
+```sh
+cd databricks
+databricks bundle run agent_coverage -t dev --profile school --no-wait
+```
+
+To process the remaining eligible repositories (up to 500), use
+`--params coverage_target=remaining`. Preparation computes the exact count and
+batch budgets; a partial final batch is supported and empty batches exit without
+calling the model. The final verifier uses the captured target rather than a
+fixed 500. See [the remaining-coverage run](.docs/COVERAGE_REMAINING_RUN.md).
+
+Each batch saves production findings and app-readable trace exports. A failed
+later task leaves completed batches available; use the Databricks run's repair
+action to resume failed tasks rather than starting another 500-repo run.
+The final verifier requires exactly 500 unique repositories absent from the
+starting findings snapshot and checks all saved finding-to-trace links. It reports
+inconclusive outcomes explicitly; completing a batch is not a model-quality score.
+
+Run evidence is saved under `/Volumes/hackcamp/raw/github/coverage/<job-run-id>/`.
+Findings use IDs beginning `coverage-<job-run-id>-`. Monitor saved progress with:
+
+```sql
+SELECT count(*) AS findings, count(DISTINCT lower(repo_id)) AS repositories
+FROM hackcamp.agent.findings
+WHERE startswith(run_id, 'coverage-REPLACE_WITH_JOB_RUN_ID-');
+```
+
+This is an on-demand job with no schedule. It reuses the frozen corpus and does
+not rerun scraping or pipeline refreshes. See [the initial 500-repo run](.docs/COVERAGE500_RUN.md).
+
 ## Scheduled autonomy (ticket #15)
 
 Lakeflow Job `hackcamp-scheduled-autonomy` chains `repo_health` (bronze→silver→gold)

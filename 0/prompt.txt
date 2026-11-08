@@ -1,0 +1,8 @@
+<bash-input>git push</bash-input><bash-stdout>[entire] Pushing 1 checkpoint ref(s) to origin..... done
+To github.com:kathryntanardy/hackcamp_2026.git
+ ! [rejected]        main -&gt; main (non-fast-forward)
+error: failed to push some refs to 'github.com:kathryntanardy/hackcamp_2026.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.</bash-stdout><bash-stderr></bash-stderr>

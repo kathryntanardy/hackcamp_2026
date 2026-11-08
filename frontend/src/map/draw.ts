@@ -1,5 +1,5 @@
 import { worldToScreen } from './camera'
-import { drawFlowerBloom } from './flowerBloom'
+import { drawFlowerBloom, drawFlowerBranches } from './flowerBloom'
 import {
   FLOWER_PALETTE,
   SEVERITY_GLYPH,
@@ -30,13 +30,13 @@ export function worldGlyphSize(importance: number): number {
   return 2.6 + Math.min(3.4, Math.max(0, importance) * 0.7)
 }
 
-export function xFontSize(importance: number, scale: number, grow = 1): number {
-  const px = worldGlyphSize(importance) * scale * grow
-  return Math.round(Math.min(110, Math.max(14, px)))
+export function xFontSize(importance: number, scale: number, grow = 1, glyphSize?: number): number {
+  const px = (glyphSize ?? worldGlyphSize(importance)) * scale * grow
+  return Math.min(110, Math.max(glyphSize == null ? 4 : 0.75, px))
 }
 
-export function pointRadius(importance: number, scale: number, grow = 1): number {
-  return xFontSize(importance, scale, grow) * 0.55
+export function pointRadius(importance: number, scale: number, grow = 1, glyphSize?: number): number {
+  return xFontSize(importance, scale, grow, glyphSize) * 0.55
 }
 
 function isOnScreen(
@@ -119,7 +119,7 @@ export function drawMap(
   matchIds: ReadonlySet<string> | null = null,
 ): void {
   ctx.clearRect(0, 0, width, height)
-  ctx.fillStyle = '#fafafa'
+  ctx.fillStyle = '#f8f8f8'
   ctx.fillRect(0, 0, width, height)
 
   const hoverRepo = hoveredId ? repos.find((r) => r.id === hoveredId) ?? null : null
@@ -135,27 +135,15 @@ export function drawMap(
     placed.set(repo.id, dispersePoint(repo, focusRepo, amount))
   }
 
-  const flowerHasMatch = (flowerId: string) => {
-    if (!matchIds) return true
-    for (const repo of repos) {
-      if (repo.flowerId === flowerId && matchIds.has(repo.id)) return true
-    }
-    return false
-  }
-
+  const matchingFlowers = matchIds == null ? null : new Set(
+    repos.filter(repo => matchIds.has(repo.id)).map(repo => repo.flowerId),
+  )
+  if (flowers.length > 0) drawFlowerBranches(ctx, camera)
   for (const flower of flowers) {
-    const center = worldToScreen(flower.center, camera)
     const dimOutside =
       (severityFocus != null && severityFocus.flowerId !== flower.id) ||
-      (matchIds != null && !flowerHasMatch(flower.id))
-    drawFlowerBloom(
-      ctx,
-      center,
-      flower.radius,
-      flower.colorIndex,
-      camera.scale,
-      dimOutside ? 0.4 : 1,
-    )
+      (matchingFlowers != null && !matchingFlowers.has(flower.id))
+    drawFlowerBloom(ctx, flower.colorIndex, camera, dimOutside ? 0.4 : 1)
   }
 
   ctx.textAlign = 'center'
@@ -184,7 +172,7 @@ export function drawMap(
     const isHovered = repo.id === hoveredId
     const { fill, dim, lit } = glyphColor(repo, flowers, severityFocus, matchIds)
     const grow = growFactor(isHovered, isSelected, amount) * (lit ? 1.12 : 1)
-    const size = xFontSize(repo.importance, camera.scale, grow)
+    const size = xFontSize(repo.importance, camera.scale, grow, repo.glyphSize)
     if (!isOnScreen(screen, size, width, height)) continue
     visibleCount += 1
     screens.push({ repo, screen, size, grow, fill, dim, lit })
@@ -240,7 +228,7 @@ export function drawMap(
       ctx.shadowBlur = Math.max(4, size * 0.35)
     }
 
-    ctx.fillStyle = fill
+    ctx.fillStyle = camera.scale < 6 && !isHovered && !isSelected && !lit ? '#ffffff' : fill
     ctx.fillText('x', screen.x, screen.y + size * 0.04)
     ctx.restore()
   }
@@ -257,7 +245,7 @@ export function hitTest(
   let bestDist = Infinity
   for (const repo of repos) {
     const screen = worldToScreen({ x: repo.x, y: repo.y }, camera)
-    const radius = pointRadius(repo.importance, camera.scale, 1) + hitSlop
+    const radius = pointRadius(repo.importance, camera.scale, 1, repo.glyphSize) + hitSlop
     const dx = screen.x - screenX
     const dy = screen.y - screenY
     const dist = Math.hypot(dx, dy)

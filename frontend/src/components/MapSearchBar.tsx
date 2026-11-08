@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import chevronDownIcon from '../assets/icons/chevron-down.svg'
-import chevronUpIcon from '../assets/icons/chevron-up.svg'
 import searchIcon from '../assets/icons/search.svg'
 import plusIcon from '../assets/icons/plus.svg'
 import minusIcon from '../assets/icons/minus.svg'
@@ -116,9 +115,9 @@ export function MapSearchBar({
               setMenuOpen((open) => !open)
             }}
           >
-            <span>{buttonLabel}</span>
+            <span className="map-search__category-name">{buttonLabel}</span>
             <img
-              src={menuOpen ? chevronUpIcon : chevronDownIcon}
+              src={chevronDownIcon}
               alt=""
               width={16}
               height={16}

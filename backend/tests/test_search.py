@@ -33,8 +33,9 @@ def test_returns_ranked_ids_above_threshold(fake):
     fake["hits"] = [("psf/requests", 0.9), ("encode/httpx", 0.8), ("noise/repo", 0.2)]
     body = client.get("/api/search", params={"q": "python http clients"}).json()
     assert body == {"query": "python http clients", "repo_ids": ["psf/requests", "encode/httpx"]}
-    # Plain search skips the warehouse post-filter (index is eligible-only).
-    assert fake["sql_calls"] == []
+    # Plain search also re-checks eligibility because the index may be stale.
+    assert len(fake["sql_calls"]) == 1
+    assert json.loads(fake["sql_calls"][0][1]["ids"]) == ["psf/requests", "encode/httpx"]
 
 
 def test_drops_weak_tail_relative_to_best(fake, monkeypatch):

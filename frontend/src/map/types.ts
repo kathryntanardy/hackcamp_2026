@@ -18,6 +18,8 @@ export type MapRepo = {
   vulnerabilityScore: string
   vulnerabilityTone: 'high' | 'medium' | 'low' | 'none'
   vulnBuckets: string[]
+  /** Display size of an x in its flower grid, in map coordinates. */
+  glyphSize?: number
   flowerId?: string
   investigated: boolean
   investigatedInLatestRun: boolean

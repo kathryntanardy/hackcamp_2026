@@ -1,3 +1,4 @@
+import { FLOWER_SCENE } from './map/flowerScene'
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { fetchFindings, type FindingsSort } from './api/findings'
@@ -13,10 +14,7 @@ import {
 } from './components/FindingsView'
 import { FavouritesSidebar } from './components/FavouritesSidebar'
 import { GalaxyMap } from './components/GalaxyMap'
-import {
-  MapSearchBar,
-  type MapSearchScope,
-} from './components/MapSearchBar'
+import { MapSearchBar, type MapSearchScope } from './components/MapSearchBar'
 import {
   RepoListSidebar,
   type RepoListItem,
@@ -72,7 +70,7 @@ function localSearchIds(
     const language = (repo.language || '').toLowerCase()
     const overview = repo.overview.toLowerCase()
     const list = listById.get(repo.id)
-    const category = (list?.category || repo.category || '').toLowerCase()
+    const category = (repo.category || list?.category || '').toLowerCase()
     const description = (list?.description || '').toLowerCase()
     const buckets = repo.vulnBuckets.map((bucket) => bucket.toLowerCase()).join(' ')
     let hit = false
@@ -233,10 +231,9 @@ function App() {
     [rawMapRepos],
   )
 
-  const mapFitPoints = useMemo(() => flowerLayout.flowers.flatMap(flower => {
-    const bounds = flowerWorldBounds(flower)
-    return [{ x: bounds.minX, y: bounds.minY }, { x: bounds.maxX, y: bounds.maxY }]
-  }), [flowerLayout.flowers])
+  const mapFitPoints = useMemo(() => flowerLayout.flowers.length > 0 ? [
+    { x: 0, y: 0 }, { x: FLOWER_SCENE.width, y: FLOWER_SCENE.height },
+  ] : [], [flowerLayout.flowers])
 
   const severityMatchedIds = useMemo(() => {
     if (!severityFocus) return null
@@ -305,13 +302,16 @@ function App() {
 
   useEffect(() => {
     if (flowerLayout.repos.length === 0) return
-    fitToRepos(mapFitPoints, true)
+    fitToRepos(mapFitPoints, true, 0)
   }, [mapFitPoints, fitToRepos])
 
+  const lastWindowSize = useRef({ width: window.innerWidth, height: window.innerHeight })
   const handleViewportChange = useCallback(
     (width: number, height: number) => {
+      const windowChanged = lastWindowSize.current.width !== window.innerWidth || lastWindowSize.current.height !== window.innerHeight
+      lastWindowSize.current = { width: window.innerWidth, height: window.innerHeight }
       setViewportSize(width, height)
-      if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints)
+      if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints, windowChanged, 0)
     },
     [fitToRepos, mapFitPoints, setViewportSize],
   )
@@ -383,7 +383,7 @@ function App() {
       setSearchError(null)
       if (searchAppliedKey.current != null) {
         searchAppliedKey.current = null
-        if (flowerLayout.repos.length > 0) fitToRepos(flowerLayout.repos, true)
+        if (flowerLayout.repos.length > 0) fitToRepos(mapFitPoints, true, 0)
       }
       return
     }
@@ -448,6 +448,7 @@ function App() {
     applySearchHits,
     fitToRepos,
     flowerLayout.repos,
+    mapFitPoints,
     rawMapRepos,
     repos,
     searchQuery,
@@ -529,7 +530,6 @@ function App() {
       if (listMode === 'saved') setListMode('browse')
     }
     const point = flowerLayout.repos.find((repo) => repo.id === id)
-      ?? rawMapRepos.find((repo) => repo.id === id)
     if (point) {
       focusOnPoint({ x: point.x, y: point.y }, point.importance, insets)
     }
@@ -672,6 +672,7 @@ function App() {
             : undefined
         }
         repos={filteredRepos}
+        onViewSaved={handleViewSaved}
         loading={loading}
         error={error}
         selectedId={selectedId}
@@ -692,7 +693,6 @@ function App() {
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(open => !open)}
           onTabChange={handleTabChange}
-          onViewSaved={handleViewSaved}
           findingsActive={findingsActive}
           savedActive={savedActive}
         />

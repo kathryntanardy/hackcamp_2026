@@ -361,10 +361,8 @@ def search(q: str = Query(min_length=1), language: str | None = None, category: 
     ranked = [rid for rid, score in hits if score >= cutoff]
     if not ranked:
         return {"query": q, "repo_ids": []}
-    # Index is synced from an eligible-only source. Skip the warehouse round-trip unless
-    # we need filters Vector Search can't apply (array bucket / investigated flag).
-    if vuln_bucket is None and not investigated_only:
-        return {"query": q, "repo_ids": ranked}
+    # The index can lag behind a new exclusion. Always re-check the latest gold
+    # and finding before returning hits, even when no extra filters are active.
     rows = query(f"""
 WITH {REPO_SCOPE}
 SELECT g.repo_id FROM eligible_gold g LEFT JOIN latest_finding f ON f.repo_id = g.repo_id

@@ -83,7 +83,7 @@ export function useMapCamera() {
   }, [])
 
   const fitToRepos = useCallback(
-    (repos: Pick<MapRepo, 'x' | 'y'>[], force = false) => {
+    (repos: Pick<MapRepo, 'x' | 'y'>[], force = false, padding = 56) => {
       const { width, height } = viewport.current
       if (width <= 1 || height <= 1) return
       const bounds = boundsOf(repos)
@@ -94,7 +94,7 @@ export function useMapCamera() {
       if (!force && fittedKey.current === key) return
       fittedKey.current = key
       stopAnim()
-      setCamera(fitBounds(bounds, width, height))
+      setCamera(fitBounds(bounds, width, height, padding))
     },
     [stopAnim],
   )

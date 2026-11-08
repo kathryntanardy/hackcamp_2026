@@ -1,6 +1,6 @@
 import type { MapCamera, MapRepo, Point, WorldBounds } from './types'
 
-export const MIN_SCALE = 0.35
+export const MIN_SCALE = 0.1
 export const MAX_SCALE = 120
 export const ZOOM_STEP = 1.35
 export const FIT_PADDING = 56

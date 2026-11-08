@@ -4,6 +4,8 @@ export type FlowerLabelProps = {
   flower: FlowerCluster
   x: number
   y: number
+  scale?: number
+  width?: number
   activeTone?: VulnSeverity | null
   /** True when this whole category (not a High/Med/Low band) is the list filter. */
   categoryActive?: boolean
@@ -22,6 +24,8 @@ export function FlowerLabel({
   flower,
   x,
   y,
+  scale = 1,
+  width,
   activeTone = null,
   categoryActive = false,
   onHoverTone,
@@ -34,13 +38,14 @@ export function FlowerLabel({
   return (
     <div
       className="flower-label"
-      style={{ left: x, top: y }}
+      style={{ left: x, top: y, width, transform: `scale(${scale})`, transformOrigin: 'top left' }}
       onPointerLeave={() => onHoverTone?.(null)}
     >
       <button
         type="button"
         className={`flower-label__title${categoryActive ? ' is-active' : ''}`}
-        style={{ background: palette.chipBg, color: palette.glyph }}
+        style={{ color: palette.glyph }}
+        title={title}
         aria-label={`Show ${title} repositories`}
         aria-pressed={categoryActive}
         onClick={() => onFocusFlower?.()}
@@ -50,7 +55,7 @@ export function FlowerLabel({
           style={{ background: palette.glyph }}
           aria-hidden="true"
         />
-        <span className="flower-label__name">{title}</span>
+        <span className="flower-label__name" style={{ background: palette.chipBg }}>{title}</span>
       </button>
       <div className="flower-label__counts" role="group" aria-label={`${title} severity counts`}>
         {TONES.map(({ tone, short, countKey }, index) => {
@@ -65,6 +70,7 @@ export function FlowerLabel({
                 aria-pressed={active}
                 onPointerEnter={() => onHoverTone?.(tone)}
                 onFocus={() => onHoverTone?.(tone)}
+                onBlur={() => onHoverTone?.(null)}
                 onClick={() => onSelectTone?.(tone)}
               >
                 <span className="flower-label__count-num">{count}</span>

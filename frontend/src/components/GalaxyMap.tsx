@@ -1,3 +1,4 @@
+import { FLOWER_SLOTS } from '../map/flowerScene'
 import {
   useEffect,
   useRef,
@@ -284,14 +285,16 @@ export function GalaxyMap({
         draggable={false}
       />
       {flowers.map((flower) => {
-        const screen = worldToScreen(flower.center, camera)
-        const labelY = screen.y + flower.radius * camera.scale + 18
+        const slot = FLOWER_SLOTS[flower.colorIndex]
+        const labelPosition = worldToScreen(slot.label, camera)
         return (
           <FlowerLabel
             key={flower.id}
             flower={flower}
-            x={screen.x}
-            y={labelY}
+            x={labelPosition.x}
+            y={labelPosition.y}
+            scale={Math.min(1, camera.scale)}
+            width={slot.label.width}
             activeTone={
               severityFocus?.flowerId === flower.id ? severityFocus.tone : null
             }

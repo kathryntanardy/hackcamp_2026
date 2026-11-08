@@ -1,95 +1,91 @@
-import bloomUrl from '../assets/flowers/bloom.png'
-import type { Point } from './types'
+import { branchArtwork, flowerArtwork } from './flowerArtwork'
+import { FLOWER_SCENE } from './flowerScene'
+import type { MapCamera } from './types'
 
-/** Figma flower bloom (40:17144) raster size + optical center. */
-const BLOOM_W = 1033
-const BLOOM_H = 771
-const BLOOM_CX = BLOOM_W / 2
-const BLOOM_CY = BLOOM_H / 2
+type Artwork = {
+  src: string
+  matrix: readonly number[]
+  width: number
+  height: number
+  offset: { readonly x: number; readonly y: number } | null
+}
+type Bloom = { image: HTMLCanvasElement; x: number; y: number; width: number; height: number }
+const blooms = new Map<number, Bloom>()
+let branches: HTMLCanvasElement | null = null
+let loading: Promise<void> | null = null
+const RESOLUTION = 2
 
-/** Hue shift from Figma blue (#3991FC) toward each palette glyph. */
-const HUE_SHIFT = [0, 18, 155, 175, 45, 265, 210] as const
-const PALETTE_LEN = HUE_SHIFT.length
-
-let bloomImage: HTMLImageElement | null = null
-let bloomPromise: Promise<HTMLImageElement> | null = null
-const tintCache = new Map<number, HTMLCanvasElement>()
-
-function loadBloom(): Promise<HTMLImageElement> {
-  if (bloomImage?.complete && bloomImage.naturalWidth > 0) {
-    return Promise.resolve(bloomImage)
-  }
-  if (bloomPromise) return bloomPromise
-  bloomPromise = new Promise((resolve, reject) => {
-    const img = new Image()
-    img.decoding = 'async'
-    img.onload = () => {
-      bloomImage = img
-      resolve(img)
-    }
-    img.onerror = () => {
-      bloomPromise = null
-      reject(new Error('Failed to load flower bloom asset'))
-    }
-    img.src = bloomUrl
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = reject
+    image.src = src
   })
-  return bloomPromise
 }
 
-/** Kick off bloom load early so the first paint can use it. */
-export function prefetchFlowerBloom(): void {
-  void loadBloom().catch(() => {})
+function drawAsset(ctx: CanvasRenderingContext2D, item: Artwork, image: HTMLImageElement): void {
+  const [a, b, c, d, x, y] = item.matrix
+  ctx.save()
+  ctx.transform(a, b, c, d, x, y)
+  const offset = item.offset ?? {
+    x: -(image.naturalWidth - item.width) / 2,
+    y: -(image.naturalHeight - item.height) / 2,
+  }
+  // Keep each exported SVG's intrinsic dimensions, including its blur bounds.
+  ctx.drawImage(image, offset.x, offset.y)
+  ctx.restore()
 }
 
-function tintedBloom(colorIndex: number): HTMLCanvasElement | HTMLImageElement | null {
-  const img = bloomImage
-  if (!img?.complete || img.naturalWidth === 0) return null
-
-  const index = ((colorIndex % PALETTE_LEN) + PALETTE_LEN) % PALETTE_LEN
-  if (index === 0) return img
-
-  const cached = tintCache.get(index)
-  if (cached) return cached
-
+function createCanvas(width: number, height: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
-  canvas.width = img.naturalWidth || BLOOM_W
-  canvas.height = img.naturalHeight || BLOOM_H
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return img
-
-  const hue = HUE_SHIFT[index] ?? 0
-  ctx.filter = `hue-rotate(${hue}deg) saturate(1.05)`
-  ctx.drawImage(img, 0, 0)
-  ctx.filter = 'none'
-  tintCache.set(index, canvas)
+  canvas.width = Math.ceil(width * RESOLUTION)
+  canvas.height = Math.ceil(height * RESOLUTION)
   return canvas
 }
 
-/**
- * Draw the Figma soft-petal bloom centered on a flower.
- * World radius maps to the bloom's half-height (soft edges included).
- */
-export function drawFlowerBloom(
-  ctx: CanvasRenderingContext2D,
-  center: Point,
-  radius: number,
-  colorIndex: number,
-  scale: number,
-  alpha = 1,
-): void {
-  const source = tintedBloom(colorIndex)
-  if (!source) {
-    void loadBloom().catch(() => {})
-    return
-  }
+/** Cache the exact exported layers, retaining every Figma affine transform. */
+export function prefetchFlowerBloom(): void {
+  if (loading) return
+  loading = Promise.all([
+    ...flowerArtwork.map(async ({ bounds, petals }, index) => {
+      const images = await Promise.all(petals.map(petal => loadImage(petal.src)))
+      const image = createCanvas(bounds.width, bounds.height)
+      const ctx = image.getContext('2d')
+      if (!ctx) return
+      ctx.scale(RESOLUTION, RESOLUTION)
+      ctx.translate(-bounds.x, -bounds.y)
+      petals.forEach((petal, i) => drawAsset(ctx, petal, images[i]))
+      blooms.set(index, { image, ...bounds })
+    }),
+    (async () => {
+      const images = await Promise.all(branchArtwork.map(branch => loadImage(branch.src)))
+      const image = createCanvas(FLOWER_SCENE.width, FLOWER_SCENE.height)
+      const ctx = image.getContext('2d')
+      if (!ctx) return
+      ctx.scale(RESOLUTION, RESOLUTION)
+      branchArtwork.forEach((branch, i) => drawAsset(ctx, branch, images[i]))
+      branches = image
+    })(),
+  ]).then(() => undefined).catch(() => { loading = null })
+}
 
-  const screenH = radius * scale * 2.55
-  const screenW = screenH * (BLOOM_W / BLOOM_H)
-  const ox = (BLOOM_CX / BLOOM_W) * screenW
-  const oy = (BLOOM_CY / BLOOM_H) * screenH
+export function drawFlowerBranches(ctx: CanvasRenderingContext2D, camera: MapCamera): void {
+  if (!branches) return
+  ctx.save()
+  ctx.translate(camera.offsetX, camera.offsetY)
+  ctx.scale(camera.scale, camera.scale)
+  ctx.drawImage(branches, 0, 0, FLOWER_SCENE.width, FLOWER_SCENE.height)
+  ctx.restore()
+}
 
+export function drawFlowerBloom(ctx: CanvasRenderingContext2D, colorIndex: number, camera: MapCamera, alpha = 1): void {
+  const bloom = blooms.get(colorIndex)
+  if (!bloom) { prefetchFlowerBloom(); return }
   ctx.save()
   ctx.globalAlpha = alpha
-  ctx.drawImage(source, center.x - ox, center.y - oy, screenW, screenH)
+  ctx.translate(camera.offsetX, camera.offsetY)
+  ctx.scale(camera.scale, camera.scale)
+  ctx.drawImage(bloom.image, bloom.x, bloom.y, bloom.width, bloom.height)
   ctx.restore()
 }

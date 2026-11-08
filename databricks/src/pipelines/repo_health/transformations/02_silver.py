@@ -4,6 +4,8 @@ from pyspark import pipelines as dp
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
+from vuln_buckets import BUCKET_OTHER, CWE_TO_BUCKET
+
 
 _PAYLOAD_SCHEMA = """
 name STRING,
@@ -34,6 +36,18 @@ advisories ARRAY<STRUCT<
   published_at: STRING
 >>
 """
+
+
+def _cwe_bucket_sql() -> str:
+    """CASE expression: first mapped CWE in the advisory array → bucket label."""
+    arms = []
+    for cwe, bucket in CWE_TO_BUCKET.items():
+        arms.append(
+            f"WHEN array_contains(transform(coalesce(adv.cwes, array()), "
+            f"x -> regexp_replace(upper(x), '^CWE-?', '')), '{cwe}') "
+            f"THEN '{bucket}'"
+        )
+    return "CASE " + " ".join(arms) + f" ELSE '{BUCKET_OTHER}' END"
 
 
 def _latest_payloads():
@@ -92,9 +106,10 @@ def repos():
 @dp.materialized_view(
     name="hackcamp.silver.repo_advisories",
     comment=(
-        "One row per GitHub repository security advisory (GHSA). "
-        "Empty when advisory_fetch_status=ok and there are none; "
-        "never treat failed fetches as 'no advisories'."
+        "One row per GitHub repository security advisory (GHSA), with F15 "
+        "vuln_bucket from the advisory's CWE IDs. Empty when "
+        "advisory_fetch_status=ok and there are none; never treat failed "
+        "fetches as 'no advisories'."
     ),
     table_properties={"quality": "silver"},
 )
@@ -119,6 +134,7 @@ def repo_advisories():
         F.col("adv.severity").alias("severity"),
         F.col("adv.cvss_score").alias("cvss_score"),
         F.coalesce(F.col("adv.cwes"), F.array().cast("array<string>")).alias("cwes"),
+        F.expr(_cwe_bucket_sql()).alias("vuln_bucket"),
         F.col("adv.summary").alias("summary"),
         F.to_timestamp("adv.published_at").alias("published_at"),
         "pulled_at",

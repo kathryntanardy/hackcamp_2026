@@ -48,7 +48,8 @@ def list_repos() -> list[dict]:
     return query(f"""
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
 SELECT g.repo_id, g.name, g.owner, g.language, g.health_score, g.status,
-  g.importance, g.x, g.y, g.stars, g.is_archived,
+  g.importance, g.x, g.y, g.cat_x, g.cat_y, g.stars, g.is_archived,
+  g.category, g.vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
   f.risk_level, f.changed_since_last,
   f.repo_id IS NOT NULL AS investigated,
   coalesce(f.run_id = (SELECT run_id FROM latest_run), false) AS investigated_in_latest_run,
@@ -63,11 +64,13 @@ def get_repo(repo_id: str) -> dict:
     rows = query(f"""
 WITH {GOLD}
 SELECT g.repo_id, g.name, g.owner, g.language, g.stars, g.dependents, g.is_archived,
-  g.health_score, g.status, g.importance, g.x, g.y, g.scored_at,
+  g.health_score, g.status, g.importance, g.x, g.y, g.cat_x, g.cat_y, g.scored_at,
+  g.category, g.vuln_buckets, g.advisory_count, g.max_severity, g.max_cvss,
   g.days_since_release, g.commit_trend_pct,
   s.pushed_at, s.last_release_at, s.commits_90d, s.commits_prev_90d,
   s.open_issues, s.open_prs, s.contributors,
-  s.maintainer_reply_rate, s.top_contributor_share, sm.summary
+  s.maintainer_reply_rate, s.top_contributor_share, s.advisory_fetch_status,
+  s.description, s.topics, sm.summary
 FROM gold g LEFT JOIN hackcamp.silver.repos s ON s.repo_id = g.repo_id
 LEFT JOIN hackcamp.gold.repo_summaries sm ON sm.repo_id = g.repo_id
 WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
@@ -77,14 +80,25 @@ WHERE g.repo_id = :repo_id""", {"repo_id": repo_id})
     verdicts = [_finding(v) for v in query(f"""
 SELECT {FINDING_COLS} FROM hackcamp.agent.findings f
 WHERE f.repo_id = :repo_id ORDER BY f.investigated_at DESC LIMIT 2""", {"repo_id": repo_id})]
+    advisories = query("""
+SELECT ghsa_id, cve_id, severity, cvss_score, cwes, vuln_bucket, summary, published_at
+FROM hackcamp.silver.repo_advisories
+WHERE repo_id = :repo_id
+ORDER BY published_at DESC NULLS LAST""", {"repo_id": repo_id})
     metric_keys = ["days_since_release", "commit_trend_pct", "pushed_at", "last_release_at",
                    "commits_90d", "commits_prev_90d", "open_issues", "open_prs", "contributors",
                    "maintainer_reply_rate", "top_contributor_share"]
     repo = {k: v for k, v in r.items() if k not in metric_keys}
+    repo["vuln_buckets"] = list(repo["vuln_buckets"]) if repo.get("vuln_buckets") is not None else []
+    repo["topics"] = list(repo["topics"]) if repo.get("topics") is not None else []
     repo["github_url"] = f"https://github.com/{repo_id}"
     repo["metrics"] = {k: r[k] for k in metric_keys}
     repo["verdict"] = verdicts[0] if verdicts else None
     repo["previous_verdict"] = verdicts[1] if len(verdicts) > 1 else None
+    repo["advisories"] = [
+        {**a, "cwes": list(a["cwes"]) if a.get("cwes") is not None else []}
+        for a in advisories
+    ]
     return repo
 
 
@@ -92,13 +106,19 @@ WHERE f.repo_id = :repo_id ORDER BY f.investigated_at DESC LIMIT 2""", {"repo_id
 def list_findings(language: str | None = None, risk: str | None = None) -> list[dict]:
     rows = query(f"""
 WITH {GOLD}, {LATEST_FINDING}, {LATEST_RUN}
-SELECT f.repo_id, g.name, g.language, g.importance, g.health_score, {FINDING_COLS},
+SELECT f.repo_id, g.name, g.language, g.importance, g.health_score,
+  g.category, g.vuln_buckets, {FINDING_COLS},
   f.run_id = (SELECT run_id FROM latest_run) AS in_latest_run
 FROM latest_finding f LEFT JOIN gold g ON g.repo_id = f.repo_id
 WHERE (:language IS NULL OR g.language = :language)
   AND (:risk IS NULL OR f.risk_level = :risk)
 ORDER BY {SEVERITY}, g.importance DESC""", {"language": language, "risk": risk})
-    return [_finding(r) for r in rows]
+    out = []
+    for r in rows:
+        row = _finding(r)
+        row["vuln_buckets"] = list(row["vuln_buckets"]) if row.get("vuln_buckets") is not None else []
+        out.append(row)
+    return out
 
 
 @app.get("/api/findings/{repo_id:path}/trace")

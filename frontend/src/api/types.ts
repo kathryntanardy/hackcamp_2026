@@ -1,3 +1,51 @@
+export type FindingListEntry = {
+  repo_id: string
+  name: string | null
+  language: string | null
+  importance: number | null
+  health_score: number | null
+  category: string | null
+  vuln_buckets: string[]
+  run_id: string
+  risk_level: string
+  confidence: number
+  headline: string
+  explanation: string
+  evidence: unknown[]
+  changed_since_last: string | null
+  alternatives: string[]
+  tool_calls: number
+  trace_id: string | null
+  investigated_at: string
+  in_latest_run: boolean | null
+}
+
+export type RepoListEntry = {
+  repo_id: string
+  name: string
+  owner: string
+  language: string | null
+  health_score: number | null
+  status: string | null
+  importance: number | null
+  stars: number | null
+  is_archived: boolean | null
+  category: string | null
+  vuln_buckets: string[]
+  advisory_count: number | null
+  max_severity: string | null
+  max_cvss: number | null
+  risk_level: string | null
+  changed_since_last: string | null
+  investigated: boolean | null
+  investigated_in_latest_run: boolean | null
+  summary: string | null
+  x: number | null
+  y: number | null
+  cat_x: number | null
+  cat_y: number | null
+}
+
 export type EvidenceItem = {
   signal: string
   tool: string

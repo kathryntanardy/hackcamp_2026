@@ -1,6 +1,6 @@
 {
-  "name": "Open-Source Corpus Explorer",
-  "short_name": "Corpus Explorer",
+  "name": "Open Commitment Issues",
+  "short_name": "Open Commitment",
   "description": "Galaxy map of open-source maintainer risk with Databricks agent findings and GitHub advisories.",
   "start_url": "/",
   "display": "standalone",

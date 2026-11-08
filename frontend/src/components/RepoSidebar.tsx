@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import languageIcon from '../assets/icons/language.svg'
 import starIcon from '../assets/icons/star.svg'
 import starOutlineIcon from '../assets/icons/star-outline.svg'
-import starFilledIcon from '../assets/icons/star-filled.svg'
 import arrowUpRightIcon from '../assets/icons/arrow-up-right.svg'
 import gitCommitIcon from '../assets/icons/git-commit.svg'
 import chevronUpIcon from '../assets/icons/chevron-up.svg'
 import { fetchTrace, type TracePayload } from '../api/trace'
+import type { FavouriteList } from '../favourites/types'
+import { FavouriteStarButton } from './FavouriteStarButton'
 
 export type RepoSidebarTab = 'overview' | 'agent'
 
@@ -77,6 +78,15 @@ export type RepoSidebarProps = {
   advisoryFetchStatus?: string | null
   maxSeverity?: string | null
   maxCvss?: number | null
+  onBack?: () => void
+  backLabel?: string
+  onViewSaved?: () => void
+  favouriteLists?: FavouriteList[]
+  isFavourite?: boolean
+  favouriteListsForRepo?: FavouriteList[]
+  onToggleFavourite?: (repoId: string) => void
+  onToggleInList?: (listId: string, repoId: string) => void
+  onCreateFavouriteList?: (name: string) => string
 }
 
 function statusClass(status: string | null | undefined): string {
@@ -134,6 +144,15 @@ export function RepoSidebar({
   advisoriesLabel = 'No GitHub advisories',
   maxSeverity = null,
   maxCvss = null,
+  onBack,
+  backLabel = '← Repositories',
+  onViewSaved,
+  favouriteLists = [],
+  isFavourite = false,
+  favouriteListsForRepo = [],
+  onToggleFavourite,
+  onToggleInList,
+  onCreateFavouriteList,
 }: RepoSidebarProps) {
   const [tab, setTab] = useState<RepoSidebarTab>('overview')
   const [evidenceOpen, setEvidenceOpen] = useState(true)
@@ -168,6 +187,11 @@ export function RepoSidebar({
     <aside className="repo-sidebar" aria-label="Repository details">
       <header className="repo-sidebar__top">
         <div className="repo-sidebar__meta">
+          {onBack ? (
+            <button type="button" className="repo-sidebar__back" onClick={onBack}>
+              {backLabel}
+            </button>
+          ) : null}
           <span className="repo-sidebar__meta-item">
             <img src={languageIcon} alt="" width={17} height={17} />
             {language}
@@ -186,7 +210,7 @@ export function RepoSidebar({
             </>
           ) : null}
         </div>
-        <button type="button" className="repo-sidebar__saved">
+        <button type="button" className="repo-sidebar__saved" onClick={onViewSaved}>
           <img src={starOutlineIcon} alt="" width={15} height={14} />
           View Saved
         </button>
@@ -195,9 +219,21 @@ export function RepoSidebar({
       <div className="repo-sidebar__title-block">
         <div className="repo-sidebar__title-row">
           <div className="repo-sidebar__title-left">
-            <button type="button" className="repo-sidebar__star-btn" aria-label="Save repository">
-              <img src={starFilledIcon} alt="" width={15} height={14} />
-            </button>
+            {repoId && repoId !== '—' && onToggleFavourite && onToggleInList && onCreateFavouriteList ? (
+              <FavouriteStarButton
+                repoId={repoId}
+                saved={isFavourite}
+                lists={favouriteLists}
+                listsForRepo={favouriteListsForRepo}
+                onToggleFavourite={onToggleFavourite}
+                onToggleInList={onToggleInList}
+                onCreateList={onCreateFavouriteList}
+              />
+            ) : (
+              <span className="repo-sidebar__star-btn" aria-hidden="true">
+                <img src={starOutlineIcon} alt="" width={15} height={14} />
+              </span>
+            )}
             <div className="repo-sidebar__name-wrap">
               <h1 className="repo-sidebar__name">{name}</h1>
               <a className="repo-sidebar__ext-link" href={githubUrl} target="_blank" rel="noreferrer" aria-label="Open on GitHub">

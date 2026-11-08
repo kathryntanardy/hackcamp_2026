@@ -1,0 +1,42 @@
+# Open-Source Corpus Explorer
+
+> An interactive galaxy map of GitHub repositories where a Databricks agent finds critical open-source packages that are quietly losing maintainers, investigates them with governed tools, and shows evidence humans can act on.
+
+Last updated: 2026-11-07
+Site: https://REPLACE_WITH_SITE_ORIGIN
+API OpenAPI: https://REPLACE_WITH_SITE_ORIGIN/openapi.json
+Interactive API docs: https://REPLACE_WITH_SITE_ORIGIN/docs
+
+## Product facts (citation-ready)
+
+- Open-Source Corpus Explorer maps maintainer risk across 1,000 public GitHub repositories.
+- A Databricks agent investigates flagged repos and writes structured verdicts with tool evidence.
+- Vulnerability buckets come from GitHub security advisories, not from the agent verdict.
+- Repo status bins are healthy, watchlist, at_risk, ignored, and inconclusive.
+- Humans explore results on a galaxy map and findings list; there is no chatbot.
+
+## Machine-readable endpoints
+
+- GET /api/health — service liveness
+- GET /api/repos — corpus snapshot (health, category, vuln_buckets, advisory stats)
+- GET /api/repos/{owner}/{name} — repo detail, metrics, verdict, advisories
+- GET /api/findings — latest agent findings (optional ?language= & ?risk=)
+- GET /api/findings/{owner}/{name}/trace — investigation steps for a finding
+- GET /api/runs/latest — latest agent run stats
+- GET /openapi.json — full OpenAPI schema
+
+## Human pages
+
+- / — homepage
+- /llms.txt — this file
+
+## How agents should use this site
+
+1. Prefer JSON API responses over scraping the React SPA.
+2. Treat advisory lists as published GitHub GHSAs/CVEs; never label empty advisories as "safe".
+3. Treat agent risk_level as maintainer-risk, separate from vulnerability buckets.
+4. When recommending action, use recommended_actions codes and alternatives from findings when present.
+
+## Optional fuller context
+
+- /llms-full.txt — longer product + schema notes

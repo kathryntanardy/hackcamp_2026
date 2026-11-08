@@ -408,18 +408,29 @@ def call_model(messages, *, phase="decide", temperature=0.2, tools=None, timeout
 
 
 def load_previous_findings(repo_ids: list[str]) -> dict[str, dict]:
-    """Latest persisted finding per repo, read before this run writes anything."""
-    if not repo_ids:
-        return {}
-    rows = (
-        spark.table("hackcamp.agent.findings")
-        .filter(F.col("repo_id").isin(repo_ids))
-        .selectExpr("*", "row_number() OVER (PARTITION BY repo_id ORDER BY investigated_at DESC) AS rn")
-        .filter("rn = 1")
-        .select("repo_id", "run_id", "risk_level", "confidence", "headline", "investigated_at")
-        .collect()
-    )
-    return {r.repo_id: r.asDict() for r in rows}
+    """Latest prior finding per repo via UC `get_previous_finding` (before this run writes)."""
+    out: dict[str, dict] = {}
+    for repo_id in repo_ids:
+        try:
+            safe = _safe_repo(repo_id)
+            raw = spark.sql(
+                f"SELECT hackcamp.tools.get_previous_finding('{safe}') AS r"
+            ).collect()[0].r
+            payload = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except Exception as exc:
+            print(f"get_previous_finding failed for {repo_id}: {type(exc).__name__}: {exc}")
+            continue
+        if not payload.get("found"):
+            continue
+        out[repo_id] = {
+            "repo_id": payload.get("repo_id", repo_id),
+            "run_id": payload.get("run_id"),
+            "risk_level": payload.get("risk_level"),
+            "confidence": payload.get("confidence"),
+            "headline": payload.get("headline"),
+            "investigated_at": payload.get("investigated_at"),
+        }
+    return out
 
 
 def investigate_repo(repo_id: str, triage_reason: str, previous: dict | None = None,

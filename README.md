@@ -33,7 +33,23 @@ npm run dev
 ```
 
 Open http://localhost:5173. The starter page displays the backend connection status.
-Vite proxies `/api` requests to `http://127.0.0.1:8000`, so no local CORS configuration is needed.
+Vite proxies `/api`, `/openapi.json`, `/docs`, and `/redoc` to `http://127.0.0.1:8000`, so no local CORS configuration is needed.
+
+### SEO / AEO boilerplate
+
+Static discovery files live in `frontend/public/` and ship with the Vite build:
+
+| Path | Purpose |
+| --- | --- |
+| `/robots.txt` | Crawler allow list + sitemap pointer |
+| `/sitemap.xml` | Core URLs for search engines |
+| `/llms.txt` | Short machine-readable product + API map for AI agents |
+| `/llms-full.txt` | Longer agent context |
+| `/site.webmanifest` | PWA/manifest metadata |
+
+The homepage is plain HTML in `frontend/index.html` (no CSS). React under `frontend/src/` is still available for the map later.
+
+Before production, replace every `https://REPLACE_WITH_SITE_ORIGIN` placeholder in those files and in `frontend/index.html` with your real deployed origin (for example your Databricks Apps URL). Keep `lastmod` / "Last updated" dates fresh when claims change.
 
 ## Production build
 

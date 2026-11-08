@@ -1,0 +1,10 @@
+{
+  "name": "Open-Source Corpus Explorer",
+  "short_name": "Corpus Explorer",
+  "description": "Galaxy map of open-source maintainer risk with Databricks agent findings and GitHub advisories.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "lang": "en"
+}

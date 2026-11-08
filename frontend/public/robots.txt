@@ -1,0 +1,42 @@
+# Open-Source Corpus Explorer — crawler policy
+# Replace SITE_ORIGIN in sitemap.xml / llms.txt before production deploy.
+
+User-agent: *
+Allow: /
+Allow: /llms.txt
+Allow: /sitemap.xml
+Allow: /api/
+Disallow: /src/
+
+# Common AI crawlers (explicit allow)
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+Sitemap: https://REPLACE_WITH_SITE_ORIGIN/sitemap.xml

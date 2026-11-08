@@ -19,7 +19,7 @@ export type ScanFinding = {
 
 export type SecurityScan = {
   repo_id: string
-  mode: 'advisories' | 'code'
+  mode: 'advisories+code' | 'code' | 'advisories' // 'advisories' = older scan, no code review
   commit_sha: string | null
   model: string
   files: string[]

@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS hackcamp.agent.eval_labels (
 COMMENT 'Ground-truth labels for agent evaluation';
 
 -- On-demand Gemini security scans from the app (POST /api/scans/{repo_id}).
--- mode = advisories (fixes for published advisories) | code (review of risky files).
+-- mode = advisories+code (advisory fixes plus a code review) | code (code review only);
+-- older rows may say advisories (advisory fixes only).
 -- files/advisory_ids/findings are JSON.
 CREATE TABLE IF NOT EXISTS hackcamp.agent.security_scans (
   repo_id STRING NOT NULL,

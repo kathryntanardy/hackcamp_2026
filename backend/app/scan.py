@@ -1,9 +1,12 @@
-"""On-demand Gemini security scan. Two modes:
-- "advisories": the repo has published GitHub security advisories, so Gemini explains how to
-  fix or work around each one, using the advisory details plus the most relevant source files.
-- "code": no advisories, so Gemini reviews the riskiest-looking files for unreported vulnerabilities."""
+"""On-demand Gemini security scan. Every scan reviews the riskiest-looking source files for
+unreported vulnerabilities (with patches for contributors). If the repo also has published GitHub
+security advisories, a second Gemini call runs in parallel and explains how to fix or work around
+each one. mode = "advisories+code" when there were advisories, else "code". (Rows stored
+before the code review ran on every scan have mode "advisories".)"""
 
 import base64
+import logging
+from concurrent.futures import ThreadPoolExecutor
 import functools
 import json
 import os
@@ -16,12 +19,13 @@ GITHUB_API = "https://api.github.com"
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-3.6-flash"
 
-MAX_FILES = 15
+MAX_FILES = 40  # code review
+MAX_ADVISORY_FILES = 15  # advisory call: the advisory-hinted files rank first
 MAX_ADVISORIES = 10
 MAX_ADVISORY_DESC = 3000
 MAX_OUTPUT_TOKENS = 16384
 MAX_FILE_BYTES = 60_000
-MAX_TOTAL_CHARS = 400_000
+MAX_TOTAL_CHARS = 800_000
 RETRY_DELAY = 5  # seconds; grows per attempt
 
 SOURCE_EXT = {
@@ -388,26 +392,51 @@ def attach_advisories(findings: list[dict], advisories: list[dict]) -> list[dict
     return out
 
 
+log = logging.getLogger(__name__)
+
+
+def _gemini(prompt: str, model: str, schema: dict = RESPONSE_SCHEMA) -> dict:
+    with httpx.Client() as client:  # one client per thread
+        return ask_gemini(prompt, client, model, schema)
+
+
 def scan_repo(repo_id: str) -> dict:
-    """Advisory fixes if the repo has published advisories, otherwise a code review."""
+    """Code review of the riskiest files, plus advisory fixes (in parallel) if the repo has any.
+    Advisory findings carry a ghsa_id; code-review findings don't."""
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
     with httpx.Client(headers=_github_headers(), timeout=30, follow_redirects=True) as gh:
         advisories = fetch_advisories(repo_id, gh)
         sha, files = fetch_files(repo_id, gh, advisory_hints(advisories))
         report = report_url(repo_id, gh)
     base = {"repo_id": repo_id, "commit_sha": sha, "model": model, "files": list(files),
-            "mode": "advisories" if advisories else "code",
+            "mode": "advisories+code" if advisories else "code",
             "advisory_ids": [a["ghsa_id"] for a in advisories]}
-    if advisories:
-        with httpx.Client() as client:
-            result = ask_gemini(build_advisory_prompt(repo_id, advisories, files), client, model,
-                                ADVISORY_RESPONSE_SCHEMA)
-        findings = attach_advisories(result.get("findings", []), advisories)
-        return {**base, "summary": result.get("summary", ""),
-                "findings": [{**f, "report_url": report} for f in findings]}
-    if not files:
+    if not advisories and not files:
         return {**base, "summary": "No security-relevant source files found to scan.", "findings": []}
-    with httpx.Client() as client:
-        result = ask_gemini(build_prompt(repo_id, files), client, model)
-    return {**base, "summary": result.get("summary", ""),
-            "findings": [{**f, "report_url": report} for f in result.get("findings", [])]}
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        code_job = pool.submit(_gemini, build_prompt(repo_id, files), model) if files else None
+        adv_files = dict(list(files.items())[:MAX_ADVISORY_FILES])  # keeps token use (and 429s) down
+        adv_job = (pool.submit(_gemini, build_advisory_prompt(repo_id, advisories, adv_files), model,
+                               ADVISORY_RESPONSE_SCHEMA) if advisories else None)
+        adv = adv_job.result() if adv_job else None
+        try:
+            code = code_job.result() if code_job else None
+        except Exception as e:
+            if not adv:
+                raise
+            # Advisory fixes are the main answer here; don't lose them to a flaky second call.
+            log.warning("code review failed for %s: %s", repo_id, e)
+            code = {"summary": "The code review part of this scan failed; rescan to retry.",
+                    "findings": []}
+
+    findings, summaries = [], []
+    if adv:
+        findings += attach_advisories(adv.get("findings", []), advisories)
+        summaries.append(adv.get("summary", ""))
+    if code:
+        # A code finding can't claim an advisory id; that would hide it in the advisory list.
+        findings += [{k: v for k, v in f.items() if k != "ghsa_id"} for f in code.get("findings", [])]
+        summaries.append(code.get("summary", ""))
+    return {**base, "summary": " ".join(x.strip() for x in summaries if x and x.strip()),
+            "findings": [{**f, "report_url": report} for f in findings]}

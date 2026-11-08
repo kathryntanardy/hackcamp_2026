@@ -295,7 +295,8 @@ FROM hackcamp.agent.runs ORDER BY started_at DESC LIMIT 1""")
     return rows[0]
 
 
-# Replaces agent.code_scans (code-only). mode = "advisories" | "code"; list columns are JSON.
+# Replaces agent.code_scans (code-only). mode = "advisories+code" | "code" (older rows: "advisories",
+# advisory fixes only); list columns are JSON.
 SCANS_TABLE = "hackcamp.agent.security_scans"
 SCANS_DDL = f"""CREATE TABLE IF NOT EXISTS {SCANS_TABLE} (
   repo_id STRING NOT NULL, mode STRING, commit_sha STRING, model STRING, files STRING,

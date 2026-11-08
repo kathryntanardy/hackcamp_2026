@@ -123,14 +123,14 @@ export function SecurityScanPanel({ repoId }: { repoId: string }) {
     }
   }, [repoId, fresh])
 
-  const isAdvisories = scan?.mode === 'advisories'
+  const advisoryFindings = scan?.findings.filter((f) => f.ghsa_id) ?? []
+  const codeFindings = scan?.findings.filter((f) => !f.ghsa_id) ?? []
+  const codeReviewed = scan ? scan.mode !== 'advisories' : false
 
   return (
     <section className="section" aria-labelledby="security-heading">
       <div className="section-heading-row">
-        <h2 id="security-heading" className="section-heading">
-          {scan ? (isAdvisories ? 'Advisory fixes' : 'Code scan') : 'Security scan'}
-        </h2>
+        <h2 id="security-heading" className="section-heading">Security scan</h2>
         {scan && !loading ? (
           <button type="button" className="section-meta" onClick={() => setFresh((n) => n + 1)}>
             Rescan
@@ -140,7 +140,7 @@ export function SecurityScanPanel({ repoId }: { repoId: string }) {
 
       {loading ? (
         <p className="empty-note">
-          Gemini is checking this repo's GitHub advisories and source code… this takes 20–60 seconds.
+          Gemini is checking this repo's GitHub advisories and source code… this takes 30–60 seconds.
         </p>
       ) : null}
       {error ? <p className="empty-note">Scan failed: {error}</p> : null}
@@ -148,24 +148,45 @@ export function SecurityScanPanel({ repoId }: { repoId: string }) {
       {scan && !loading ? (
         <>
           <p className="section-subline">
-            {isAdvisories
+            {scan.advisory_ids.length > 0
               ? `${scan.advisory_ids.length} published advisor${scan.advisory_ids.length === 1 ? 'y' : 'ies'}`
-              : `No published advisories · reviewed ${scan.files.length} source files`}
+              : 'No published advisories'}
+            {codeReviewed ? ` · reviewed ${scan.files.length} source files` : ''}
             {` · ${scan.model} · ${new Date(scan.scanned_at).toLocaleDateString()}`}
             {scan.commit_sha ? ` · ${scan.commit_sha.slice(0, 7)}` : ''}
           </p>
           {scan.summary ? <p className="repo-sidebar__summary">{scan.summary}</p> : null}
-          {scan.findings.length > 0 ? (
-            <ul className="advisory-list">
-              {scan.findings.map((f, i) => (
-                <FindingCard f={f} key={`${f.ghsa_id ?? f.file}-${i}`} />
-              ))}
-            </ul>
-          ) : (
-            <p className="empty-note">
-              No vulnerabilities found in the files reviewed. That's not a guarantee the code is safe.
-            </p>
-          )}
+
+          {scan.advisory_ids.length > 0 ? (
+            <div className="scan-group">
+              <h3 className="scan-group__heading">Advisory fixes · {advisoryFindings.length}</h3>
+              <ul className="advisory-list">
+                {advisoryFindings.map((f, i) => (
+                  <FindingCard f={f} key={`${f.ghsa_id}-${i}`} />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="scan-group">
+            <h3 className="scan-group__heading">Code review · {codeFindings.length}</h3>
+            {!codeReviewed ? (
+              <p className="empty-note">
+                This scan predates the code review. Rescan to review the source code too.
+              </p>
+            ) : codeFindings.length > 0 ? (
+              <ul className="advisory-list">
+                {codeFindings.map((f, i) => (
+                  <FindingCard f={f} key={`${f.file}-${i}`} />
+                ))}
+              </ul>
+            ) : (
+              <p className="empty-note">
+                No vulnerabilities found in the {scan.files.length} files reviewed. That's not a
+                guarantee the code is safe.
+              </p>
+            )}
+          </div>
         </>
       ) : null}
     </section>

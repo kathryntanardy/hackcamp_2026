@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 .ruff_cache/
 sample_responses/
+.env
+.env.*

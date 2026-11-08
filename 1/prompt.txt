@@ -1,0 +1,106 @@
+Do ticket #30 please, just the backend no frontend
+
+---
+
+what are u using for the vector search, is it using databrick's vector search?
+
+---
+
+whats ur command running?
+
+---
+
+are you done with #30?
+
+---
+
+continue working on it
+
+---
+
+<task-notification>
+<task-id>bu2wlvjoc</task-id>
+<tool-use-id>toolu_011nw5FGDvVhN616DbZGKKxy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-verrill-Documents-Nerding-Hackathon-hackcamp-2026-hackcamp-2026/78a1f0d2-4f57-494b-a804-ea1b5c6afc72/tasks/bu2wlvjoc.output</output-file>
+<status>completed</status>
+<summary>Background command "until databricks vector-search-indexes get-index hackcamp.gold.repo_search_index -p school 2&gt;&amp;1 | grep -q '"ready": true'; do sleep 20; done; databricks vector-search-indexes get-index hackcamp.gold.repo_search_index -p school 2&gt;&amp;1 | grep -E '"(ready|indexed_row_count)"'" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b0tv8o3jg</task-id>
+<tool-use-id>toolu_01NZCr942QDaDbcs5ka4BYnn</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-verrill-Documents-Nerding-Hackathon-hackcamp-2026-hackcamp-2026/78a1f0d2-4f57-494b-a804-ea1b5c6afc72/tasks/b0tv8o3jg.output</output-file>
+<status>completed</status>
+<summary>Background command "cat &gt; /Users/verrill/Documents/Nerding/Hackathon/hackcamp_2026/hackcamp_2026/databricks/src/search/setup_vector_index.py &lt;&lt;'EOF'
+"""Ticket #30: create the Vector Search endpoint + Delta Sync index over gold.repo_search_docs,
+then trigger a sync. Idempotent. Run locally: DATABRICKS_CONFIG_PROFILE=school python setup_vector_index.py
+Run build_search_docs.sql first (bundle job `repo_search_docs`)."""
+
+import time
+
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import NotFound
+from databricks.sdk.service.vectorsearch import (
+    DeltaSyncVectorIndexSpecRequest, EmbeddingSourceColumn, EndpointType,
+    PipelineType, VectorIndexType)
+
+ENDPOINT = "hackcamp-vs"
+INDEX = "hackcamp.gold.repo_search_index"
+SOURCE = "hackcamp.gold.repo_search_docs"
+EMBEDDING_MODEL = "databricks-gte-large-en"
+
+
+def main() -&gt; None:
+    w = WorkspaceClient()
+    try:
+        w.vector_search_endpoints.get_endpoint(ENDPOINT)
+    except NotFound:
+        print(f"creating endpoint {ENDPOINT} (takes a few minutes)")
+        w.vector_search_endpoints.create_endpoint_and_wait(ENDPOINT, endpoint_type=EndpointType.STANDARD)
+    try:
+        w.vector_search_indexes.get_index(INDEX)
+        print(f"index {INDEX} exists; triggering sync")
+        w.vector_search_indexes.sync_index(INDEX)
+    except NotFound:
+        print(f"creating index {INDEX}")
+        w.vector_search_indexes.create_index(
+            name=INDEX, endpoint_name=ENDPOINT, primary_key="repo_id",
+            index_type=VectorIndexType.DELTA_SYNC,
+            delta_sync_index_spec=DeltaSyncVectorIndexSpecRequest(
+                source_table=SOURCE, pipeline_type=PipelineType.TRIGGERED,
+                columns_to_sync=["repo_id", "language", "category", "status", "search_text"],
+                embedding_source_columns=[EmbeddingSourceColumn(
+                    name="search_text", embedding_model_endpoint_name=EMBEDDING_MODEL)]))
+    while True:
+        status = w.vector_search_indexes.get_index(INDEX).status
+        print(f"ready={status.ready} rows={status.indexed_row_count} {status.message}")
+        if status.ready:
+            return
+        time.sleep(20)
+
+
+if __name__ == "__main__":
+    main()
+EOF
+cat &gt; /Users/verrill/Documents/Nerding/Hackathon/hackcamp_2026/hackcamp_2026/databricks/resources/repo_search_docs.job.yml &lt;&lt;'EOF'
+resources:
+  jobs:
+    repo_search_docs:
+      name: hackcamp-repo-search-docs
+      description: &gt;
+        Ticket #30: refresh gold.repo_search_docs (eligible-only, CDF on), the source of the
+        hackcamp.gold.repo_search_index Vector Search index. After it runs, sync the index with
+        databricks/src/search/setup_vector_index.py.
+      max_concurrent_runs: 1
+      tasks:
+        - task_key: build_search_docs
+          sql_task:
+            file:
+              path: ../src/search/build_search_docs.sql
+              source: WORKSPACE
+            warehouse_id: ${var.warehouse_id}
+EOF
+cd /Users/verrill/Documents/Nerding/Hackathon/hackcamp_2026/hackcamp_2026/backend &amp;&amp; source .venv/bin/activate &amp;&amp; DATABRICKS_CONFIG_PROFILE=school python ../databricks/src/search/setup_vector_index.py" completed (exit code 0)</summary>
+</task-notification>

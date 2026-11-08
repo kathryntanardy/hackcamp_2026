@@ -1,10 +1,12 @@
 # Ticket dependency graph
 
 Synced from GitHub issues on 2026-11-07 (`kathryntanardy/hackcamp_2026`).
-✅ = closed on GitHub **or done in workspace**. Open: **#14, #17–#29**. Closed/done: **#1–#13, #15–#16**.
+✅ = closed on GitHub **or done in workspace**. Open: **17** (#14, #17–#22, #23–#30, #32–#33). Closed/done: **16** (#1–#13, #15–#16, #31).
 
-Unblocked next (deps closed): **#14**, **#18**, **#19**, **#20**, **#21**, **#22**.
-Blocked: **#17** (needs #14), **#23–#29** (`blocked-by-design` / after #22).
+**New:** **#30–#33** (F14 map search + F15 categories/CWEs).
+
+Unblocked next (deps closed): **#14**, **#18**, **#19**, **#20**, **#21**, **#22**, **#32**.
+Blocked: **#17** (needs #14), **#23–#29** (`blocked-by-design` / after #22), **#30** (needs #24+#31), **#33** (needs FE + #32).
 
 ```mermaid
 flowchart TB
@@ -16,6 +18,8 @@ flowchart TB
     n3["#3 GitHub pull ✅"]
     n4["#4 bronze/silver ✅"]
     n5["#5 gold score ✅"]
+    n31["#31 scrape desc/topics/advisories ✅"]
+    n32["#32 categories + CWE buckets"]
   end
   subgraph AgentLoop["Agent tools + loop"]
     n6["#6 UC tools ✅"]
@@ -50,6 +54,8 @@ flowchart TB
     n19["#19 run memory"]
     n20["#20 ai_query"]
     n29["#29 FE stretch"]
+    n30["#30 NL map search"]
+    n33["#33 category/vuln filters"]
   end
   n1 --> n2
   n1 --> n3
@@ -93,4 +99,13 @@ flowchart TB
   n27 --> n28
   n12 --> n28
   n28 --> n29
+  n3 --> n31
+  n4 --> n31
+  n31 --> n32
+  n24 --> n30
+  n31 --> n30
+  n24 --> n33
+  n25 --> n33
+  n27 --> n33
+  n32 --> n33
 ```

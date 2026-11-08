@@ -68,7 +68,9 @@ def _databricks_auth() -> tuple[str, str]:
 
 
 _DB_HOST, _DB_TOKEN = _databricks_auth()
-llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints", max_retries=0)
+# Retry 429s (shared workspace QPS cap) with SDK backoff; the per-repo deadline still
+# rejects any response that arrives late (see _call_with_deadline).
+llm = OpenAI(api_key=_DB_TOKEN, base_url=f"{_DB_HOST}/serving-endpoints", max_retries=3)
 
 # COMMAND ----------
 
